@@ -1,0 +1,46 @@
+{
+  "name": "nightshift",
+  "version": "0.1.0",
+  "description": "Coordinating AI agents for your development pipeline. Set up 5 agents (producer, planner, reviewer, coder, tester) in any repository.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test 'tests/*.test.js'"
+  },
+  "bin": {
+    "nightshift": "./bin/nightshift.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "presets/",
+    "defaults/",
+    "examples/",
+    "docs/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "ai",
+    "agents",
+    "pipeline",
+    "claude",
+    "development",
+    "automation",
+    "code-review",
+    "planning"
+  ],
+  "author": "Nightshift Agents <https://github.com/nightshift-agents>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nightshift-agents/nightshift.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "prompts": "^2.4.2"
+  }
+}

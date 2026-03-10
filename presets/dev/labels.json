@@ -1,0 +1,15 @@
+{
+  "labels": [
+    { "status": "planning", "color": "1d76db", "description": "Issue is being planned" },
+    { "status": "plan-review", "color": "5319e7", "description": "Plan ready for review" },
+    { "status": "plan-revising", "color": "fbca04", "description": "Plan needs revision" },
+    { "status": "approved", "color": "0e8a16", "description": "Plan approved, ready for implementation" },
+    { "status": "code-review", "color": "5319e7", "description": "PR ready for code review" },
+    { "status": "code-revising", "color": "fbca04", "description": "Code needs revision" },
+    { "status": "testing", "color": "1d76db", "description": "PR ready for testing" },
+    { "status": "ready-to-merge", "color": "0e8a16", "description": "All checks passed, ready for human merge" },
+    { "status": "blocked", "color": "d93f0b", "description": "Blocked, needs human intervention" },
+    { "status": "needs-info", "color": "d93f0b", "description": "Issue needs clarification" },
+    { "status": "wip", "color": "ededed", "description": "Work in progress (agent lock)" }
+  ]
+}

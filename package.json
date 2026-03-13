@@ -1,6 +1,6 @@
 {
   "name": "nightshift",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Coordinating AI agents for your development pipeline. Set up 5 agents (producer, planner, reviewer, coder, tester) in any repository.",
   "type": "module",
   "scripts": {

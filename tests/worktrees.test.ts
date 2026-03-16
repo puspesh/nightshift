@@ -29,9 +29,9 @@ describe('createWorktrees + removeWorktrees', () => {
   const repoName = `nightshift-wt-test-${Date.now()}`;
   const team = 'dev';
   const roles = ['planner', 'reviewer', 'coder-1', 'tester'];
-  let tmp;
-  let clonedRepo;
-  let origCwd;
+  let tmp: string;
+  let clonedRepo: string;
+  let origCwd: string;
 
   beforeEach(() => {
     origCwd = process.cwd();

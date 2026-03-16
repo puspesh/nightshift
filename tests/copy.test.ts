@@ -6,7 +6,6 @@ import {
   existsSync,
   readFileSync,
   writeFileSync,
-  mkdirSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,7 +16,7 @@ import {
   removeRepoMd,
 } from '../lib/copy.js';
 
-let tmp;
+let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'nightshift-test-'));

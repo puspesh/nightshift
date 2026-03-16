@@ -23,9 +23,9 @@ Thank you for your interest in contributing to nightshift!
 
 nightshift is a CLI tool with markdown agent profiles. Testing is primarily manual:
 
-1. Run `npx nightshift init` in a test repository
+1. Run `bunx nightshift init` in a test repository
 2. Verify all files are created correctly
-3. Run `npx nightshift teardown` to verify cleanup
+3. Run `bunx nightshift teardown` to verify cleanup
 4. Check agent profiles for correctness (no hardcoded repo references)
 
 ### Code Style

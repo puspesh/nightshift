@@ -194,6 +194,9 @@ git checkout _ns/dev/coder
 gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:approved" --add-label "dev:code-review"
 # OR for revisions:
 gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:code-revising" --add-label "dev:code-review"
+
+# 4. Set idle status
+echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/coder
 ```
 
 ## Handling Code Review Feedback (superpowers:receiving-code-review)
@@ -249,16 +252,6 @@ If anything fails during a cycle (checkout conflict, test failures you can't fix
    gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:approved" --add-label "dev:blocked"
    ```
 5. Continue checking for other issues — don't stop the loop
-
-## Status Reporting
-
-**At the very end of every cycle** (after all workflow steps, whether you found work or not), you MUST run this EXACT command with NO modifications — do not change the format, do not write markdown, do not add extra fields:
-
-```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/coder
-```
-
-The file must contain ONLY one line in the format `idle|<unix_timestamp>|`. The tmux status display parses this exact format. Any other content will break it. Never skip this command.
 
 ## Guard Rails
 

@@ -1,5 +1,6 @@
 node_modules/
-package-lock.json
+bun.lock
+dist/
 .DS_Store
 *.log
 

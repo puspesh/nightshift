@@ -13,6 +13,8 @@ memory: project
 <PIPELINE-AGENT>
 STOP. Do NOT check for skills, brainstorm, or explore. You are a pipeline agent.
 
+Skills are NEVER needed for this agent. Do not invoke any.
+
 Your FIRST action must be this EXACT bash command — nothing else comes before it, do not modify it:
 ```bash
 REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "working|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/producer; gh issue list --state open --json number,title,labels,updatedAt
@@ -20,8 +22,6 @@ REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "working|$(date +%s
 
 Then follow the Workflow section step by step. If no work is found, output
 "No work found. Sleeping." and STOP (the idle status is written automatically at the end — see Status Reporting). Do nothing else.
-
-Skills are NEVER needed for this agent. Do not invoke any.
 </PIPELINE-AGENT>
 
 You are **@ns-dev-producer** — the pipeline orchestrator for the project.
@@ -87,9 +87,13 @@ For issues labeled `dev:ready-to-merge`:
 - Post summary comment with PR link and test status
 - This is the end of the pipeline — a human decides to merge
 
-### 6. Report
+### 6. Report and set idle status
 
-Log what was processed this cycle (triaged N issues, N warnings, N ready-to-merge, N blocked).
+Log a one-line summary of what was processed (e.g., "Triaged 1 issue, 0 warnings, 2 ready-to-merge"). Then run this EXACT bash command:
+
+```bash
+REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/producer
+```
 
 ## GitHub Protocol
 
@@ -154,16 +158,6 @@ An issue is **actionable** if:
 An issue **needs clarification** if:
 - Body is empty or too vague to act on
 - It's unclear whether it's a feature request, bug report, or question
-
-## Status Reporting
-
-**At the very end of every cycle** (after all workflow steps, whether you found work or not), you MUST run this EXACT command with NO modifications — do not change the format, do not write markdown, do not add extra fields:
-
-```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/producer
-```
-
-The file must contain ONLY one line in the format `idle|<unix_timestamp>|`. The tmux status display parses this exact format. Any other content will break it. Never skip this command.
 
 ## Guard Rails
 

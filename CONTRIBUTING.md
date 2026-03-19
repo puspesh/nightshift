@@ -30,11 +30,11 @@ nightshift is a CLI tool with markdown agent profiles. Testing is primarily manu
 
 ### Code Style
 
-- Pure Node.js -- no TypeScript, no build step
+- TypeScript with strict mode -- build with `bun run build`
 - ESM modules (`import`/`export`)
 - Minimal dependencies
 - Clear, descriptive variable names
-- JSDoc comments on exported functions
+- Type annotations on all exported functions
 
 ### Agent Profile Guidelines
 

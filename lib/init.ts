@@ -497,7 +497,8 @@ export async function init(args: string[]): Promise<void> {
     }
   }
 
-  // 16. Copy agent profiles
+
+  // 17. Copy agent profiles
   console.log('');
   console.log(chalk.bold('Installing agent profiles...'));
   try {

@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Live agent status indicators (working/idle with countdown timer)
 - Runner command configurable via `## Runner` section in `repo.md`
 - `.gitignore` updates during `init` for Claude Code runtime artifacts
+- Pixel-art agent visualization at `http://localhost:4321` (gear-supply themed office world)
+- Vendored miniverse server + core (no external npm dependency)
+- Claude Code hooks for real-time agent state tracking (working/thinking/idle)
+- Auto-opens visualization in browser on `start`
+- ASCII art banner on CLI output
 
 ## [0.1.0] - 2026-03-20
 

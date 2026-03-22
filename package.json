@@ -4,7 +4,7 @@
   "description": "Coordinating AI agents for your development pipeline. Set up 5 agents (producer, planner, reviewer, coder, tester) in any repository.",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp -r lib/miniverse/core dist/lib/miniverse/",
+    "build": "tsc -p tsconfig.build.json && cp -r lib/miniverse/core dist/lib/miniverse/ && cp -r presets dist/ && cp -r worlds dist/ && cp -r defaults dist/ && cp -r bin dist/",
     "pretest": "tsc",
     "test": "node --test 'dist/tests/*.test.js'",
     "typecheck": "tsc --noEmit",
@@ -30,10 +30,13 @@
     "agents",
     "pipeline",
     "claude",
+    "claude-code",
     "development",
     "automation",
     "code-review",
-    "planning"
+    "planning",
+    "github",
+    "tmux"
   ],
   "author": "Nightshift Agents <https://github.com/nightshift-agents>",
   "license": "MIT",

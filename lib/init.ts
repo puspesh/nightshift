@@ -523,7 +523,7 @@ export async function init(args: string[]): Promise<void> {
       console.log(`  ${chalk.dim('  .gitignore already configured (skipped)')}`);
     }
   } catch (err) {
-    console.log(`  ${chalk.yellow('~')} Failed to update .gitignore: ${err.message}`);
+    console.log(`  ${chalk.yellow('~')} Failed to update .gitignore: ${(err as Error).message}`);
   }
 
   // 18. Update CLAUDE.md

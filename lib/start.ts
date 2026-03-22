@@ -9,7 +9,7 @@ import { detectRepoRoot, detectRepoName } from './detect.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const STATUS_SCRIPT = join(__dirname, '..', 'bin', 'ns-status.sh');
+const STATUS_SCRIPT = join(__dirname, '..', '..', 'bin', 'ns-status.sh');
 const DEFAULT_RUNNER = 'claude --dangerously-skip-permissions';
 const LOOP_INTERVAL = 900; // 15 minutes in seconds
 
@@ -19,7 +19,7 @@ const LOOP_INTERVAL = 900; // 15 minutes in seconds
  * @param {string} team
  * @returns {string}
  */
-export function getSessionName(repoName, team) {
+export function getSessionName(repoName: string, team: string): string {
   return `nightshift-${repoName}-${team}`;
 }
 
@@ -33,9 +33,15 @@ export function getSessionName(repoName, team) {
  * @param {string} repoName
  * @returns {{ role: string, agent: string, cwd: string }[]}
  */
-export function buildAgentList(team, coderCount, repoRoot, repoName) {
+interface AgentEntry {
+  role: string;
+  agent: string;
+  cwd: string;
+}
+
+export function buildAgentList(team: string, coderCount: number, repoRoot: string, repoName: string): AgentEntry[] {
   const teamDir = join(homedir(), '.nightshift', repoName, team);
-  const agents = [];
+  const agents: AgentEntry[] = [];
 
   // Sidebar agents (left column)
   agents.push({ role: 'producer', agent: `ns-${team}-producer`, cwd: repoRoot });
@@ -60,7 +66,7 @@ export function buildAgentList(team, coderCount, repoRoot, repoName) {
  * @param {string} repoRoot
  * @returns {string}
  */
-export function parseRunner(repoRoot) {
+export function parseRunner(repoRoot: string): string {
   const repoMdPath = join(repoRoot, '.claude', 'nightshift', 'repo.md');
   if (!existsSync(repoMdPath)) {
     return DEFAULT_RUNNER;
@@ -79,7 +85,7 @@ export function parseRunner(repoRoot) {
  * Run a tmux command, suppressing output.
  * @param {string} cmd
  */
-function tmux(cmd) {
+function tmux(cmd: string): void {
   execSync(`tmux ${cmd}`, { stdio: ['pipe', 'pipe', 'pipe'] });
 }
 
@@ -92,7 +98,7 @@ function tmux(cmd) {
  *
  * @param {string} team
  */
-export function startSession(team) {
+export function startSession(team: string): void {
   // Check tmux is available
   try {
     execSync('which tmux', { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -147,7 +153,7 @@ export function startSession(team) {
   }
 
   // Set pane labels using custom user options (immune to Claude overwriting)
-  const paneColors = {
+  const paneColors: Record<string, string> = {
     'producer': 'fg=black,bg=cyan',
     'planner':  'fg=black,bg=yellow',
     'reviewer': 'fg=black,bg=magenta',
@@ -206,7 +212,7 @@ export function startSession(team) {
  * Stop a running tmux session for a team.
  * @param {string} team
  */
-export function stopSession(team) {
+export function stopSession(team: string): void {
   const repoName = detectRepoName();
   const session = getSessionName(repoName, team);
 

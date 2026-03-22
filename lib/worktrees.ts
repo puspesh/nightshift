@@ -5,34 +5,22 @@ import { homedir } from 'node:os';
 
 /**
  * Get the nightshift directory for a repository.
- * @param {string} repoName - Name of the repository
- * @returns {string} Path to ~/.nightshift/<repoName>/
  */
-export function getNightshiftDir(repoName) {
+export function getNightshiftDir(repoName: string): string {
   return join(homedir(), '.nightshift', repoName);
 }
 
 /**
  * Get the team directory for a repository and team.
- * @param {string} repoName - Name of the repository
- * @param {string} team - Team name
- * @returns {string} Path to ~/.nightshift/<repoName>/<team>/
  */
-export function getTeamDir(repoName, team) {
+export function getTeamDir(repoName: string, team: string): string {
   return join(homedir(), '.nightshift', repoName, team);
 }
 
 /**
  * Create git worktrees for the given roles within a team.
- * Each role gets its own worktree at ~/.nightshift/<repo>/<team>/worktrees/<role>/
- * on branch _ns/<team>/<role> based on origin/<mainBranch>.
- *
- * @param {string} repoName - Name of the repository
- * @param {string} team - Team name
- * @param {string[]} roles - Array of role names (e.g., ['planner', 'reviewer', 'coder-1', 'tester'])
- * @param {string} mainBranch - Main branch name (e.g., "main")
  */
-export function createWorktrees(repoName, team, roles, mainBranch) {
+export function createWorktrees(repoName: string, team: string, roles: string[], mainBranch: string): void {
   const teamDir = getTeamDir(repoName, team);
 
   // Create directory structure
@@ -70,7 +58,7 @@ export function createWorktrees(repoName, team, roles, mainBranch) {
         });
       } catch (err) {
         throw new Error(
-          `Failed to create branch ${branchName} from origin/${mainBranch}: ${err.message}`
+          `Failed to create branch ${branchName} from origin/${mainBranch}: ${(err as Error).message}`
         );
       }
     }
@@ -83,7 +71,7 @@ export function createWorktrees(repoName, team, roles, mainBranch) {
       });
     } catch (err) {
       throw new Error(
-        `Failed to create worktree for ${role} at ${worktreePath}: ${err.message}`
+        `Failed to create worktree for ${role} at ${worktreePath}: ${(err as Error).message}`
       );
     }
   }
@@ -91,12 +79,8 @@ export function createWorktrees(repoName, team, roles, mainBranch) {
 
 /**
  * Remove all worktrees and branches for a team.
- * Discovers roles by scanning <teamDir>/worktrees/ subdirectories.
- *
- * @param {string} repoName - Name of the repository
- * @param {string} team - Team name
  */
-export function removeWorktrees(repoName, team) {
+export function removeWorktrees(repoName: string, team: string): void {
   const teamDir = getTeamDir(repoName, team);
   const worktreesDir = join(teamDir, 'worktrees');
 
@@ -136,13 +120,8 @@ export function removeWorktrees(repoName, team) {
 
 /**
  * Discover the number of coder roles for a team.
- * Counts coder-* directories in <teamDir>/worktrees/.
- *
- * @param {string} repoName - Name of the repository
- * @param {string} team - Team name
- * @returns {number} Number of coder worktrees
  */
-export function discoverCoderCount(repoName, team) {
+export function discoverCoderCount(repoName: string, team: string): number {
   const worktreesDir = join(getTeamDir(repoName, team), 'worktrees');
 
   if (!existsSync(worktreesDir)) {
@@ -156,12 +135,8 @@ export function discoverCoderCount(repoName, team) {
 
 /**
  * Discover all teams for a repository.
- * Lists subdirectories of ~/.nightshift/<repoName>/.
- *
- * @param {string} repoName - Name of the repository
- * @returns {string[]} Array of team names
  */
-export function discoverTeams(repoName) {
+export function discoverTeams(repoName: string): string[] {
   const nightshiftDir = getNightshiftDir(repoName);
 
   if (!existsSync(nightshiftDir)) {

@@ -5,9 +5,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const agentsDir = join(__dirname, '..', 'presets', 'dev', 'agents');
+const agentsDir = join(__dirname, '..', '..', 'presets', 'dev', 'agents');
 
-const profiles = readdirSync(agentsDir)
+interface Profile {
+  name: string;
+  content: string;
+}
+
+const profiles: Profile[] = readdirSync(agentsDir)
   .filter((f) => f.endsWith('.md'))
   .map((f) => ({
     name: f,

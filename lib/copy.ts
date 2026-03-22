@@ -5,7 +5,6 @@ import {
   readdirSync,
   readFileSync,
   unlinkSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
@@ -15,65 +14,53 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+export interface CopyResult {
+  copied: string[];
+  skipped: string[];
+}
+
 /**
  * Get the path to a team's preset directory.
- * @param {string} team - Team name (e.g. 'dev')
- * @returns {string} Path to nightshift/presets/<team>/
  */
-export function getPresetDir(team) {
-  return join(__dirname, '..', 'presets', team);
+export function getPresetDir(team: string): string {
+  return join(__dirname, '..', '..', 'presets', team);
 }
 
 /**
  * Get the path to a team's preset agents directory.
- * @param {string} team - Team name (e.g. 'dev')
- * @returns {string} Path to nightshift/presets/<team>/agents/
  */
-export function getPresetAgentsDir(team) {
+export function getPresetAgentsDir(team: string): string {
   return join(getPresetDir(team), 'agents');
 }
 
 /**
  * Get the path to a team's preset defaults directory.
- * @param {string} team - Team name (e.g. 'dev')
- * @returns {string} Path to nightshift/presets/<team>/defaults/
  */
-export function getPresetDefaultsDir(team) {
+export function getPresetDefaultsDir(team: string): string {
   return join(getPresetDir(team), 'defaults');
 }
 
 /**
  * Get the path to the nightshift package's shared defaults directory.
- * Contains repo.md template shared across all presets.
- * @returns {string} Path to nightshift/defaults/
  */
-export function getDefaultsDir() {
-  return join(__dirname, '..', 'defaults');
+export function getDefaultsDir(): string {
+  return join(__dirname, '..', '..', 'defaults');
 }
 
 /**
  * Get the path to the global Claude agents directory.
- * @returns {string} Path to ~/.claude/agents/
  */
-export function getGlobalAgentsDir() {
+export function getGlobalAgentsDir(): string {
   return join(homedir(), '.claude', 'agents');
 }
 
 /**
  * Copy agent profiles to the global ~/.claude/agents/ directory.
- * For the coder template (ns-<team>-coder.md), stamps N copies with numbered
- * names (ns-<team>-coder-1.md through ns-<team>-coder-<N>.md), replacing
- * occurrences of `ns-<team>-coder` with `ns-<team>-coder-<N>` in the content.
- * Non-coder agents are copied directly.
- *
- * @param {string} team - Team name (e.g. 'dev')
- * @param {number} coderCount - Number of coder instances to stamp
- * @returns {string[]} List of copied file names
  */
-export function copyAgentProfiles(team, coderCount) {
+export function copyAgentProfiles(team: string, coderCount: number): string[] {
   const agentsDir = getPresetAgentsDir(team);
   const targetDir = getGlobalAgentsDir();
-  const copied = [];
+  const copied: string[] = [];
   const prefix = `ns-${team}-`;
   const coderBaseName = `ns-${team}-coder`;
 
@@ -111,18 +98,12 @@ export function copyAgentProfiles(team, coderCount) {
 
 /**
  * Copy default extension files to the repo's .claude/nightshift/ directory.
- * Copies from the team's preset defaults. Skips files that already exist
- * to preserve user customizations.
- *
- * @param {string} repoRoot - Path to the repository root
- * @param {string} team - Team name (e.g. 'dev')
- * @returns {{ copied: string[], skipped: string[] }} Lists of copied and skipped files
  */
-export function copyExtensionFiles(repoRoot, team) {
+export function copyExtensionFiles(repoRoot: string, team: string): CopyResult {
   const defaultsDir = getPresetDefaultsDir(team);
   const targetDir = join(repoRoot, '.claude', 'nightshift');
-  const copied = [];
-  const skipped = [];
+  const copied: string[] = [];
+  const skipped: string[] = [];
 
   mkdirSync(targetDir, { recursive: true });
 
@@ -143,13 +124,8 @@ export function copyExtensionFiles(repoRoot, team) {
 
 /**
  * Write repo.md content to the repo's .claude/nightshift/ directory.
- * Only writes if the file does not already exist.
- *
- * @param {string} repoRoot - Path to the repository root
- * @param {string} content - Content to write to repo.md
- * @returns {boolean} Whether the file was written
  */
-export function copyRepoMd(repoRoot, content) {
+export function copyRepoMd(repoRoot: string, content: string): boolean {
   const targetDir = join(repoRoot, '.claude', 'nightshift');
   const targetPath = join(targetDir, 'repo.md');
 
@@ -164,14 +140,10 @@ export function copyRepoMd(repoRoot, content) {
 
 /**
  * Remove nightshift agent profiles for a team from ~/.claude/agents/.
- * Removes files matching ns-<team>-*.md.
- *
- * @param {string} team - Team name (e.g. 'dev')
- * @returns {string[]} List of removed file names
  */
-export function removeAgentProfiles(team) {
+export function removeAgentProfiles(team: string): string[] {
   const targetDir = getGlobalAgentsDir();
-  const removed = [];
+  const removed: string[] = [];
   const prefix = `ns-${team}-`;
 
   if (!existsSync(targetDir)) {
@@ -196,16 +168,10 @@ export function removeAgentProfiles(team) {
 
 /**
  * Remove team-specific extension files from .claude/nightshift/.
- * Removes files matching ns-<team>-*.md. Does NOT remove repo.md
- * or other teams' files.
- *
- * @param {string} repoRoot - Path to the repository root
- * @param {string} team - Team name (e.g. 'dev')
- * @returns {string[]} List of removed file names
  */
-export function removeExtensionFiles(repoRoot, team) {
+export function removeExtensionFiles(repoRoot: string, team: string): string[] {
   const targetDir = join(repoRoot, '.claude', 'nightshift');
-  const removed = [];
+  const removed: string[] = [];
   const prefix = `ns-${team}-`;
 
   if (!existsSync(targetDir)) {
@@ -230,11 +196,8 @@ export function removeExtensionFiles(repoRoot, team) {
 
 /**
  * Remove .claude/nightshift/repo.md from the repository.
- *
- * @param {string} repoRoot - Path to the repository root
- * @returns {boolean} Whether the file was removed
  */
-export function removeRepoMd(repoRoot) {
+export function removeRepoMd(repoRoot: string): boolean {
   const targetPath = join(repoRoot, '.claude', 'nightshift', 'repo.md');
 
   if (!existsSync(targetPath)) {

@@ -2,12 +2,17 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+export interface DetectedScripts {
+  build: string | null;
+  test: string | null;
+  lint: string | null;
+  typecheck: string | null;
+}
+
 /**
  * Detect the git repository root directory.
- * @returns {string} Absolute path to the repo root
- * @throws {Error} If not inside a git repository
  */
-export function detectRepoRoot() {
+export function detectRepoRoot(): string {
   try {
     return execSync('git rev-parse --show-toplevel', {
       encoding: 'utf-8',
@@ -22,9 +27,8 @@ export function detectRepoRoot() {
 
 /**
  * Detect the repository name (basename of the repo root).
- * @returns {string} Repository name
  */
-export function detectRepoName() {
+export function detectRepoName(): string {
   const root = detectRepoRoot();
   return root.split('/').pop() || 'unknown';
 }
@@ -32,9 +36,8 @@ export function detectRepoName() {
 /**
  * Detect the main branch name.
  * Checks for origin/main, then origin/master, then falls back to current branch.
- * @returns {string} Main branch name (e.g., "main" or "master")
  */
-export function detectMainBranch() {
+export function detectMainBranch(): string {
   // Check for origin/main
   try {
     execSync('git rev-parse --verify origin/main', {
@@ -71,10 +74,8 @@ export function detectMainBranch() {
 /**
  * Detect the package manager used by the project.
  * Checks for lockfiles in priority order: pnpm, yarn, bun, npm.
- * @param {string} repoRoot - Path to the repository root
- * @returns {string} Package manager name ("pnpm", "yarn", "bun", or "npm")
  */
-export function detectPackageManager(repoRoot) {
+export function detectPackageManager(repoRoot: string): string {
   if (existsSync(join(repoRoot, 'pnpm-lock.yaml'))) {
     return 'pnpm';
   }
@@ -89,10 +90,8 @@ export function detectPackageManager(repoRoot) {
 
 /**
  * Detect the primary language of the project.
- * @param {string} repoRoot - Path to the repository root
- * @returns {string} Language identifier: 'javascript', 'go', 'python', 'rust', or 'unknown'
  */
-export function detectLanguage(repoRoot) {
+export function detectLanguage(repoRoot: string): string {
   if (existsSync(join(repoRoot, 'package.json'))) {
     return 'javascript';
   }
@@ -113,10 +112,8 @@ export function detectLanguage(repoRoot) {
 
 /**
  * Detect available scripts from the project's package.json.
- * @param {string} repoRoot - Path to the repository root
- * @returns {{ build: string|null, test: string|null, lint: string|null, typecheck: string|null }}
  */
-export function detectScripts(repoRoot) {
+export function detectScripts(repoRoot: string): DetectedScripts {
   const pkgPath = join(repoRoot, 'package.json');
   if (!existsSync(pkgPath)) {
     return { build: null, test: null, lint: null, typecheck: null };
@@ -138,21 +135,15 @@ export function detectScripts(repoRoot) {
 
 /**
  * Validate a team name against the naming convention.
- * Must start with a lowercase letter, contain only lowercase letters, digits, and hyphens,
- * and end with a lowercase letter or digit.
- * @param {string} name - Team name to validate
- * @returns {boolean} True if valid
  */
-export function validateTeamName(name) {
+export function validateTeamName(name: string): boolean {
   return /^[a-z]([a-z0-9-]*[a-z0-9])?$/.test(name);
 }
 
 /**
  * Detect the git remote origin URL.
- * @returns {string} Remote URL
- * @throws {Error} If no remote "origin" is configured
  */
-export function detectRemote() {
+export function detectRemote(): string {
   try {
     return execSync('git remote get-url origin', {
       encoding: 'utf-8',

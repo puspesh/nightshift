@@ -8,13 +8,9 @@ import { removeWorktrees, getNightshiftDir, getTeamDir, discoverTeams } from './
 import { removeAgentProfiles, removeExtensionFiles, removeRepoMd } from './copy.js';
 
 /**
- * Parse a flag value from CLI args (e.g. --team alpha → "alpha").
- *
- * @param {string[]} args
- * @param {string} flag
- * @returns {string | null}
+ * Parse a flag value from CLI args (e.g. --team alpha -> "alpha").
  */
-function parseFlag(args, flag) {
+function parseFlag(args: string[], flag: string): string | null {
   const index = args.indexOf(flag);
   if (index === -1 || index + 1 >= args.length) return null;
   return args[index + 1];
@@ -22,15 +18,8 @@ function parseFlag(args, flag) {
 
 /**
  * Remove a team's subsection from CLAUDE.md.
- *
- * Looks for `### <team>` within the `## Nightshift Teams` section and removes
- * only that subsection. If no team subsections remain, removes the entire
- * `## Nightshift Teams` section.
- *
- * @param {string} repoRoot - Path to the repository root
- * @param {string} team - Team name to remove
  */
-export function cleanClaudeMd(repoRoot, team) {
+export function cleanClaudeMd(repoRoot: string, team: string): void {
   const claudeMdPath = join(repoRoot, 'CLAUDE.md');
 
   if (!existsSync(claudeMdPath)) {
@@ -51,7 +40,7 @@ export function cleanClaudeMd(repoRoot, team) {
   const afterSection = content.slice(sectionIndex + sectionMarker.length);
   const nextH2Match = afterSection.match(/\n## /);
   const sectionEnd = nextH2Match
-    ? sectionIndex + sectionMarker.length + nextH2Match.index
+    ? sectionIndex + sectionMarker.length + nextH2Match.index!
     : content.length;
 
   const sectionContent = content.slice(sectionIndex, sectionEnd);
@@ -68,7 +57,7 @@ export function cleanClaudeMd(repoRoot, team) {
   const afterTeam = sectionContent.slice(teamIndex + teamHeading.length);
   const nextH3Match = afterTeam.match(/\n### /);
   const teamEnd = nextH3Match
-    ? teamIndex + teamHeading.length + nextH3Match.index
+    ? teamIndex + teamHeading.length + nextH3Match.index!
     : sectionContent.length;
 
   // Remove the team subsection
@@ -95,9 +84,8 @@ export function cleanClaudeMd(repoRoot, team) {
 
 /**
  * Run the full nightshift teardown flow.
- * @param {string[]} args - CLI arguments
  */
-export async function teardown(args) {
+export async function teardown(args: string[]): Promise<void> {
   const team = parseFlag(args, '--team');
   const force = args.includes('--force');
   const shouldRemoveLabels = args.includes('--remove-labels');
@@ -107,16 +95,17 @@ export async function teardown(args) {
   console.log('');
 
   // Detect project
-  let repoRoot, repoName;
+  let repoRoot: string;
+  let repoName: string;
   try {
     repoRoot = detectRepoRoot();
     repoName = detectRepoName();
   } catch (err) {
-    console.error(chalk.red(err.message));
+    console.error(chalk.red((err as Error).message));
     process.exit(1);
   }
 
-  let teamsToRemove;
+  let teamsToRemove: string[];
   if (team) {
     teamsToRemove = [team];
   } else {
@@ -155,9 +144,9 @@ export async function teardown(args) {
     // 1. Remove worktrees
     try {
       removeWorktrees(repoName, t);
-      console.log(`  ${chalk.green('✓')} Worktrees removed`);
+      console.log(`  ${chalk.green('\u2713')} Worktrees removed`);
     } catch (err) {
-      console.log(`  ${chalk.yellow('~')} ${err.message}`);
+      console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
     }
 
     // 2. Remove team directory (~/.nightshift/<repo>/<team>/)
@@ -166,43 +155,43 @@ export async function teardown(args) {
       if (existsSync(teamDir)) {
         rmSync(teamDir, { recursive: true, force: true });
       }
-      console.log(`  ${chalk.green('✓')} ${teamDir} removed`);
+      console.log(`  ${chalk.green('\u2713')} ${teamDir} removed`);
     } catch (err) {
-      console.log(`  ${chalk.yellow('~')} ${err.message}`);
+      console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
     }
 
     // 3. Remove agent profiles
     try {
       const removed = removeAgentProfiles(t);
-      console.log(`  ${chalk.green('✓')} ${removed.length} profiles removed`);
+      console.log(`  ${chalk.green('\u2713')} ${removed.length} profiles removed`);
     } catch (err) {
-      console.log(`  ${chalk.yellow('~')} ${err.message}`);
+      console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
     }
 
     // 4. Remove team extension files
     try {
       const removed = removeExtensionFiles(repoRoot, t);
-      console.log(`  ${chalk.green('✓')} ${removed.length} config files removed`);
+      console.log(`  ${chalk.green('\u2713')} ${removed.length} config files removed`);
     } catch (err) {
-      console.log(`  ${chalk.yellow('~')} ${err.message}`);
+      console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
     }
 
     // 5. Optionally remove labels
     if (shouldRemoveLabels) {
       try {
         const removed = removeLabels(t);
-        console.log(`  ${chalk.green('✓')} ${removed} labels removed`);
+        console.log(`  ${chalk.green('\u2713')} ${removed} labels removed`);
       } catch (err) {
-        console.log(`  ${chalk.yellow('~')} ${err.message}`);
+        console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
       }
     }
 
     // 6. Clean CLAUDE.md (remove team subsection)
     try {
       cleanClaudeMd(repoRoot, t);
-      console.log(`  ${chalk.green('✓')} CLAUDE.md updated`);
+      console.log(`  ${chalk.green('\u2713')} CLAUDE.md updated`);
     } catch (err) {
-      console.log(`  ${chalk.yellow('~')} ${err.message}`);
+      console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
     }
   }
 
@@ -218,9 +207,9 @@ export async function teardown(args) {
           rmSync(nightshiftConfigDir, { recursive: true, force: true });
         }
       }
-      console.log(`  ${chalk.green('✓')} repo.md removed`);
+      console.log(`  ${chalk.green('\u2713')} repo.md removed`);
     } catch (err) {
-      console.log(`  ${chalk.yellow('~')} ${err.message}`);
+      console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
     }
 
     // Remove ~/.nightshift/<repo>/ if empty

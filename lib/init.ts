@@ -3,17 +3,15 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlink
 import { join } from 'node:path';
 import chalk from 'chalk';
 import prompts from 'prompts';
-import { detectRepoRoot, detectRepoName, detectMainBranch, detectPackageManager, detectLanguage, detectScripts, validateTeamName, detectRemote } from './detect.js';
+import { detectRepoRoot, detectRepoName, detectMainBranch, detectPackageManager, detectLanguage, detectScripts, validateTeamName, detectRemote, type DetectedScripts } from './detect.js';
 import { createLabels } from './labels.js';
 import { createWorktrees, getTeamDir, discoverCoderCount } from './worktrees.js';
 import { copyAgentProfiles, copyExtensionFiles, getPresetDir } from './copy.js';
 
 /**
  * Check if a command-line tool is available.
- * @param {string} cmd - Command to check
- * @returns {boolean}
  */
-function isAvailable(cmd) {
+function isAvailable(cmd: string): boolean {
   try {
     execSync(`which ${cmd}`, {
       encoding: 'utf-8',
@@ -28,21 +26,22 @@ function isAvailable(cmd) {
 /**
  * Print the nightshift banner.
  */
-function printBanner() {
-  console.log('');
-  console.log(chalk.bold('  nightshift'));
+function printBanner(): void {
+  console.log(chalk.bold(`
+       _       __    __       __    _ ______
+ ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
+/ _ \\/ / __ \`/ __ \\/ __/ ___/ __ \\/ / /_/ __/
+/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
+/_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
+        /____/`));
   console.log(chalk.dim('  Coordinating AI agents for your development pipeline'));
   console.log('');
 }
 
 /**
  * Parse a flag value from CLI arguments.
- * E.g., parseFlag(['--team', 'dev'], '--team') returns 'dev'.
- * @param {string[]} args - CLI arguments
- * @param {string} flag - Flag to look for (e.g., '--team')
- * @returns {string|null} Value after the flag, or null if not found
  */
-function parseFlag(args, flag) {
+function parseFlag(args: string[], flag: string): string | null {
   const idx = args.indexOf(flag);
   if (idx === -1 || idx + 1 >= args.length) {
     return null;
@@ -52,9 +51,8 @@ function parseFlag(args, flag) {
 
 /**
  * List available preset names by scanning the presets directory.
- * @returns {string[]} Array of preset names
  */
-function listAvailablePresets() {
+function listAvailablePresets(): string[] {
   const presetsDir = join(getPresetDir(''), '..');
   if (!existsSync(presetsDir)) {
     return [];
@@ -66,16 +64,8 @@ function listAvailablePresets() {
 
 /**
  * Generate repo.md content from detected project settings.
- * Auto-fills detected values, prompts for missing ones (unless skipPrompts is true).
- *
- * @param {string} packageManager - Detected package manager
- * @param {string} language - Detected language
- * @param {{ build: string|null, test: string|null, lint: string|null, typecheck: string|null }} scripts - Detected scripts
- * @param {string} mainBranch - Main branch name
- * @param {boolean} skipPrompts - If true, skip interactive prompts and use defaults
- * @returns {Promise<string>} Generated repo.md content
  */
-export async function generateRepoMd(packageManager, language, scripts, mainBranch, skipPrompts) {
+export async function generateRepoMd(packageManager: string, language: string, scripts: DetectedScripts, mainBranch: string, skipPrompts: boolean): Promise<string> {
   const pm = packageManager || 'npm';
 
   // Build command strings from detected scripts
@@ -86,7 +76,7 @@ export async function generateRepoMd(packageManager, language, scripts, mainBran
   let lintCmd = scripts.lint ? `${pm} run lint` : 'TODO';
 
   // Build verification command from available scripts
-  const verifyParts = [];
+  const verifyParts: string[] = [];
   if (scripts.typecheck) verifyParts.push(`${pm} run typecheck`);
   if (scripts.lint) verifyParts.push(`${pm} run lint`);
   if (scripts.test) verifyParts.push(`${pm} run test`);
@@ -202,17 +192,8 @@ claude --dangerously-skip-permissions
 
 /**
  * Append or update the nightshift team section in CLAUDE.md.
- * - If CLAUDE.md doesn't exist: creates it with ## Nightshift Teams header + team subsection
- * - If CLAUDE.md exists but no ## Nightshift Teams: appends it
- * - If ## Nightshift Teams exists but no ### <team>: appends team subsection
- * - If ### <team> already exists: replaces it (regenerates)
- *
- * @param {string} repoRoot - Path to the repository root
- * @param {string} repoName - Name of the repository
- * @param {string} team - Team name
- * @param {number} coderCount - Number of coder agents
  */
-export function appendClaudeMd(repoRoot, repoName, team, coderCount) {
+export function appendClaudeMd(repoRoot: string, repoName: string, team: string, coderCount: number): void {
   const claudeMdPath = join(repoRoot, 'CLAUDE.md');
 
   // Build the team subsection
@@ -276,12 +257,8 @@ export function appendClaudeMd(repoRoot, repoName, team, coderCount) {
 
 /**
  * Build the markdown subsection for a team.
- * @param {string} team - Team name
- * @param {string} repoName - Repository name
- * @param {number} coderCount - Number of coder agents
- * @returns {string} Markdown content
  */
-function buildTeamSubsection(team, repoName, coderCount) {
+function buildTeamSubsection(team: string, repoName: string, coderCount: number): string {
   const teamDir = getTeamDir(repoName, team);
 
   let rows = '';
@@ -298,9 +275,8 @@ function buildTeamSubsection(team, repoName, coderCount) {
 
 /**
  * Run the full nightshift init flow.
- * @param {string[]} args - CLI arguments
  */
-export async function init(args) {
+export async function init(args: string[]): Promise<void> {
   // 1. Parse flags
   const team = parseFlag(args, '--team');
   const codersFlag = parseFlag(args, '--coders');
@@ -359,12 +335,12 @@ export async function init(args) {
   // 7. Validate repository
   console.log('');
   console.log(chalk.bold('Validating repository...'));
-  let repoRoot;
+  let repoRoot: string;
   try {
     repoRoot = detectRepoRoot();
     console.log(`  ${chalk.green('v')} Git repository found`);
   } catch (err) {
-    console.log(`  ${chalk.red('x')} ${err.message}`);
+    console.log(`  ${chalk.red('x')} ${(err as Error).message}`);
     process.exit(1);
   }
 
@@ -372,7 +348,7 @@ export async function init(args) {
     detectRemote();
     console.log(`  ${chalk.green('v')} Remote origin configured`);
   } catch (err) {
-    console.log(`  ${chalk.red('x')} ${err.message}`);
+    console.log(`  ${chalk.red('x')} ${(err as Error).message}`);
     process.exit(1);
   }
 
@@ -476,7 +452,7 @@ export async function init(args) {
       `  ${chalk.green('v')} ${labelsCreated} labels created`
     );
   } catch (err) {
-    console.log(`  ${chalk.red('x')} Failed to create labels: ${err.message}`);
+    console.log(`  ${chalk.red('x')} Failed to create labels: ${(err as Error).message}`);
     console.log(
       `  ${chalk.dim('  Make sure you are authenticated with gh: gh auth login')}`
     );
@@ -499,7 +475,7 @@ export async function init(args) {
     createWorktrees(repoName, team, roles, mainBranch);
     console.log(`  ${chalk.green('v')} Worktrees created at ${teamDir}/worktrees/`);
   } catch (err) {
-    console.log(`  ${chalk.red('x')} Failed to create worktrees: ${err.message}`);
+    console.log(`  ${chalk.red('x')} Failed to create worktrees: ${(err as Error).message}`);
     process.exit(1);
   }
 
@@ -530,7 +506,7 @@ export async function init(args) {
       `  ${chalk.green('v')} ${profilesCopied.length} profiles installed to ~/.claude/agents/`
     );
   } catch (err) {
-    console.log(`  ${chalk.red('x')} Failed to copy profiles: ${err.message}`);
+    console.log(`  ${chalk.red('x')} Failed to copy profiles: ${(err as Error).message}`);
     process.exit(1);
   }
 
@@ -552,7 +528,7 @@ export async function init(args) {
       console.log(`  ${chalk.dim('  .gitignore already configured (skipped)')}`);
     }
   } catch (err) {
-    console.log(`  ${chalk.yellow('~')} Failed to update .gitignore: ${err.message}`);
+    console.log(`  ${chalk.yellow('~')} Failed to update .gitignore: ${(err as Error).message}`);
   }
 
   // 18. Update CLAUDE.md
@@ -562,7 +538,7 @@ export async function init(args) {
     appendClaudeMd(repoRoot, repoName, team, coderCount);
     console.log(`  ${chalk.green('v')} Team section added to CLAUDE.md`);
   } catch (err) {
-    console.log(`  ${chalk.red('x')} Failed to update CLAUDE.md: ${err.message}`);
+    console.log(`  ${chalk.red('x')} Failed to update CLAUDE.md: ${(err as Error).message}`);
   }
 
   // 18. Print next steps

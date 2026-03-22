@@ -4,8 +4,9 @@ import chalk from 'chalk';
 import prompts from 'prompts';
 import { detectRepoRoot, detectRepoName } from './detect.js';
 import { removeLabels } from './labels.js';
-import { removeWorktrees, getNightshiftDir, getTeamDir, discoverTeams } from './worktrees.js';
+import { removeWorktrees, getNightshiftDir, getTeamDir, discoverTeams, discoverCoderCount } from './worktrees.js';
 import { removeAgentProfiles, removeExtensionFiles, removeRepoMd } from './copy.js';
+import { removeHooks } from './hooks.js';
 
 /**
  * Parse a flag value from CLI args (e.g. --team alpha -> "alpha").
@@ -172,6 +173,20 @@ export async function teardown(args: string[]): Promise<void> {
     try {
       const removed = removeExtensionFiles(repoRoot, t);
       console.log(`  ${chalk.green('\u2713')} ${removed.length} config files removed`);
+    } catch (err) {
+      console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
+    }
+
+    // 4b. Remove visualization hooks
+    try {
+      const coderCount = discoverCoderCount(repoName, t);
+      const roles = [
+        'producer', 'planner', 'reviewer',
+        ...Array.from({ length: coderCount }, (_, i) => `coder-${i + 1}`),
+        'tester',
+      ];
+      removeHooks(repoName, t, roles, repoRoot);
+      console.log(`  ${chalk.green('\u2713')} Visualization hooks removed`);
     } catch (err) {
       console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
     }

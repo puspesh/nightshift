@@ -19,6 +19,7 @@
     "defaults/",
     "examples/",
     "docs/",
+    "worlds/",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

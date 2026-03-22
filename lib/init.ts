@@ -7,7 +7,6 @@ import { detectRepoRoot, detectRepoName, detectMainBranch, detectPackageManager,
 import { createLabels } from './labels.js';
 import { createWorktrees, getTeamDir, discoverCoderCount } from './worktrees.js';
 import { copyAgentProfiles, copyExtensionFiles, getPresetDir } from './copy.js';
-import { installHooks } from './hooks.js';
 
 /**
  * Check if a command-line tool is available.
@@ -511,18 +510,7 @@ export async function init(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // 17. Install visualization hooks
-  console.log('');
-  console.log(chalk.bold('Installing visualization hooks...'));
-  try {
-    const allRoles = ['producer', ...roles];
-    installHooks(repoName, team, allRoles, 'http://localhost:4321', repoRoot);
-    console.log(`  ${chalk.green('v')} Hooks installed in worktree settings`);
-  } catch (err) {
-    console.log(`  ${chalk.yellow('~')} Failed to install hooks: ${(err as Error).message}`);
-  }
-
-  // 18. Update .gitignore with Claude Code runtime artifacts
+  // 17. Update .gitignore with Claude Code runtime artifacts
   console.log('');
   console.log(chalk.bold('Updating .gitignore...'));
   try {

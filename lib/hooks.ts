@@ -4,7 +4,15 @@ import { homedir } from 'node:os';
 import type { HookConfig, HookEntry } from './types.js';
 
 const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
-const HOOK_MARKER = '__nightshift_viz__';
+const HOOK_URL_PATTERN = '/api/hooks/claude-code';
+
+/**
+ * Check if a hook entry is a nightshift visualization hook.
+ * Identified by URL containing the miniverse claude-code hook endpoint.
+ */
+function isNightshiftHook(hook: Record<string, unknown>): boolean {
+  return typeof hook.url === 'string' && hook.url.includes(HOOK_URL_PATTERN);
+}
 
 /**
  * Generate a Claude Code hook configuration for a single agent.
@@ -73,14 +81,10 @@ export function installHooks(
 
     for (const event of HOOK_EVENTS) {
       const eventHooks = (existingHooks[event] ?? []) as Array<Record<string, unknown>>;
-      // Remove any previous nightshift hooks (identified by marker)
-      const filtered = eventHooks.filter(h => !(h as Record<string, unknown>)[HOOK_MARKER]);
-      // Add the new hook with marker
-      const newHook = {
-        ...hookConfig.hooks[event][0],
-        [HOOK_MARKER]: true,
-      };
-      filtered.push(newHook);
+      // Remove any previous nightshift hooks (identified by URL pattern)
+      const filtered = eventHooks.filter(h => !isNightshiftHook(h));
+      // Add the new hook
+      filtered.push(hookConfig.hooks[event][0] as unknown as Record<string, unknown>);
       existingHooks[event] = filtered;
     }
 
@@ -128,7 +132,7 @@ export function removeHooks(
       const eventHooks = hooks[event] as Array<Record<string, unknown>> | undefined;
       if (!eventHooks) continue;
 
-      const filtered = eventHooks.filter(h => !h[HOOK_MARKER]);
+      const filtered = eventHooks.filter(h => !isNightshiftHook(h));
       if (filtered.length !== eventHooks.length) {
         modified = true;
         if (filtered.length === 0) {

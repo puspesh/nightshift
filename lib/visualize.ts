@@ -34,6 +34,7 @@ export function startServer(
   worldDir: string,
   repoName: string,
   team: string,
+  repoRoot: string,
 ): { pid: number; url: string } | null {
   const pidFile = getPidFilePath(repoName, team);
   const portFile = getPortFilePath(repoName, team);
@@ -42,8 +43,8 @@ export function startServer(
   // Ensure parent directory exists
   mkdirSync(join(homedir(), '.nightshift', repoName, team), { recursive: true });
 
-  // Find the miniverse binary
-  const miniverse = join(process.cwd(), 'node_modules', '.bin', 'miniverse');
+  // Find the miniverse binary relative to repo root (not cwd)
+  const miniverse = join(repoRoot, 'node_modules', '.bin', 'miniverse');
   if (!existsSync(miniverse)) {
     return null;
   }
@@ -74,7 +75,7 @@ export function startServer(
 
 /**
  * Wait for the miniverse server to become healthy.
- * Polls GET / until it responds (max timeout).
+ * Polls GET / (the static frontend) until it responds (max timeout).
  */
 export async function waitForServer(url: string, timeoutMs: number = 10000): Promise<boolean> {
   const start = Date.now();
@@ -82,7 +83,7 @@ export async function waitForServer(url: string, timeoutMs: number = 10000): Pro
 
   while (Date.now() - start < timeoutMs) {
     try {
-      const response = await fetch(`${url}/api/info`);
+      const response = await fetch(url);
       if (response.ok) return true;
     } catch {
       // Server not ready yet

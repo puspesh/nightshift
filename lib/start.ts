@@ -8,6 +8,7 @@ import { getTeamDir, discoverCoderCount } from './worktrees.js';
 import { detectRepoRoot, detectRepoName } from './detect.js';
 import { startServer, waitForServer, registerAgents, stopServer } from './visualize.js';
 import { generateWorldConfig, writeWorldConfig } from './world-config.js';
+import { installHooks } from './hooks.js';
 import type { AgentEntry } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -127,12 +128,16 @@ export async function startSession(team: string, options?: { port?: number }): P
     const worldConfig = generateWorldConfig(agents, team);
     writeWorldConfig(worldConfig, worldDir);
 
-    const result = startServer(vizPort, worldDir, repoName, team);
+    const result = startServer(vizPort, worldDir, repoName, team, repoRoot);
     if (result) {
       const healthy = await waitForServer(result.url, 10000);
       if (healthy) {
         await registerAgents(result.url, agents, team);
         vizUrl = result.url;
+
+        // Install/update hooks with the actual server URL so heartbeats reach the right port
+        const allRoles = agents.map(a => a.role);
+        installHooks(repoName, team, allRoles, result.url, repoRoot);
       } else {
         console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
       }

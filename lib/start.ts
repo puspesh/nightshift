@@ -186,8 +186,13 @@ export function startSession(team: string): void {
   }
 
   // Print info
-  console.log('');
-  console.log(chalk.bold('  nightshift'));
+  console.log(chalk.bold(`
+       _       __    __       __    _ ______
+ ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
+/ _ \\/ / __ \`/ __ \\/ __/ ___/ __ \\/ / /_/ __/
+/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
+/_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
+        /____/`));
   console.log(chalk.dim(`  Starting ${team} team in tmux session: ${session}`));
   console.log(chalk.dim(`  Runner: ${runner}`));
   console.log('');

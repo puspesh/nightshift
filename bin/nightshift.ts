@@ -19,11 +19,17 @@ function parseFlag(arr: string[], flag: string): string | null {
   return arr[idx + 1];
 }
 
-function printHelp(): void {
-  console.log(`
-nightshift v${pkg.version}
+const BANNER = `
+       _       __    __       __    _ ______
+ ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
+/ _ \\/ / __ \`/ __ \\/ __/ ___/ __ \\/ / /_/ __/
+/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
+/_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
+        /____/                                 `;
 
-Coordinating AI agents for your development pipeline.
+function printHelp(): void {
+  console.log(BANNER);
+  console.log(`  v${pkg.version} — Coordinating AI agents for your development pipeline.
 
 Usage: nightshift <command> [options]
 

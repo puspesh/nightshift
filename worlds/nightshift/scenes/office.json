@@ -1,0 +1,7 @@
+{
+  "name": "office",
+  "description": "Nightshift office with dynamic workstation layout",
+  "anchorLayout": "grid",
+  "maxAnchors": 8,
+  "anchorSpacing": { "cols": 4, "xPadding": 128, "yPadding": 96 }
+}

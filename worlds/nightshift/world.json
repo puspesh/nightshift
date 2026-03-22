@@ -1,0 +1,8 @@
+{
+  "canvas": { "width": 512, "height": 384 },
+  "tileSize": 32,
+  "scale": 2,
+  "theme": "gear-supply",
+  "gridCols": 16,
+  "gridRows": 12
+}

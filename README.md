@@ -22,7 +22,16 @@ vi .claude/nightshift/repo.md                  # commands, branch patterns (shar
 vi .claude/nightshift/ns-dev-review-criteria.md  # code review checklist
 vi .claude/nightshift/ns-dev-test-config.md      # test configuration
 
-# Start the agents (each in its own Claude Code terminal)
+# Start all agents in a tmux session
+npx nightshift start --team dev
+```
+
+This opens a tmux session with all agents in a split-pane layout. Each pane
+shows its role and the `/loop` command to run. Navigate panes with `Ctrl+b, arrow`.
+
+You can also start agents individually in separate terminals:
+
+```bash
 /loop 15m @ns-dev-producer
 /loop 15m @ns-dev-planner
 /loop 15m @ns-dev-reviewer
@@ -112,6 +121,12 @@ dev:ready-to-merge --> human merges
 # Initialize a team
 npx nightshift init --team dev
 
+# Launch all agents in a tmux session
+npx nightshift start --team dev
+
+# Stop a running tmux session
+npx nightshift stop --team dev
+
 # List all installed teams and their agents
 npx nightshift list
 
@@ -124,6 +139,17 @@ npx nightshift teardown --team dev --force
 # Also remove GitHub labels
 npx nightshift teardown --team dev --force --remove-labels
 ```
+
+### Runner Configuration
+
+The `start` command reads the runner command from `.claude/nightshift/repo.md`.
+Default:
+
+```
+claude --dangerously-skip-permissions
+```
+
+Customize it to change flags, model, or permissions for all agents.
 
 ## Prerequisites
 

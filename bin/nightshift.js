@@ -13,6 +13,12 @@ const pkg = JSON.parse(
 
 const args = process.argv.slice(2);
 
+function parseFlag(arr, flag) {
+  const idx = arr.indexOf(flag);
+  if (idx === -1 || idx + 1 >= arr.length) return null;
+  return arr[idx + 1];
+}
+
 function printHelp() {
   console.log(`
 nightshift v${pkg.version}
@@ -24,6 +30,8 @@ Usage: nightshift <command> [options]
 Commands:
   init       Set up a nightshift team in this repository
   teardown   Remove nightshift from this repository
+  start      Launch all agents in a tmux session
+  stop       Stop a running tmux session
   list       Show active teams in this repository
 
 Options (init):
@@ -37,6 +45,9 @@ Options (teardown):
   --team <name>     Remove specific team (omit to remove all)
   --force           Skip confirmation
   --remove-labels   Also delete GitHub labels
+
+Options (start/stop):
+  --team <name>     Team to start or stop (required)
 
 Options:
   --help, -h        Show this help message
@@ -91,6 +102,26 @@ async function main() {
     case 'teardown': {
       const { teardown } = await import('../lib/teardown.js');
       await teardown(commandArgs);
+      break;
+    }
+    case 'start': {
+      const team = parseFlag(commandArgs, '--team');
+      if (!team) {
+        console.error('Please specify a team: npx nightshift start --team dev');
+        process.exit(1);
+      }
+      const { startSession } = await import('../lib/start.js');
+      startSession(team);
+      break;
+    }
+    case 'stop': {
+      const team = parseFlag(commandArgs, '--team');
+      if (!team) {
+        console.error('Please specify a team: npx nightshift stop --team dev');
+        process.exit(1);
+      }
+      const { stopSession } = await import('../lib/start.js');
+      stopSession(team);
       break;
     }
     case 'list': {

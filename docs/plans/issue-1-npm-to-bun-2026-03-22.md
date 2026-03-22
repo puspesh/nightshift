@@ -2,34 +2,35 @@
 
 > Issue: #1
 > Date: 2026-03-22
-> Status: draft
+> Status: revised
 
 ## Overview
 
-Migrate the nightshift project's own package management from npm to bun. This involves replacing `package-lock.json` with `bun.lock`, updating `.gitignore`/`.npmignore`, changing all `npx` references to `bunx`, updating the test script to use `bun test`, and adding a build-time measurement script. The project already has bun detection support for user repos (`lib/detect.js`), so this change is about nightshift's own tooling -- not the multi-PM detection logic that serves end users.
+Migrate the nightshift project's own package management from npm to bun. This involves replacing `package-lock.json` with `bun.lock`, updating `.gitignore`, and adding a build-time measurement script. The test script stays as `node --test` (since existing tests use `node:test` API, incompatible with `bun test`), and bun is used as the package manager (`bun install`) and runner (`bun run test`). End-user-facing `npx` references are preserved — only contributor/developer-facing docs switch to `bunx`. The multi-PM detection in `lib/detect.js` is unchanged since it serves end-user repos.
 
 ## Requirements
 
-- Replace npm with bun as the project's package manager and runner
+- Replace npm with bun as the project's own package manager and runner
 - Replace `package-lock.json` with `bun.lock`
-- Replace all `npx nightshift` references with `bunx nightshift`
-- Update test runner from `node --test` to `bun test`
+- Keep `node --test` as the test script (bun used via `bun run test`)
+- Update only contributor/developer-facing `npx` references to `bunx` (CONTRIBUTING.md)
+- Preserve all end-user-facing `npx nightshift` references (README, CLI output, error messages, docs)
 - Measure and log build time (install + test) as a baseline
 - Maintain backward compatibility: the multi-PM detection in `lib/detect.js` must continue supporting npm/pnpm/yarn/bun for end-user repos
-- All existing tests must pass under `bun test`
+- All existing tests must pass via `bun run test`
 
 ## Architecture Changes
 
-- `package.json`: update `scripts.test` to use bun, remove npm engine constraint
+- `package.json`: add `"measure"` script, keep `"test"` as-is (`node --test`)
 - `package-lock.json`: delete (replaced by `bun.lock` generated via `bun install`)
-- `.gitignore`: replace `package-lock.json` with `bun.lock` (bun.lock should be committed, but if the project currently ignores the lockfile, maintain that pattern)
+- `.gitignore`: replace `package-lock.json` with `bun.lock` (maintain ignore-lockfile convention)
 - `.npmignore`: no changes needed (already excludes `node_modules/`)
-- `bin/nightshift.js`: update `npx` reference to `bunx`
-- `lib/init.js`: update `npx` references in user-facing strings to `bunx`
-- `README.md`: update all `npx` references to `bunx`
-- `CONTRIBUTING.md`: update `npx` references to `bunx`
-- `docs/troubleshooting.md`: update `npx` references to `bunx`
-- `presets/dev/defaults/ns-dev-test-config.md`: update `npx`/`npm` examples to include `bunx`/`bun`
+- `CONTRIBUTING.md`: update `npx` references to `bunx` (contributor-facing)
+- `bin/nightshift.js`: **no changes** (end-user-facing `npx` reference stays)
+- `lib/init.js`: **no changes** (end-user-facing `npx` references stay)
+- `README.md`: **no changes** to `npx` commands (end-user-facing); add note that bun is used for development
+- `docs/troubleshooting.md`: **no changes** (end-user-facing `npx` references stay)
+- `presets/dev/defaults/ns-dev-test-config.md`: **no changes** (PM-agnostic template for end users)
 
 ## Implementation Steps
 
@@ -50,95 +51,93 @@ Migrate the nightshift project's own package management from npm to bun. This in
    - Why: Keep lockfile handling consistent with current project convention
    - Dependencies: step 2
 
-4. **Update `package.json`** (`package.json`)
-   - Action: Change `"test": "node --test 'tests/*.test.js'"` to `"test": "bun test"`
-   - Why: `bun test` is bun's native test runner; however, the project uses `node:test` API -- verify compatibility (see Assumptions)
+4. **Verify test script** (`package.json`)
+   - Action: No change needed. Keep `"test": "node --test 'tests/*.test.js'"` as-is. Bun will be used as the package manager (`bun install`) and runner (`bun run test`), but the test script itself uses Node's built-in test runner. All 6 test files import from `node:test`, which is incompatible with `bun test`.
+   - Why: `bun test` uses the `bun:test` API, not `node:test`. Keeping `node --test` is the safe, compatible choice.
    - Dependencies: none
 
-5. **Update `bin/nightshift.js`** (`bin/nightshift.js`)
-   - Action: Change `npx nightshift init --team dev` to `bunx nightshift init --team dev` on line 63
-   - Why: User-facing instructions should reference the new runner
+5. **Run tests via bun** (project root)
+   - Action: Run `bun run test` and verify all existing tests pass
+   - Why: Validate that bun as a runner correctly delegates to `node --test`
+   - Dependencies: steps 1-4
+
+### Phase 2: Documentation updates
+
+6. **Update `CONTRIBUTING.md`** (`CONTRIBUTING.md`)
+   - Action: Replace `npx nightshift` with `bunx nightshift` (lines 26, 28). This is contributor/developer-facing documentation about how to develop nightshift itself.
+   - Why: Contributors working on the nightshift codebase should use bun, the project's own package manager
    - Dependencies: none
 
-6. **Update `lib/init.js`** (`lib/init.js`)
-   - Action: Change the two `npx` references to `bunx`:
-     - Line 151: `Generated by \`npx nightshift init\`` -> `Generated by \`bunx nightshift init\``
-     - Line 305: `'Please specify a team: npx nightshift init --team dev'` -> `'Please specify a team: bunx nightshift init --team dev'`
-   - Why: User-facing error messages and generated docs should reference bun
+7. **No changes to end-user-facing docs**
+   - Action: Explicitly do NOT change `npx` references in the following files — they are end-user-facing and users install/run nightshift via npm/npx:
+     - `bin/nightshift.js` line 63 (`npx nightshift init --team dev`) -- shown to end users
+     - `lib/init.js` line 151 (`Generated by npx nightshift init`) -- generated repo.md comment
+     - `lib/init.js` line 305 (`Please specify a team: npx nightshift init --team dev`) -- CLI error message
+     - `README.md` -- all `npx nightshift` examples are user install/usage instructions
+     - `docs/troubleshooting.md` -- end-user troubleshooting commands
+     - `presets/dev/defaults/ns-dev-test-config.md` -- PM-agnostic template for end-user projects
+   - Why: End users don't need bun installed. They install nightshift from npm and run with `npx`. The issue scope is nightshift's own development tooling, not the end-user experience.
    - Dependencies: none
-
-7. **Run tests** (project root)
-   - Action: Run `bun test` and verify all tests pass
-   - Why: Validate that existing `node:test` tests work with bun's test runner, or if not, keep `node --test` in the test script and use `bun run test` as the entry point
-   - Dependencies: steps 4
-
-### Phase 2: Documentation and references
-
-8. **Update `README.md`** (`README.md`)
-   - Action: Replace all `npx nightshift` with `bunx nightshift` (lines 13, 38, 113, 116, 119, 122, 125)
-   - Why: Primary user-facing documentation
-   - Dependencies: none
-
-9. **Update `CONTRIBUTING.md`** (`CONTRIBUTING.md`)
-   - Action: Replace `npx nightshift` with `bunx nightshift` (lines 26, 28)
-   - Why: Contributor documentation consistency
-   - Dependencies: none
-
-10. **Update `docs/troubleshooting.md`** (`docs/troubleshooting.md`)
-    - Action: Replace `npx nightshift` with `bunx nightshift` (lines 131, 138)
-    - Why: Troubleshooting docs consistency
-    - Dependencies: none
-
-11. **Update `presets/dev/defaults/ns-dev-test-config.md`** (`presets/dev/defaults/ns-dev-test-config.md`)
-    - Action: Update `npm test` to `bun test` and `npx playwright test` to `bunx playwright test`, `npm run e2e` to `bun run e2e` (line 11, line 20)
-    - Why: Preset defaults should reflect the new package manager
-    - Dependencies: none
 
 ### Phase 3: Build-time baseline measurement
 
-12. **Add build-time measurement script** (`scripts/measure-build.sh`)
-    - Action: Create a simple shell script that:
-      - Removes `node_modules/`
-      - Runs `bun install` with timing (`time bun install`)
-      - Runs `bun test` with timing (`time bun test`)
-      - Logs results to stdout with clear labels
-    - Why: Issue requires measuring build time and logging it for baseline
-    - Dependencies: steps 1-7
+8. **Add build-time measurement script** (`scripts/measure-build.sh`)
+   - Action: Create a simple shell script that:
+     - Removes `node_modules/`
+     - Runs `bun install` with timing (`time bun install`)
+     - Runs `bun run test` with timing (`time bun run test`)
+     - Logs results to stdout with clear labels
+   - Why: Issue requires measuring build time and logging it for baseline
+   - Dependencies: steps 1-5
 
-13. **Add `measure` script to `package.json`** (`package.json`)
-    - Action: Add `"measure": "bash scripts/measure-build.sh"` to scripts
-    - Why: Convenient entry point for running the measurement
-    - Dependencies: step 12
+9. **Add `measure` script to `package.json`** (`package.json`)
+   - Action: Add `"measure": "bash scripts/measure-build.sh"` to scripts
+   - Why: Convenient entry point for running the measurement
+   - Dependencies: step 8
 
-14. **Run the measurement and log the baseline** (project root)
+10. **Run the measurement and log the baseline** (project root)
     - Action: Execute `bun run measure` and capture the output
     - Why: Establishes the baseline build time as requested in the issue
-    - Dependencies: step 13
+    - Dependencies: step 9
 
 ## Testing Strategy
 
-- Unit tests: Run full existing test suite with `bun test` (or `node --test` via `bun run test` if bun's test runner is incompatible with `node:test` API)
-- Integration tests: Run `bunx nightshift init --team dev --yes` in a scratch repo to verify the init flow still works
+- Unit tests: Run full existing test suite via `bun run test` (which delegates to `node --test 'tests/*.test.js'`)
+- Integration tests: Run `npx nightshift init --team dev --yes` in a scratch repo to verify the init flow still works (note: `npx`, not `bunx`, because end-user flows use npx)
 - Manual verification: Confirm `bun install` resolves the same dependency tree (chalk, prompts, kleur, sisteransi)
 
 ## Assumptions
 
-- **bun test compatibility**: Bun's test runner uses its own test API (`bun:test`), not `node:test`. The existing tests use `node:test` (import from `node:test`). There are two approaches:
-  1. Keep `"test": "node --test 'tests/*.test.js'"` and just use `bun` as the runtime (i.e., `bun run test` invokes node's test runner via bun). This is the safer, lower-risk option.
-  2. Rewrite tests to use `bun:test` API. This is higher effort and out of scope for this issue.
-  - **Decision**: Use option 1 -- keep `node --test` as the test command and use bun only as package manager/runner. This minimizes risk and scope. The `package.json` test script stays as `"test": "node --test 'tests/*.test.js'"`, and bun is used via `bun run test`.
+- **bun test compatibility**: Bun's test runner uses `bun:test` API, not `node:test`. The existing tests import from `node:test` (all 6 test files). **Decision**: Keep `"test": "node --test 'tests/*.test.js'"` and use bun only as package manager/runner. `bun run test` delegates to `node --test`. This minimizes risk and scope.
 - **bun is not installed on this machine** (verified during exploration). The coder agent will need to install bun first (`curl -fsSL https://bun.sh/install | bash`) or document it as a prerequisite.
 - **Lockfile gitignore convention**: The project currently gitignores `package-lock.json`. We'll maintain this pattern and gitignore `bun.lock` as well, since the project has minimal dependencies and reproducibility from the lockfile is less critical.
 - **No changes to `lib/detect.js`**: The multi-PM detection logic is for detecting the *user's* package manager in their repo, not nightshift's own. It already supports bun detection and should not be modified.
 - **The `.npmignore` stays**: Even though we're moving to bun, the package may still be published to npm registry via `npm publish` or `bun publish`. The `.npmignore` file is still relevant.
+- **npx vs bunx scope**: `npx` references fall into two categories: (1) end-user-facing (README, CLI output, error messages, troubleshooting) — these stay as `npx` because end users install from npm; (2) contributor/developer-facing (CONTRIBUTING.md) — these change to `bunx` because developers working on nightshift use bun.
 
 ## Risks & Mitigations
 
-- **Risk**: `bun test` / `bun run test` may behave differently than `node --test` for edge cases (e.g., test isolation, mock behavior)
-  - Mitigation: Run full test suite under bun and compare results. If any tests fail, keep `node --test` as the test command and only use bun for package management.
-
-- **Risk**: `bunx` may not be a drop-in replacement for `npx` in all contexts (e.g., if users don't have bun installed)
-  - Mitigation: Since this is nightshift's own tooling, and bun is being adopted as the project's package manager, `bunx` is the appropriate runner. Users who install nightshift globally via npm can still use `npx`. Add a note in README that bun is recommended but npx still works.
+- **Risk**: `bun run test` may behave differently than `npm run test` when delegating to `node --test`
+  - Mitigation: Both `bun run test` and `npm run test` invoke the same script (`node --test 'tests/*.test.js'`). The behavior should be identical. Verify in step 5.
 
 - **Risk**: Build-time measurement may vary significantly across machines
   - Mitigation: The measurement script is for establishing a local baseline, not for CI benchmarking. Document that results are machine-specific.
+
+## Revision Notes
+
+Revised based on @ns-dev-reviewer feedback (1 critical, 2 warnings):
+
+### What changed
+
+1. **CRITICAL — npx/bunx scope corrected**: Removed the blanket `npx` → `bunx` replacement. End-user-facing references in `bin/nightshift.js`, `lib/init.js`, `README.md`, `docs/troubleshooting.md`, and `presets/dev/defaults/ns-dev-test-config.md` all keep `npx`. Only `CONTRIBUTING.md` (contributor-facing) changes to `bunx`. Added explicit step 7 documenting which files are NOT changed and why.
+
+2. **WARNING — Step 4 contradiction resolved**: Removed the instruction to change `"test"` to `"bun test"`. Step 4 now explicitly says "no change needed" and matches the Assumptions section decision to keep `node --test`.
+
+3. **WARNING — Preset template kept PM-agnostic**: Removed step 11 that would have changed `presets/dev/defaults/ns-dev-test-config.md`. This is a template for end-user projects and should remain package-manager-agnostic.
+
+### What was kept and why
+
+- Phase 1 core migration (bun.lock, delete package-lock.json, .gitignore update) — unchanged, correctly scoped
+- Phase 3 build-time measurement — unchanged, well-scoped
+- `lib/detect.js` out-of-scope — correctly identified as serving end-user repos
+- `node --test` decision — validated by reviewer as correct

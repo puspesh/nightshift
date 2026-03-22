@@ -7,19 +7,19 @@ import { dirname, join } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const pkg = JSON.parse(
+const pkg: { version: string } = JSON.parse(
   readFileSync(join(__dirname, '..', 'package.json'), 'utf-8')
 );
 
 const args = process.argv.slice(2);
 
-function parseFlag(arr, flag) {
+function parseFlag(arr: string[], flag: string): string | null {
   const idx = arr.indexOf(flag);
   if (idx === -1 || idx + 1 >= arr.length) return null;
   return arr[idx + 1];
 }
 
-function printHelp() {
+function printHelp(): void {
   console.log(`
 nightshift v${pkg.version}
 
@@ -57,12 +57,12 @@ Learn more: https://github.com/nightshift-agents/nightshift
 `);
 }
 
-function printVersion() {
+function printVersion(): void {
   console.log(pkg.version);
 }
 
-async function list() {
-  const { detectRepoRoot, detectRepoName } = await import('../lib/detect.js');
+async function list(): Promise<void> {
+  const { detectRepoName } = await import('../lib/detect.js');
   const { discoverTeams, discoverCoderCount } = await import('../lib/worktrees.js');
 
   try {
@@ -84,12 +84,12 @@ async function list() {
     }
     console.log('');
   } catch (err) {
-    console.error(err.message);
+    console.error((err as Error).message);
     process.exit(1);
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   const command = args[0];
   const commandArgs = args.slice(1);
 
@@ -147,7 +147,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err.message);
+main().catch((err: unknown) => {
+  console.error((err as Error).message);
   process.exit(1);
 });

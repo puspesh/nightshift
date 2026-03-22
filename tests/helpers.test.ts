@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { appendClaudeMd } from '../lib/init.js';
 import { cleanClaudeMd } from '../lib/teardown.js';
 
-let tmp;
+let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'nightshift-test-'));

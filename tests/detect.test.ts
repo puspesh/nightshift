@@ -15,8 +15,8 @@ import {
   detectRemote,
 } from '../lib/detect.js';
 
-let tmp;
-let origCwd;
+let tmp: string;
+let origCwd: string;
 
 beforeEach(() => {
   origCwd = process.cwd();

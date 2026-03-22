@@ -54,6 +54,7 @@ Options (teardown):
 
 Options (start/stop):
   --team <name>     Team to start or stop (required)
+  --port <number>   Port for visualization server (default: 4321)
 
 Options:
   --help, -h        Show this help message
@@ -116,8 +117,10 @@ async function main(): Promise<void> {
         console.error('Please specify a team: npx nightshift start --team dev');
         process.exit(1);
       }
+      const portStr = parseFlag(commandArgs, '--port');
+      const port = portStr ? parseInt(portStr, 10) : undefined;
       const { startSession } = await import('../lib/start.js');
-      startSession(team);
+      await startSession(team, { port });
       break;
     }
     case 'stop': {

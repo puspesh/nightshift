@@ -2,7 +2,7 @@
 
 > Issue: #2
 > Date: 2026-03-22
-> Status: draft
+> Status: revised
 
 ## Overview
 
@@ -24,7 +24,7 @@ Migrate all JavaScript source files (lib/, bin/, tests/) to TypeScript with stri
 - `tsconfig.json` -- TypeScript configuration with strict mode
 - `tsconfig.build.json` -- Build-only config (excludes tests) for publishing
 
-### File renames (14 files)
+### File renames (13 files)
 - `lib/detect.js` -> `lib/detect.ts`
 - `lib/init.js` -> `lib/init.ts`
 - `lib/copy.js` -> `lib/copy.ts`
@@ -116,10 +116,14 @@ dist/
 6. **Update `package.json`** (`package.json`)
    - Action:
      - Change `"bin"` from `"./bin/nightshift.js"` to `"./dist/bin/nightshift.js"`
-     - Update `"files"` to include `"dist/"` and remove `"bin/"`, `"lib/"` (source TS no longer shipped)
-     - Add scripts: `"build": "tsc -p tsconfig.build.json"`, `"typecheck": "tsc --noEmit"`
-     - Update `"test"` to: `"node --test 'dist/tests/*.test.js'"` (run compiled tests) OR use `tsx` for direct TS test execution (see Assumptions)
-   - Why: Entry points must reference compiled output
+     - Update `"files"` to include `"dist/"` and remove `"bin/"`, `"lib/"` (source TS no longer shipped). Note: `.npmignore` additions in step 5 are belt-and-suspenders with the `files` whitelist — both are kept for clarity.
+     - Add scripts:
+       - `"build": "tsc -p tsconfig.build.json"` — for publishing (excludes tests)
+       - `"pretest": "tsc"` — compiles everything including tests using main `tsconfig.json`
+       - `"test": "node --test 'dist/tests/*.test.js'"` — runs compiled tests
+       - `"typecheck": "tsc --noEmit"` — type-check only, no emit
+     - The key distinction: `build` uses `tsconfig.build.json` (no tests in output), while `pretest` uses the main `tsconfig.json` (includes tests in `dist/tests/`). Running `npm test` or `bun run test` triggers `pretest` automatically, so tests are always compiled before running.
+   - Why: Entry points must reference compiled output. Two compilation modes needed: one for publishing (no tests), one for testing (with tests).
    - Dependencies: steps 2, 3
 
 ### Phase 2: Migrate source files (lib/)
@@ -246,9 +250,9 @@ dist/
 
 ### Phase 4: Update imports and build verification
 
-20. **Update all import paths** (all `.ts` files)
-    - Action: Change `import ... from './foo.js'` to `import ... from './foo.js'` -- **keep the `.js` extension**. With `NodeNext` module resolution, TypeScript requires `.js` extensions in imports even for `.ts` source files. This is a common gotcha.
-    - Why: NodeNext resolution requires explicit `.js` extensions that map to the compiled output
+20. **Verify import paths** (all `.ts` files)
+    - Action: No changes needed. All existing imports already use `.js` extensions (e.g., `import ... from './detect.js'`). With `NodeNext` module resolution, TypeScript requires `.js` extensions in import specifiers even for `.ts` source files — the existing paths are already correct.
+    - Why: Confirming no import path changes are needed reduces risk of breakage
     - Dependencies: steps 7-19
 
 21. **Add `@types/node` devDependency** (`package.json`)
@@ -262,13 +266,13 @@ dist/
     - Dependencies: step 1
 
 23. **Run typecheck** (project root)
-    - Action: Run `npx tsc --noEmit` and fix all type errors
+    - Action: Run `bun run typecheck` (which executes `tsc --noEmit`) and fix all type errors. If issue #1 has not yet merged, use `npx tsc --noEmit` instead.
     - Why: Verify the migration is type-safe
     - Dependencies: steps 7-22
 
 24. **Build and test** (project root)
-    - Action: Run `npx tsc -p tsconfig.build.json` then `node --test dist/tests/*.test.js` (or the configured test command)
-    - Why: Verify compiled output works correctly
+    - Action: Run `bun run test` (which triggers `pretest` → `tsc` to compile everything including tests, then runs `node --test dist/tests/*.test.js`). Verify all tests pass. If issue #1 has not yet merged, use `npm test` instead.
+    - Why: Verify compiled output works correctly. Uses main `tsconfig.json` (not `tsconfig.build.json`) so tests are compiled to `dist/tests/`.
     - Dependencies: step 23
 
 25. **Verify the CLI entry point** (project root)
@@ -278,17 +282,20 @@ dist/
 
 ## Testing Strategy
 
-- **Typecheck**: `tsc --noEmit` must pass with zero errors (this is the primary new test)
-- **Unit tests**: All 6 test files must pass after compilation. Run via `node --test dist/tests/*.test.js`
+- **Typecheck**: `bun run typecheck` (`tsc --noEmit`) must pass with zero errors
+- **Unit tests**: `bun run test` which triggers `pretest` (`tsc` — compiles everything via main `tsconfig.json`), then runs `node --test dist/tests/*.test.js`. All 6 test files must pass.
+- **Build for publish**: `bun run build` (`tsc -p tsconfig.build.json`) must succeed — verify `dist/` contains lib/ and bin/ but NOT tests/
 - **Integration**: Run `node dist/bin/nightshift.js --help` to verify CLI entry point
 - **Regression**: The test output and behavior must match pre-migration behavior exactly
 
 ## Assumptions
 
 - **Test runner approach**: The project uses `node:test` which is Node.js's built-in test runner. With TypeScript, we have two options:
-  1. **Compile first, then test**: `tsc && node --test dist/tests/*.test.js` -- reliable, but requires a build step before testing
+  1. **Compile first, then test**: `tsc && node --test dist/tests/*.test.js` -- reliable, but requires a build step before testing. Implemented via `"pretest": "tsc"` so `bun run test` handles both steps automatically.
   2. **Use `tsx` for direct execution**: Add `tsx` as a devDependency and run `tsx --test tests/*.test.ts` -- faster dev loop, no build step for tests
   - **Decision**: Use option 1 (compile then test) for CI/scripts, but document option 2 in CONTRIBUTING.md for developer convenience. This keeps the dependency footprint minimal.
+
+- **Issue #1 dependency (bun migration)**: Issue #1 (`dev:ready-to-merge`) migrates the project from npm to bun. The coder should rebase `issue-2-migrate-to-typescript` onto main after issue #1 merges. The `package.json` scripts themselves are PM-agnostic (`tsc`, `node --test`), so only the runner commands change (`bun run test` instead of `npm test`, `bun run build` instead of `npm run build`). Plan prose uses `bun run` commands assuming issue #1 has merged; if not, substitute `npm run` or `npx`.
 
 - **Import extensions**: TypeScript with `NodeNext` requires `.js` extensions in import specifiers even though the source files are `.ts`. This is intentional and correct -- the imports resolve to the compiled `.js` output. The existing imports already use `.js` extensions, so **no import path changes are needed**.
 
@@ -316,3 +323,23 @@ dist/
 
 - **Risk**: Test files import from `../lib/` using relative paths -- compiled test output in `dist/tests/` must still resolve to `dist/lib/`
   - Mitigation: The directory structure is flat (no nesting beyond one level), so `../lib/foo.js` from `dist/tests/` correctly resolves to `dist/lib/foo.js`. Verify in step 24.
+
+## Revision Notes
+
+Revised based on @ns-dev-reviewer feedback (1 critical, 2 warnings):
+
+### What changed
+
+1. **CRITICAL — Test compilation gap fixed**: Step 6 now defines two compilation modes: `"build"` uses `tsconfig.build.json` (excludes tests, for publishing) and `"pretest": "tsc"` uses main `tsconfig.json` (includes tests). Running `bun run test` automatically triggers `pretest` → compiles everything including tests to `dist/tests/` → then runs `node --test dist/tests/*.test.js`. Step 24 also corrected to use `bun run test` (not `tsc -p tsconfig.build.json`).
+
+2. **WARNING — Issue #1 dependency acknowledged**: Added Assumptions entry noting that issue #1 (bun migration, `dev:ready-to-merge`) should be merged first. The coder should rebase onto main after issue #1 merges. Plan prose updated to use `bun run` commands. `package.json` scripts are PM-agnostic so no script changes needed.
+
+3. **WARNING — File count corrected**: Header changed from "14 files" to "13 files" (6 lib + 1 bin + 6 tests = 13).
+
+### What was kept and why
+
+- Phased migration order (leaf modules first) — validated by reviewer
+- NodeNext module resolution with `.js` extensions — confirmed correct
+- Two tsconfig approach — called "sound" by reviewer
+- Type signatures — reviewer verified they match actual code
+- Step 20 (import paths) — clarified as "verify, no changes needed" since existing `.js` extensions already work

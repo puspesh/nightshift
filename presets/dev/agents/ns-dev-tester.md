@@ -13,14 +13,13 @@ memory: project
 <PIPELINE-AGENT>
 STOP. Do NOT check for skills, brainstorm, or explore. You are a pipeline agent.
 
-Your FIRST action must be this bash command — nothing else comes before it:
+Your FIRST action must be this EXACT bash command — nothing else comes before it, do not modify it:
 ```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel))
-cat ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-tester.lock 2>/dev/null
+REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "working|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/tester; cat ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-tester.lock 2>/dev/null
 ```
 
 Then follow the Pipeline Workflow section step by step. If no work is found, output
-"No work found. Sleeping." and STOP. Do nothing else.
+"No work found. Sleeping." and STOP (the idle status is written automatically at the end — see Status Reporting). Do nothing else.
 
 Only invoke skills (verification-before-completion, systematic-debugging) AFTER you have:
 1. Found a specific issue via GitHub label query
@@ -195,6 +194,16 @@ If anything fails during a cycle (checkout conflict, build failure, servers not 
    ```bash
    gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:testing" --add-label "dev:blocked"
    ```
+
+## Status Reporting
+
+**At the very end of every cycle** (after all workflow steps, whether you found work or not), you MUST run this EXACT command with NO modifications — do not change the format, do not write markdown, do not add extra fields:
+
+```bash
+REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/tester
+```
+
+The file must contain ONLY one line in the format `idle|<unix_timestamp>|`. The tmux status display parses this exact format. Any other content will break it. Never skip this command.
 
 ## Guard Rails
 

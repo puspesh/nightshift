@@ -26,8 +26,23 @@ vi .claude/nightshift/ns-dev-test-config.md      # test configuration
 npx nightshift start --team dev
 ```
 
-This opens a tmux session with all agents in a split-pane layout. Each pane
-shows its role and the `/loop` command to run. Navigate panes with `Ctrl+b, arrow`.
+This opens a tmux session with a split-pane layout:
+
+```
+┌──────────┬─────────────────┐
+│ producer │                 │
+├──────────┤    coder-1      │
+│ planner  │                 │
+├──────────┼─────────────────┤
+│ reviewer │    coder-2      │
+├──────────┤                 │
+│ tester   │                 │
+└──────────┴─────────────────┘
+```
+
+Each pane has a color-coded label showing its role, the `/loop` command to type,
+and a live status indicator (working/idle with countdown timer). Navigate panes
+with `Ctrl+b, arrow`. Detach with `Ctrl+b, d` (agents keep running).
 
 You can also start agents individually in separate terminals:
 
@@ -156,6 +171,7 @@ Customize it to change flags, model, or permissions for all agents.
 - [Claude Code](https://docs.anthropic.com/claude-code) -- the AI coding assistant
 - [GitHub CLI (gh)](https://cli.github.com/) -- for label and issue management
 - [git](https://git-scm.com/) -- for worktree isolation
+- [tmux](https://github.com/tmux/tmux) -- for the `start` command (`brew install tmux`)
 
 ## Documentation
 

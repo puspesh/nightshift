@@ -176,6 +176,9 @@ git checkout _ns/dev/planner
 gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:planning" --add-label "dev:plan-review"
 # OR for revisions:
 gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:plan-revising" --add-label "dev:plan-review"
+
+# 4. Set idle status
+echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/planner
 ```
 
 ## Handling Revisions (dev:plan-revising)
@@ -232,16 +235,6 @@ If anything fails during a cycle (git checkout conflict, push failure, unexpecte
    gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:planning" --add-label "dev:blocked"
    ```
 5. Continue checking for other issues in the same cycle — don't stop the loop
-
-## Status Reporting
-
-**At the very end of every cycle** (after all workflow steps, whether you found work or not), you MUST run this EXACT command with NO modifications — do not change the format, do not write markdown, do not add extra fields:
-
-```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/planner
-```
-
-The file must contain ONLY one line in the format `idle|<unix_timestamp>|`. The tmux status display parses this exact format. Any other content will break it. Never skip this command.
 
 ## Guard Rails
 

@@ -160,6 +160,9 @@ git checkout _ns/dev/tester
    gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:testing" --add-label "dev:ready-to-merge"
    # Any test fails:
    gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:testing" --add-label "dev:code-revising"
+
+   # 4. Set idle status
+   echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/tester
    ```
 
 ## Diagnosing Failures (superpowers:systematic-debugging)
@@ -194,16 +197,6 @@ If anything fails during a cycle (checkout conflict, build failure, servers not 
    ```bash
    gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:testing" --add-label "dev:blocked"
    ```
-
-## Status Reporting
-
-**At the very end of every cycle** (after all workflow steps, whether you found work or not), you MUST run this EXACT command with NO modifications — do not change the format, do not write markdown, do not add extra fields:
-
-```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/tester
-```
-
-The file must contain ONLY one line in the format `idle|<unix_timestamp>|`. The tmux status display parses this exact format. Any other content will break it. Never skip this command.
 
 ## Guard Rails
 

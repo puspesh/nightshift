@@ -4,7 +4,8 @@
   "description": "Coordinating AI agents for your development pipeline. Set up 5 agents (producer, planner, reviewer, coder, tester) in any repository.",
   "type": "module",
   "scripts": {
-    "test": "node --test 'tests/*.test.js'"
+    "test": "node --test 'tests/*.test.js'",
+    "measure": "bash scripts/measure-build.sh"
   },
   "bin": {
     "nightshift": "./bin/nightshift.js"

@@ -497,20 +497,6 @@ export async function init(args: string[]): Promise<void> {
     }
   }
 
-  // 16. Install miniverse visualization server
-  console.log('');
-  console.log(chalk.bold('Installing visualization server...'));
-  try {
-    execSync('npm ls @miniverse/server 2>/dev/null || npm install --no-save @miniverse/server@latest', {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 60000,
-    });
-    console.log(`  ${chalk.green('v')} @miniverse/server installed`);
-  } catch {
-    console.log(`  ${chalk.yellow('~')} @miniverse/server not available — visualization will be skipped`);
-  }
 
   // 17. Copy agent profiles
   console.log('');

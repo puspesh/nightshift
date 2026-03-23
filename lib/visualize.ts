@@ -1,8 +1,12 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, openSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import type { AgentEntry } from './types.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Get the path to the miniverse PID file for a team.
@@ -43,8 +47,8 @@ export function startServer(
   // Ensure parent directory exists
   mkdirSync(join(homedir(), '.nightshift', repoName, team), { recursive: true });
 
-  // Find the miniverse binary relative to repo root (not cwd)
-  const miniverse = join(repoRoot, 'node_modules', '.bin', 'miniverse');
+  // Use the vendored miniverse server CLI
+  const miniverse = join(__dirname, 'miniverse', 'server', 'cli.js');
   if (!existsSync(miniverse)) {
     return null;
   }
@@ -52,8 +56,8 @@ export function startServer(
   // Open log file for output
   const logFd = openSync(logFile, 'a');
 
-  // Start as detached process
-  const child = spawn(miniverse, ['--port', String(port), '--public', worldDir], {
+  // Start as detached process using node
+  const child = spawn(process.execPath, [miniverse, '--port', String(port), '--public', worldDir, '--no-browser'], {
     detached: true,
     stdio: ['ignore', logFd, logFd],
     env: { ...process.env },

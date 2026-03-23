@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -130,10 +130,16 @@ export async function startSession(team: string, options?: { port?: number }): P
     const worldConfig = generateWorldConfig(agents, team);
     writeWorldConfig(worldConfig, worldDir);
 
-    // Copy base world assets (scenes, citizens, index.html) from the repo
+    // Copy base world assets and core bundle to the world dir
     const baseWorldDir = join(__dirname, '..', '..', 'worlds', 'nightshift');
     if (existsSync(baseWorldDir)) {
-      execSync(`cp -R "${baseWorldDir}/scenes" "${baseWorldDir}/citizens" "${baseWorldDir}/index.html" "${worldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/universal_assets" "${baseWorldDir}/base-world.json" "${worldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+    }
+    // Copy miniverse core bundle so the server can serve it
+    const coreDir = join(__dirname, 'miniverse', 'core');
+    mkdirSync(join(worldDir, '..', 'core'), { recursive: true });
+    if (existsSync(join(coreDir, 'miniverse-core.js'))) {
+      execSync(`cp "${coreDir}/miniverse-core.js" "${join(worldDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
     const result = startServer(vizPort, worldDir, repoName, team, repoRoot);
@@ -232,14 +238,9 @@ export async function startSession(team: string, options?: { port?: number }): P
   console.log(chalk.dim(`  Starting ${team} team in tmux session: ${session}`));
   console.log(chalk.dim(`  Runner: ${runner}`));
   if (vizUrl) {
-    // Open our custom status panel HTML, connecting to the miniverse WebSocket
-    const worldDir = join(getTeamDir(repoName, team), 'world');
-    const dashboardPath = join(worldDir, 'index.html');
-    const serverHost = vizUrl.replace('http://', '');
-    const dashboardUrl = `file://${dashboardPath}?server=${serverHost}&team=${team}`;
-    console.log(chalk.dim(`  Visualization: ${dashboardUrl}`));
+    console.log(chalk.dim(`  Visualization: ${vizUrl}`));
     try {
-      execSync(`open "${dashboardUrl}"`, { stdio: 'pipe' });
+      execSync(`open "${vizUrl}"`, { stdio: 'pipe' });
     } catch { /* non-macOS or open not available */ }
   }
   console.log('');

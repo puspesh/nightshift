@@ -107,7 +107,7 @@ export function copyExtensionFiles(repoRoot: string, team: string): CopyResult {
 
   mkdirSync(targetDir, { recursive: true });
 
-  const files = readdirSync(defaultsDir).filter((f) => f.endsWith('.md'));
+  const files = readdirSync(defaultsDir).filter((f) => f.endsWith('.md') || f.endsWith('.json'));
 
   for (const file of files) {
     const targetPath = join(targetDir, file);
@@ -179,7 +179,7 @@ export function removeExtensionFiles(repoRoot: string, team: string): string[] {
   }
 
   const files = readdirSync(targetDir).filter(
-    (f) => f.startsWith(prefix) && f.endsWith('.md'),
+    (f) => f.startsWith(prefix) && (f.endsWith('.md') || f.endsWith('.json')),
   );
 
   for (const file of files) {

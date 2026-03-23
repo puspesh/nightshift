@@ -17,7 +17,7 @@ Skills are NEVER needed for this agent. Do not invoke any.
 
 Your FIRST action must be this EXACT bash command — nothing else comes before it, do not modify it:
 ```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "working|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/producer; gh issue list --state open --json number,title,labels,updatedAt
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')"); echo "working|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/producer; gh issue list --state open --json number,title,labels,updatedAt
 ```
 
 Then follow the Workflow section step by step. If no work is found, output
@@ -92,7 +92,7 @@ For issues labeled `dev:ready-to-merge`:
 Log a one-line summary of what was processed (e.g., "Triaged 1 issue, 0 warnings, 2 ready-to-merge"). Then run this EXACT bash command:
 
 ```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/producer
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')"); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/producer
 ```
 
 ## GitHub Protocol

@@ -482,6 +482,12 @@ export class MiniverseServer {
       agentName = shortSession ? `Claude (${folder} #${shortSession})` : `Claude (${folder})`;
     }
 
+    // If this agent wasn't pre-registered, treat it as a subagent (temporary)
+    // Mark it with metadata so the frontend can style it differently
+    if (!this.store.has(agentId)) {
+      (data as any).metadata = { ...(data as any).metadata, subagent: true };
+    }
+
     const toolName = data.tool_name as string | undefined;
     const prompt = data.prompt as string | undefined;
 

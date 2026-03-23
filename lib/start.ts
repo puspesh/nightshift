@@ -125,8 +125,16 @@ export async function startSession(team: string, options?: { port?: number }): P
   let vizUrl: string | null = null;
   try {
     const worldDir = join(getTeamDir(repoName, team), 'world');
+
+    // Generate and write dynamic world config first (creates the directory)
     const worldConfig = generateWorldConfig(agents, team);
     writeWorldConfig(worldConfig, worldDir);
+
+    // Copy base world assets (scenes, citizens, index.html) from the repo
+    const baseWorldDir = join(__dirname, '..', '..', 'worlds', 'nightshift');
+    if (existsSync(baseWorldDir)) {
+      execSync(`cp -R "${baseWorldDir}/scenes" "${baseWorldDir}/citizens" "${baseWorldDir}/index.html" "${worldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+    }
 
     const result = startServer(vizPort, worldDir, repoName, team, repoRoot);
     if (result) {
@@ -224,7 +232,15 @@ export async function startSession(team: string, options?: { port?: number }): P
   console.log(chalk.dim(`  Starting ${team} team in tmux session: ${session}`));
   console.log(chalk.dim(`  Runner: ${runner}`));
   if (vizUrl) {
-    console.log(chalk.dim(`  Visualization: ${vizUrl}`));
+    // Open our custom status panel HTML, connecting to the miniverse WebSocket
+    const worldDir = join(getTeamDir(repoName, team), 'world');
+    const dashboardPath = join(worldDir, 'index.html');
+    const serverHost = vizUrl.replace('http://', '');
+    const dashboardUrl = `file://${dashboardPath}?server=${serverHost}&team=${team}`;
+    console.log(chalk.dim(`  Visualization: ${dashboardUrl}`));
+    try {
+      execSync(`open "${dashboardUrl}"`, { stdio: 'pipe' });
+    } catch { /* non-macOS or open not available */ }
   }
   console.log('');
   console.log(chalk.bold('  Agents:'));

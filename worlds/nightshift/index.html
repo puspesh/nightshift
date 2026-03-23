@@ -116,10 +116,6 @@
 <body>
   <h1>nightshift</h1>
 
-  <div id="canvas-container">
-    <iframe id="miniverse-frame" src="/"></iframe>
-  </div>
-
   <div id="status-panel"></div>
 
   <div id="connection-status">Connecting...</div>
@@ -173,7 +169,8 @@
     }
 
     function connect() {
-      const wsUrl = `ws://${location.host}/ws`;
+      const serverHost = params.get('server') || 'localhost:4321';
+      const wsUrl = `ws://${serverHost}/ws`;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -203,14 +200,6 @@
         ws.close();
       };
     }
-
-    // The miniverse server serves its own frontend at /, so we embed it
-    // in an iframe. But the status panel connects via WebSocket directly.
-    // Remove the iframe if we can't load it (miniverse frontend may not exist).
-    const frame = document.getElementById('miniverse-frame');
-    frame.onerror = () => {
-      frame.parentElement.style.display = 'none';
-    };
 
     // Update page title with team name from URL if available
     const params = new URLSearchParams(location.search);

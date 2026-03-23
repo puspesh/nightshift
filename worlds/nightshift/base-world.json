@@ -289,8 +289,8 @@
         {
           "name": "yellow_armchair_8_0",
           "ox": 1,
-          "oy": 2,
-          "type": "social"
+          "oy": 1,
+          "type": "rest"
         }
       ]
     },
@@ -305,8 +305,8 @@
         {
           "name": "yellow_armchair_9_0",
           "ox": 1,
-          "oy": 2,
-          "type": "social"
+          "oy": 1,
+          "type": "rest"
         }
       ]
     },
@@ -337,8 +337,8 @@
         {
           "name": "orange_ottoman_11_0",
           "ox": 0.5,
-          "oy": 1,
-          "type": "social"
+          "oy": 0.5,
+          "type": "rest"
         }
       ]
     },
@@ -353,8 +353,8 @@
         {
           "name": "orange_ottoman_12_0",
           "ox": 0.5,
-          "oy": 1,
-          "type": "social"
+          "oy": 0.5,
+          "type": "rest"
         }
       ]
     },
@@ -468,7 +468,15 @@
       "y": 3.75,
       "w": 1.9,
       "h": 2,
-      "layer": "below"
+      "layer": "below",
+      "anchors": [
+        {
+          "name": "wood_cushion_chair_0",
+          "ox": 0.5,
+          "oy": 1,
+          "type": "rest"
+        }
+      ]
     },
     {
       "id": "desk_chair_dark",
@@ -480,7 +488,7 @@
       "anchors": [
         {
           "ox": 0,
-          "oy": 2,
+          "oy": 0.8,
           "type": "work",
           "name": "desk_chair_dark_18_0"
         }
@@ -496,7 +504,7 @@
       "anchors": [
         {
           "ox": 0,
-          "oy": 2,
+          "oy": 0.8,
           "type": "work",
           "name": "desk_chair_dark_19_0"
         }

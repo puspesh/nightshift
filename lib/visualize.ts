@@ -3,7 +3,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, openSync, unlinkSyn
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import type { AgentEntry } from './types.js';
+import type { AgentEntry, CitizenOverrides } from './types.js';
+import { resolveCitizenProps } from './citizen-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -99,13 +100,15 @@ export async function waitForServer(url: string, timeoutMs: number = 10000): Pro
  * Register all agents with the miniverse server via heartbeat API.
  * Includes retry logic for reliability.
  */
-export async function registerAgents(url: string, agents: AgentEntry[], team: string): Promise<void> {
+export async function registerAgents(url: string, agents: AgentEntry[], team: string, overrides?: CitizenOverrides): Promise<void> {
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
     const agentId = `ns-${team}-${agent.role}`;
+    const resolved = resolveCitizenProps(agent.role, overrides ?? {});
     const payload = {
       agent: agentId,
-      name: agent.role,
+      name: resolved.displayName,
+      color: resolved.color,
       state: 'idle',
       task: 'Initializing',
     };

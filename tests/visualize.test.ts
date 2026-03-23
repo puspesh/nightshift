@@ -63,6 +63,32 @@ describe('generateWorldConfig', () => {
     assert.equal(config.theme, 'gear-supply');
   });
 
+  it('citizen displayName uses override when provided', () => {
+    const agents = makeAgents(1);
+    const overrides = { producer: { displayName: 'Boss' } };
+    const config = generateWorldConfig(agents, 'dev', overrides);
+    const producer = config.citizens.find(c => c.role === 'producer')!;
+    assert.equal(producer.displayName, 'Boss');
+  });
+
+  it('citizen color uses override when provided', () => {
+    const agents = makeAgents(1);
+    const overrides = { producer: { color: '#ff0000' } };
+    const config = generateWorldConfig(agents, 'dev', overrides);
+    const producer = config.citizens.find(c => c.role === 'producer')!;
+    assert.equal(producer.color, '#ff0000');
+  });
+
+  it('without overrides, behavior matches defaults', () => {
+    const agents = makeAgents(1);
+    const config = generateWorldConfig(agents, 'dev');
+    const producer = config.citizens.find(c => c.role === 'producer')!;
+    assert.equal(producer.displayName, 'producer');
+    assert.equal(producer.color, '#00cccc');
+    const coder = config.citizens.find(c => c.role === 'coder-1')!;
+    assert.equal(coder.color, '#0066cc');
+  });
+
   it('sets correct canvas dimensions', () => {
     const agents = makeAgents(1);
     const config = generateWorldConfig(agents, 'dev');

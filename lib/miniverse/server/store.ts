@@ -62,6 +62,10 @@ export class AgentStore {
     this.notify();
   }
 
+  has(agentId: string): boolean {
+    return this.agents.has(agentId);
+  }
+
   getAll(): AgentState[] {
     return Array.from(this.agents.values());
   }

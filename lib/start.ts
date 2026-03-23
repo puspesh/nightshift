@@ -9,6 +9,7 @@ import { detectRepoRoot, detectRepoName } from './detect.js';
 import { startServer, waitForServer, registerAgents, stopServer, isServerRunning, getPortFilePath } from './visualize.js';
 import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
+import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
 import type { AgentEntry } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -119,6 +120,7 @@ export async function startSession(team: string, options?: { port?: number }): P
   const session = getSessionName(repoName, team);
   const agents = buildAgentList(team, coderCount, repoRoot, repoName);
   const runner = parseRunner(repoRoot);
+  const citizenOverrides = loadCitizenConfig(repoRoot, team);
 
   // Start visualization server (non-blocking — failure doesn't prevent agents from launching)
   const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
@@ -128,7 +130,7 @@ export async function startSession(team: string, options?: { port?: number }): P
     const teamWorldDir = join(miniverseDir, team);
 
     // Generate dynamic world config
-    const worldConfig = generateWorldConfig(agents, team);
+    const worldConfig = generateWorldConfig(agents, team, citizenOverrides);
 
     // Copy base world assets to team world dir
     const baseWorldDir = join(__dirname, '..', '..', 'worlds', 'nightshift');
@@ -170,7 +172,7 @@ export async function startSession(team: string, options?: { port?: number }): P
       serverUrl = result.url;
     }
 
-    await registerAgents(serverUrl, agents, team);
+    await registerAgents(serverUrl, agents, team, citizenOverrides);
     vizUrl = serverUrl;
 
     // Install/update hooks with the actual server URL so heartbeats reach the right port
@@ -214,16 +216,6 @@ export async function startSession(team: string, options?: { port?: number }): P
     tmux(`split-window -v -t "${session}:0.${rightBase}" -l ${pct}% -c "${coders[i].cwd}"`);
   }
 
-  // Set pane labels using custom user options (immune to Claude overwriting)
-  const paneColors: Record<string, string> = {
-    'producer': 'fg=black,bg=cyan',
-    'planner':  'fg=black,bg=yellow',
-    'reviewer': 'fg=black,bg=magenta',
-    'tester':   'fg=black,bg=green',
-  };
-  // Coders get blue shades
-  const coderColors = ['fg=white,bg=blue', 'fg=black,bg=colour39', 'fg=black,bg=colour33', 'fg=black,bg=colour27'];
-
   const statusDir = join(getTeamDir(repoName, team), 'status');
 
   tmux(`set-window-option -t "${session}" pane-border-status top`);
@@ -233,10 +225,9 @@ export async function startSession(team: string, options?: { port?: number }): P
   const allPanes = [...sidebar, ...coders];
   for (let i = 0; i < allPanes.length; i++) {
     const a = allPanes[i];
-    const color = paneColors[a.role] || coderColors[i - sidebar.length] || coderColors[0];
-    // Role name for status file: coders use "coder" (shared base), producer/planner/reviewer/tester use their role
-    const statusRole = a.role.startsWith('coder-') ? a.role : a.role;
-    const statusFile = join(statusDir, statusRole);
+    const resolved = resolveCitizenProps(a.role, citizenOverrides);
+    const color = hexToTmuxStyle(resolved.color);
+    const statusFile = join(statusDir, a.role);
     tmux(`set-option -p -t "${session}:0.${i}" @agent_label "${a.role}  ·  /loop 15m @${a.agent}"`);
     tmux(`set-option -p -t "${session}:0.${i}" @agent_color "${color}"`);
     tmux(`set-option -p -t "${session}:0.${i}" @status_file "${statusFile}"`);

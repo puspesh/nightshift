@@ -667,7 +667,7 @@ export class MiniverseServer {
     if (req.method === 'GET' && url.pathname.startsWith('/worlds/')) {
       const publicDir = this.publicDir ?? '.';
       const safePath = url.pathname.slice('/worlds/'.length).replace(/\.\./g, '');
-      const filePath = path.join(publicDir, 'world_assets', safePath);
+      const filePath = path.join(publicDir, safePath);
       if (existsSync(filePath)) {
         const ext = path.extname(filePath).toLowerCase();
         const mimeTypes: Record<string, string> = {

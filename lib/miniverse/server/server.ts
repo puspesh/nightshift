@@ -30,8 +30,6 @@ export class MiniverseServer {
   /** Webhook callbacks: agent ID → callback URL */
   private webhooks: Map<string, string> = new Map();
   private publicDir: string | null;
-  /** World ID → world.json data cache */
-  private worldCache: Map<string, unknown> = new Map();
 
   constructor(config: MiniverseServerConfig = {}) {
     this.port = config.port ?? 4321;
@@ -264,7 +262,7 @@ export class MiniverseServer {
   private getWorldPath(worldId: string): string {
     const publicDir = this.publicDir ?? './public';
     const safeId = worldId.replace(/[^a-zA-Z0-9_-]/g, '');
-    return path.join(publicDir, 'worlds', safeId, 'world.json');
+    return path.join(publicDir, safeId, 'world.json');
   }
 
   private readWorld(worldId: string): Record<string, any> | null {
@@ -277,7 +275,6 @@ export class MiniverseServer {
     const worldPath = this.getWorldPath(worldId);
     mkdirSync(path.dirname(worldPath), { recursive: true });
     writeFileSync(worldPath, JSON.stringify(data, null, 2) + '\n');
-    this.worldCache.delete(worldId); // invalidate cache
   }
 
   private async handleWorldAction(agentId: string, action: { type: string; [key: string]: unknown }) {
@@ -587,11 +584,10 @@ export class MiniverseServer {
 
   private getDefaultWorldId(): string | null {
     const publicDir = this.publicDir ?? './public';
-    const worldsDir = path.join(publicDir, 'worlds');
-    if (!existsSync(worldsDir)) return null;
+    if (!existsSync(publicDir)) return null;
     try {
-      const dirs = readdirSync(worldsDir).filter(d => {
-        return existsSync(path.join(worldsDir, d, 'world.json'));
+      const dirs = readdirSync(publicDir).filter(d => {
+        return existsSync(path.join(publicDir, d, 'world.json'));
       });
       return dirs[0] ?? null;
     } catch { return null; }
@@ -599,14 +595,11 @@ export class MiniverseServer {
 
   private loadWorldData(worldId: string): unknown | null {
     const safeId = worldId.replace(/[^a-zA-Z0-9_-]/g, '');
-    if (this.worldCache.has(safeId)) return this.worldCache.get(safeId);
     const publicDir = this.publicDir ?? './public';
-    const worldPath = path.join(publicDir, 'worlds', safeId, 'world.json');
+    const worldPath = path.join(publicDir, safeId, 'world.json');
     if (!existsSync(worldPath)) return null;
     try {
-      const data = JSON.parse(readFileSync(worldPath, 'utf-8'));
-      this.worldCache.set(safeId, data);
-      return data;
+      return JSON.parse(readFileSync(worldPath, 'utf-8'));
     } catch {
       return null;
     }
@@ -649,17 +642,40 @@ export class MiniverseServer {
       return;
     }
 
-    // Serve world data as JSON
+    // Serve world data as JSON (supports ?team= for multi-team)
     if (req.method === 'GET' && url.pathname === '/api/world') {
-      const publicDir = this.publicDir ?? '.';
-      const worldPath = path.join(publicDir, 'base-world.json');
-      if (existsSync(worldPath)) {
+      const team = url.searchParams.get('team');
+      let worldData: unknown | null;
+      if (team) {
+        worldData = this.loadWorldData(team);
+      } else {
+        const defaultId = this.getDefaultWorldId();
+        worldData = defaultId ? this.loadWorldData(defaultId) : null;
+      }
+      if (worldData) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(readFileSync(worldPath));
+        res.end(JSON.stringify(worldData));
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'No world data' }));
       }
+      return;
+    }
+
+    // List available team worlds
+    if (req.method === 'GET' && url.pathname === '/api/worlds') {
+      const publicDir = this.publicDir ?? '.';
+      const teams: { id: string; agents: number }[] = [];
+      try {
+        for (const entry of readdirSync(publicDir, { withFileTypes: true })) {
+          if (entry.isDirectory() && existsSync(path.join(publicDir, entry.name, 'world.json'))) {
+            const world = this.loadWorldData(entry.name) as any;
+            teams.push({ id: entry.name, agents: world?.citizens?.length ?? 0 });
+          }
+        }
+      } catch { /* publicDir may not exist yet */ }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ worlds: teams }));
       return;
     }
 

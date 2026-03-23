@@ -104,6 +104,16 @@ git checkout issue-<number>-<slug>
 git pull origin issue-<number>-<slug>
 ```
 
+- Post a starting comment so progress is visible from GitHub:
+  ```bash
+  PLAN_FILE=$(gh issue view <number> --json comments --jq '.comments[].body' | grep -o 'docs/plans/[^ ]*\.md' | head -1)
+  gh issue comment <number> --body "### @ns-dev-coder -- Implementation started
+  **Status**: in-progress
+  **Branch**: \`issue-<number>-<slug>\`
+  **Plan**: \`${PLAN_FILE}\`
+  **Next**: Implementing phase by phase"
+  ```
+
 - Find the plan file from the planner's comment on the issue:
   ```bash
   gh issue view <number> --json comments --jq '.comments[].body' | grep -o 'docs/plans/[^ ]*\.md'

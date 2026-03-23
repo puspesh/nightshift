@@ -11,6 +11,13 @@ const HOOK_URL_PATTERN = '/api/hooks/claude-code';
  * Identified by URL containing the miniverse claude-code hook endpoint.
  */
 function isNightshiftHook(hook: Record<string, unknown>): boolean {
+  // Check new format: {matcher, hooks: [{type: "command", command: "curl ... /api/hooks/claude-code ..."}]}
+  if (Array.isArray(hook.hooks)) {
+    return hook.hooks.some((h: Record<string, unknown>) =>
+      typeof h.command === 'string' && h.command.includes(HOOK_URL_PATTERN)
+    );
+  }
+  // Check old format: {type: "http", url: "..."}
   return typeof hook.url === 'string' && hook.url.includes(HOOK_URL_PATTERN);
 }
 
@@ -21,11 +28,15 @@ function isNightshiftHook(hook: Record<string, unknown>): boolean {
  */
 export function generateHookConfig(agentName: string, serverUrl: string): HookConfig {
   const hooks: Record<string, HookEntry[]> = {};
+  const url = `${serverUrl}/api/hooks/claude-code?agent=${encodeURIComponent(agentName)}&name=${encodeURIComponent(agentName)}`;
 
   for (const event of HOOK_EVENTS) {
     hooks[event] = [{
-      type: 'http',
-      url: `${serverUrl}/api/hooks/claude-code?agent=${encodeURIComponent(agentName)}&name=${encodeURIComponent(agentName)}`,
+      matcher: '',
+      hooks: [{
+        type: 'command',
+        command: `curl -s -o /dev/null -X POST "${url}" -H "Content-Type: application/json" -d '{"event":"${event}"}' 2>/dev/null || true`,
+      }],
     }];
   }
 

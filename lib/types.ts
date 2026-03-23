@@ -32,6 +32,6 @@ export interface HookConfig {
 }
 
 export interface HookEntry {
-  type: 'http';
-  url: string;
+  matcher: string;
+  hooks: { type: 'command'; command: string }[];
 }

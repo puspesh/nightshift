@@ -71,6 +71,29 @@ describe('generateWorldConfig', () => {
     assert.equal(config.tileSize, 32);
     assert.equal(config.scale, 2);
   });
+
+  it('assigns spawn positions when baseWorld is provided', () => {
+    const agents = makeAgents(1);
+    const baseWorld = {
+      floor: Array.from({ length: 6 }, () => Array(6).fill('tile')),
+      gridCols: 6,
+      gridRows: 6,
+      props: [],
+    };
+    const config = generateWorldConfig(agents, 'dev', baseWorld);
+    for (const citizen of config.citizens) {
+      assert.ok(citizen.position, `${citizen.role} should have a position`);
+      assert.equal(citizen.position!.length, 2, 'position should be [x, y] tuple');
+    }
+  });
+
+  it('omits positions when baseWorld is not provided', () => {
+    const agents = makeAgents(1);
+    const config = generateWorldConfig(agents, 'dev');
+    for (const citizen of config.citizens) {
+      assert.equal(citizen.position, undefined, `${citizen.role} should not have a position`);
+    }
+  });
 });
 
 describe('writeWorldConfig', () => {

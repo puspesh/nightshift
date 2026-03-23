@@ -25,6 +25,7 @@ export interface CitizenConfig {
   role: string;
   workstationId: string;
   color: string;
+  position?: [number, number];
 }
 
 export interface HookConfig {

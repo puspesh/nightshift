@@ -207,25 +207,40 @@ async function startWorld() {
     tiles[key] = basePath + '/' + (src.startsWith('/') ? src.slice(1) : src);
   }
 
+  // Build spawn locations from citizen positions
+  const spawnLocations = {};
+  const citizenDefs = worldData.citizens || [];
+  for (const def of citizenDefs) {
+    if (Array.isArray(def.position) && def.position.length === 2) {
+      const locName = '_spawn_' + def.position[0] + '_' + def.position[1];
+      spawnLocations[locName] = { x: def.position[0], y: def.position[1] };
+    }
+  }
+
   const sceneConfig = {
     name: 'main',
     tileWidth: tileSize,
     tileHeight: tileSize,
     layers: [floor],
     walkable,
-    locations: {},
+    locations: spawnLocations,
     tiles,
   };
 
   // Citizens from world data
-  const citizenDefs = worldData.citizens || [];
-  const citizens = citizenDefs.map(def => ({
-    agentId: def.agentId || def.id,
-    name: def.name,
-    sprite: def.sprite,
-    position: def.position,
-    npc: def.type === 'npc',
-  }));
+  const citizens = citizenDefs.map(def => {
+    let pos = def.position;
+    if (Array.isArray(pos) && pos.length === 2) {
+      pos = '_spawn_' + pos[0] + '_' + pos[1];
+    }
+    return {
+      agentId: def.agentId || def.id,
+      name: def.name,
+      sprite: def.sprite,
+      position: pos,
+      npc: def.type === 'npc',
+    };
+  });
 
   const spriteSheets = {};
   for (const def of citizenDefs) {

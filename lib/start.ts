@@ -126,12 +126,19 @@ export async function startSession(team: string, options?: { port?: number }): P
   try {
     const worldDir = join(getTeamDir(repoName, team), 'world');
 
-    // Generate and write dynamic world config first (creates the directory)
-    const worldConfig = generateWorldConfig(agents, team);
-    writeWorldConfig(worldConfig, worldDir);
-
-    // Copy base world assets and core bundle to the world dir
+    // Read base world data for spawn position computation
     const baseWorldDir = join(__dirname, '..', '..', 'worlds', 'nightshift');
+    let baseWorld: { floor: string[][]; gridCols: number; gridRows: number; props: Array<{ x: number; y: number; w: number; h: number }> } | undefined;
+    const baseWorldPath = join(baseWorldDir, 'base-world.json');
+    if (existsSync(baseWorldPath)) {
+      try {
+        baseWorld = JSON.parse(readFileSync(baseWorldPath, 'utf-8'));
+      } catch { /* fallback to no positions */ }
+    }
+
+    // Generate and write dynamic world config (with spawn positions if base world available)
+    const worldConfig = generateWorldConfig(agents, team, baseWorld);
+    writeWorldConfig(worldConfig, worldDir);
     if (existsSync(baseWorldDir)) {
       execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/universal_assets" "${baseWorldDir}/base-world.json" "${worldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }

@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentEntry, WorldConfig, WorkstationAnchor, CitizenConfig } from './types.js';
+import { buildWalkableSet, assignSpawnPositions } from './spawn.js';
 
 const CANVAS_WIDTH = 512;
 const CANVAS_HEIGHT = 384;
@@ -19,7 +20,14 @@ const CODER_COLOR = '#0066cc';
  * Generate a miniverse world configuration from a list of agents.
  * Workstations are placed in a grid layout that adapts to agent count.
  */
-export function generateWorldConfig(agents: AgentEntry[], team: string): WorldConfig {
+export interface BaseWorld {
+  floor: string[][];
+  gridCols: number;
+  gridRows: number;
+  props: Array<{ x: number; y: number; w: number; h: number }>;
+}
+
+export function generateWorldConfig(agents: AgentEntry[], team: string, baseWorld?: BaseWorld): WorldConfig {
   const cols = Math.min(agents.length, 4);
   const rows = Math.ceil(agents.length / cols);
 
@@ -52,6 +60,15 @@ export function generateWorldConfig(agents: AgentEntry[], team: string): WorldCo
       workstationId: stationId,
       color,
     });
+  }
+
+  // Assign spawn positions if base world data is available
+  if (baseWorld) {
+    const walkableSet = buildWalkableSet(baseWorld.floor, baseWorld.props);
+    const positions = assignSpawnPositions(agents.length, walkableSet, baseWorld.gridCols, baseWorld.gridRows);
+    for (let i = 0; i < citizens.length; i++) {
+      citizens[i].position = positions[i];
+    }
   }
 
   return {

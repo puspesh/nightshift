@@ -164,7 +164,7 @@ export function stopServer(repoName: string): void {
 }
 
 /**
- * Check if the miniverse server is running for a team.
+ * Check if the miniverse server is running for a repo.
  */
 export function isServerRunning(repoName: string): boolean {
   const pidFile = getPidFilePath(repoName);

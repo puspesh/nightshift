@@ -218,9 +218,15 @@ function refreshStatusPanel() {
   }
 }
 
+let currentMv = null;
+
 // --- Load world and start miniverse ---
 async function startWorld(teamId) {
-  // Clear previous canvas
+  // Destroy previous Miniverse instance if it exists
+  if (currentMv) {
+    try { currentMv.destroy?.() || currentMv.stop?.(); } catch {}
+    currentMv = null;
+  }
   container.innerHTML = '';
 
   let worldData;
@@ -316,6 +322,7 @@ async function startWorld(teamId) {
   mv.updateWalkability(props.getBlockedTiles());
 
   await mv.start();
+  currentMv = mv;
 
   mv.addLayer({ order: 5, render: (ctx) => props.renderBelow(ctx) });
   mv.addLayer({ order: 15, render: (ctx) => props.renderAbove(ctx) });

@@ -363,7 +363,7 @@ export class MiniverseServer {
         }
 
         const publicDir = this.publicDir ?? './public';
-        const tilesDir = path.join(publicDir, 'worlds', worldId, 'world_assets', 'tiles');
+        const tilesDir = path.join(publicDir, worldId, 'world_assets', 'tiles');
         mkdirSync(tilesDir, { recursive: true });
         const outPath = path.join(tilesDir, `${id}.png`);
         await gen.generateTexture({ prompt, output: outPath, size: 32 });
@@ -395,7 +395,7 @@ export class MiniverseServer {
         }
 
         const publicDir = this.publicDir ?? './public';
-        const propsDir = path.join(publicDir, 'worlds', worldId, 'world_assets', 'props');
+        const propsDir = path.join(publicDir, worldId, 'world_assets', 'props');
         mkdirSync(propsDir, { recursive: true });
         const existing = existsSync(propsDir) ? readdirSync(propsDir).filter((f: string) => f.startsWith('prop_')).length : 0;
         const filename = `prop_${existing}_${id}.png`;
@@ -921,7 +921,7 @@ export class MiniverseServer {
       const publicDir = this.publicDir ?? './public';
       const slug = data.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
       const worldId = (data.worldId || '').replace(/[^a-zA-Z0-9_-]/g, '');
-      const worldDir = worldId ? path.join(publicDir, 'worlds', worldId) : publicDir;
+      const worldDir = worldId ? path.join(publicDir, worldId) : publicDir;
 
       // Handle base64 reference image
       let refImage: string | undefined;

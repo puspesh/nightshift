@@ -66,6 +66,7 @@ export function generateWorldConfig(agents: AgentEntry[], team: string): WorldCo
 
 /**
  * Write the world configuration files to a directory.
+ * @deprecated Replaced by `mergeWorldConfig` + direct `writeFileSync` in `start.ts`.
  */
 export function writeWorldConfig(config: WorldConfig, outputDir: string): void {
   mkdirSync(outputDir, { recursive: true });

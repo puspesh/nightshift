@@ -1,6 +1,11 @@
-<p align="center">
-  <img src="assets/logo.svg" alt="nightshift" width="400">
-</p>
+<pre align="center">
+       _       __    __       __    _ ______
+ ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
+/ _ \/ / __ `/ __ \/ __/ ___/ __ \/ / /_/ __/
+/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
+/_/ /_/_/\__, /_/ /_/\__/____/_/ /_/_/_/  \__/
+        /____/
+</pre>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/nightshift"><img src="https://img.shields.io/npm/v/nightshift" alt="npm version"></a>

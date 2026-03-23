@@ -35,7 +35,7 @@ export function generateHookConfig(agentName: string, serverUrl: string): HookCo
       matcher: '',
       hooks: [{
         type: 'command',
-        command: `curl -s -o /dev/null -X POST "${url}" -H "Content-Type: application/json" -d '{"event":"${event}"}' 2>/dev/null || true`,
+        command: `curl -s -o /dev/null -X POST "${url}" -H "Content-Type: application/json" -d '{"hook_event_name":"${event}"}' 2>/dev/null || true`,
       }],
     }];
   }

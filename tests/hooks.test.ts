@@ -41,7 +41,7 @@ describe('generateHookConfig', () => {
   it('includes event name in POST body', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
     const cmd = config.hooks['Stop'][0].hooks[0].command;
-    assert.ok(cmd.includes('"event":"Stop"'));
+    assert.ok(cmd.includes('"hook_event_name":"Stop"'));
   });
 });
 

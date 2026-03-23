@@ -156,7 +156,7 @@ export async function startSession(team: string, options?: { port?: number }): P
         console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
       }
     } else {
-      console.warn(chalk.yellow('  Warning: Could not start visualization server. Install @miniverse/server for agent visualization.'));
+      console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
     }
   } catch (err) {
     console.warn(chalk.yellow(`  Warning: Visualization failed to start: ${(err as Error).message}`));

@@ -29,9 +29,11 @@ if (args[0] === 'report') {
 // Main server mode
 const portIdx = args.indexOf('--port');
 const port = portIdx >= 0 ? parseInt(args[portIdx + 1], 10) : 4321;
+const publicIdx = args.indexOf('--public');
+const publicDir = publicIdx >= 0 ? args[publicIdx + 1] : undefined;
 const noBrowser = args.includes('--no-browser');
 
-const server = new MiniverseServer({ port });
+const server = new MiniverseServer({ port, publicDir });
 
 server.start().then(async (actualPort) => {
   console.log('');

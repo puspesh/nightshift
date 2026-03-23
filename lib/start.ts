@@ -1,11 +1,15 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 import { getTeamDir, discoverCoderCount } from './worktrees.js';
 import { detectRepoRoot, detectRepoName } from './detect.js';
+import { startServer, waitForServer, registerAgents, stopServer } from './visualize.js';
+import { generateWorldConfig, writeWorldConfig } from './world-config.js';
+import { installHooks } from './hooks.js';
+import type { AgentEntry } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -33,12 +37,6 @@ export function getSessionName(repoName: string, team: string): string {
  * @param {string} repoName
  * @returns {{ role: string, agent: string, cwd: string }[]}
  */
-interface AgentEntry {
-  role: string;
-  agent: string;
-  cwd: string;
-}
-
 export function buildAgentList(team: string, coderCount: number, repoRoot: string, repoName: string): AgentEntry[] {
   const teamDir = join(homedir(), '.nightshift', repoName, team);
   const agents: AgentEntry[] = [];
@@ -98,7 +96,9 @@ function tmux(cmd: string): void {
  *
  * @param {string} team
  */
-export function startSession(team: string): void {
+const DEFAULT_VIZ_PORT = 4321;
+
+export async function startSession(team: string, options?: { port?: number }): Promise<void> {
   // Check tmux is available
   try {
     execSync('which tmux', { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -119,6 +119,48 @@ export function startSession(team: string): void {
   const session = getSessionName(repoName, team);
   const agents = buildAgentList(team, coderCount, repoRoot, repoName);
   const runner = parseRunner(repoRoot);
+
+  // Start visualization server (non-blocking — failure doesn't prevent agents from launching)
+  const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
+  let vizUrl: string | null = null;
+  try {
+    const worldDir = join(getTeamDir(repoName, team), 'world');
+
+    // Generate and write dynamic world config first (creates the directory)
+    const worldConfig = generateWorldConfig(agents, team);
+    writeWorldConfig(worldConfig, worldDir);
+
+    // Copy base world assets and core bundle to the world dir
+    const baseWorldDir = join(__dirname, '..', '..', 'worlds', 'nightshift');
+    if (existsSync(baseWorldDir)) {
+      execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/universal_assets" "${baseWorldDir}/base-world.json" "${worldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+    }
+    // Copy miniverse core bundle so the server can serve it
+    const coreDir = join(__dirname, 'miniverse', 'core');
+    mkdirSync(join(worldDir, '..', 'core'), { recursive: true });
+    if (existsSync(join(coreDir, 'miniverse-core.js'))) {
+      execSync(`cp "${coreDir}/miniverse-core.js" "${join(worldDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
+    }
+
+    const result = startServer(vizPort, worldDir, repoName, team, repoRoot);
+    if (result) {
+      const healthy = await waitForServer(result.url, 10000);
+      if (healthy) {
+        await registerAgents(result.url, agents, team);
+        vizUrl = result.url;
+
+        // Install/update hooks with the actual server URL so heartbeats reach the right port
+        const allRoles = agents.map(a => a.role);
+        installHooks(repoName, team, allRoles, result.url, repoRoot);
+      } else {
+        console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
+      }
+    } else {
+      console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
+    }
+  } catch (err) {
+    console.warn(chalk.yellow(`  Warning: Visualization failed to start: ${(err as Error).message}`));
+  }
 
   const sidebar = agents.filter(a => !a.role.startsWith('coder-'));
   const coders = agents.filter(a => a.role.startsWith('coder-'));
@@ -195,6 +237,12 @@ export function startSession(team: string): void {
         /____/`));
   console.log(chalk.dim(`  Starting ${team} team in tmux session: ${session}`));
   console.log(chalk.dim(`  Runner: ${runner}`));
+  if (vizUrl) {
+    console.log(chalk.dim(`  Visualization: ${vizUrl}`));
+    try {
+      execSync(`open "${vizUrl}"`, { stdio: 'pipe' });
+    } catch { /* non-macOS or open not available */ }
+  }
   console.log('');
   console.log(chalk.bold('  Agents:'));
   for (const a of agents) {
@@ -220,6 +268,13 @@ export function startSession(team: string): void {
 export function stopSession(team: string): void {
   const repoName = detectRepoName();
   const session = getSessionName(repoName, team);
+
+  // Stop visualization server before killing tmux
+  try {
+    stopServer(repoName, team);
+  } catch {
+    // Non-critical — continue with tmux cleanup
+  }
 
   try {
     tmux(`kill-session -t "${session}"`);

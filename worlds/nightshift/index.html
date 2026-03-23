@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>nightshift</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #58a6ff;
+      margin-bottom: 16px;
+    }
+
+    #canvas-container {
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    #canvas-container iframe {
+      display: block;
+      border: none;
+      width: 512px;
+      height: 384px;
+    }
+
+    #status-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      width: 100%;
+      max-width: 720px;
+    }
+
+    .agent-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px;
+      transition: border-color 0.3s;
+    }
+
+    .agent-card .name {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .agent-card .status {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .agent-card .task {
+      font-size: 11px;
+      color: #8b949e;
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Role colors matching tmux pane borders */
+    .agent-card[data-role="producer"] { border-left: 3px solid #00cccc; }
+    .agent-card[data-role="producer"] .name { color: #00cccc; }
+
+    .agent-card[data-role="planner"] { border-left: 3px solid #cccc00; }
+    .agent-card[data-role="planner"] .name { color: #cccc00; }
+
+    .agent-card[data-role="reviewer"] { border-left: 3px solid #cc00cc; }
+    .agent-card[data-role="reviewer"] .name { color: #cc00cc; }
+
+    .agent-card[data-role^="coder"] { border-left: 3px solid #58a6ff; }
+    .agent-card[data-role^="coder"] .name { color: #58a6ff; }
+
+    .agent-card[data-role="tester"] { border-left: 3px solid #00cc00; }
+    .agent-card[data-role="tester"] .name { color: #00cc00; }
+
+    /* State-based status colors */
+    .status-working { color: #58a6ff; }
+    .status-idle { color: #8b949e; }
+    .status-thinking { color: #d2a8ff; }
+    .status-sleeping { color: #484f58; }
+    .status-error { color: #f85149; }
+    .status-offline { color: #484f58; }
+    .status-speaking { color: #ffa657; }
+
+    #connection-status {
+      font-size: 11px;
+      color: #484f58;
+      margin-top: 16px;
+    }
+
+    .connected { color: #3fb950 !important; }
+    .disconnected { color: #f85149 !important; }
+  </style>
+</head>
+<body>
+  <h1>nightshift</h1>
+
+  <div id="status-panel"></div>
+
+  <div id="connection-status">Connecting...</div>
+
+  <script>
+    const STATE_LABELS = {
+      working: 'Working',
+      idle: 'Idle',
+      thinking: 'Thinking',
+      sleeping: 'Sleeping',
+      error: 'Error',
+      offline: 'Offline',
+      speaking: 'Speaking',
+    };
+
+    const panel = document.getElementById('status-panel');
+    const connStatus = document.getElementById('connection-status');
+    const agents = new Map();
+
+    function getRole(agentId) {
+      // Extract role from agent ID like "ns-dev-producer" -> "producer"
+      const parts = agentId.split('-');
+      if (parts.length >= 3) {
+        return parts.slice(2).join('-');
+      }
+      return agentId;
+    }
+
+    function renderAgent(agent) {
+      const role = agent.name || getRole(agent.agent);
+      let card = document.querySelector(`[data-agent="${agent.agent}"]`);
+
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'agent-card';
+        card.dataset.agent = agent.agent;
+        card.dataset.role = role;
+        card.innerHTML = `
+          <div class="name">${role}</div>
+          <div class="status"></div>
+          <div class="task"></div>
+        `;
+        panel.appendChild(card);
+      }
+
+      const state = agent.state || 'offline';
+      const label = STATE_LABELS[state] || state;
+      card.querySelector('.status').textContent = label;
+      card.querySelector('.status').className = `status status-${state}`;
+      card.querySelector('.task').textContent = agent.task || '';
+    }
+
+    function connect() {
+      const serverHost = params.get('server') || 'localhost:4321';
+      const wsUrl = `ws://${serverHost}/ws`;
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        connStatus.textContent = 'Connected';
+        connStatus.className = 'connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'agents' && Array.isArray(msg.agents)) {
+            for (const agent of msg.agents) {
+              agents.set(agent.agent, agent);
+              renderAgent(agent);
+            }
+          }
+        } catch { /* ignore parse errors */ }
+      };
+
+      ws.onclose = () => {
+        connStatus.textContent = 'Disconnected — reconnecting...';
+        connStatus.className = 'disconnected';
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    }
+
+    // Update page title with team name from URL if available
+    const params = new URLSearchParams(location.search);
+    const team = params.get('team');
+    if (team) {
+      document.title = `nightshift — ${team}`;
+      document.querySelector('h1').textContent = `nightshift — ${team}`;
+    }
+
+    connect();
+  </script>
+</body>
+</html>

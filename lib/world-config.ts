@@ -1,25 +1,18 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AgentEntry, WorldConfig, WorkstationAnchor, CitizenConfig } from './types.js';
+import type { AgentEntry, CitizenOverrides, WorldConfig, WorkstationAnchor, CitizenConfig } from './types.js';
+import { resolveCitizenProps } from './citizen-config.js';
 
 const CANVAS_WIDTH = 512;
 const CANVAS_HEIGHT = 384;
 const TILE_SIZE = 32;
 const SCALE = 2;
 
-const ROLE_COLORS: Record<string, string> = {
-  producer: '#00cccc',
-  planner:  '#cccc00',
-  reviewer: '#cc00cc',
-  tester:   '#00cc00',
-};
-const CODER_COLOR = '#0066cc';
-
 /**
  * Generate a miniverse world configuration from a list of agents.
  * Workstations are placed in a grid layout that adapts to agent count.
  */
-export function generateWorldConfig(agents: AgentEntry[], team: string): WorldConfig {
+export function generateWorldConfig(agents: AgentEntry[], team: string, overrides?: CitizenOverrides): WorldConfig {
   const cols = Math.min(agents.length, 4);
   const rows = Math.ceil(agents.length / cols);
 
@@ -41,16 +34,14 @@ export function generateWorldConfig(agents: AgentEntry[], team: string): WorldCo
 
     workstations.push({ id: stationId, x, y });
 
-    const color = agent.role.startsWith('coder-')
-      ? CODER_COLOR
-      : (ROLE_COLORS[agent.role] ?? CODER_COLOR);
+    const resolved = resolveCitizenProps(agent.role, overrides ?? {});
 
     citizens.push({
       id: `ns-${team}-${agent.role}`,
-      displayName: agent.role,
+      displayName: resolved.displayName,
       role: agent.role,
       workstationId: stationId,
-      color,
+      color: resolved.color,
     });
   }
 

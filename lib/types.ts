@@ -27,6 +27,13 @@ export interface CitizenConfig {
   color: string;
 }
 
+export interface CitizenOverride {
+  displayName?: string | null;
+  color?: string;
+}
+
+export type CitizenOverrides = Record<string, CitizenOverride>;
+
 export interface HookConfig {
   hooks: Record<string, HookEntry[]>;
 }

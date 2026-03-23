@@ -77,17 +77,7 @@ h1 {
   text-overflow: ellipsis;
 }
 
-/* Role colors matching tmux pane borders */
-.agent-card[data-role="producer"] { border-left: 3px solid #00cccc; }
-.agent-card[data-role="producer"] .name { color: #00cccc; }
-.agent-card[data-role="planner"] { border-left: 3px solid #cccc00; }
-.agent-card[data-role="planner"] .name { color: #cccc00; }
-.agent-card[data-role="reviewer"] { border-left: 3px solid #cc00cc; }
-.agent-card[data-role="reviewer"] .name { color: #cc00cc; }
-.agent-card[data-role^="coder"] { border-left: 3px solid #58a6ff; }
-.agent-card[data-role^="coder"] .name { color: #58a6ff; }
-.agent-card[data-role="tester"] { border-left: 3px solid #00cc00; }
-.agent-card[data-role="tester"] .name { color: #00cc00; }
+/* Role colors are applied dynamically from agent state via renderCard() */
 
 .status-working { color: #58a6ff; }
 .status-idle { color: #8b949e; }
@@ -170,6 +160,9 @@ function renderCard(agent) {
     card.innerHTML = '<div class="name">' + esc(agent.name || role) + '</div><div class="status"></div><div class="task"></div>';
     panel.appendChild(card);
   }
+  const agentColor = agent.color || '#8b949e';
+  card.style.borderLeft = '3px solid ' + agentColor;
+  card.querySelector('.name').style.color = agentColor;
   const state = agent.state || 'offline';
   card.querySelector('.status').textContent = STATE_LABELS[state] || state;
   card.querySelector('.status').className = 'status status-' + state;

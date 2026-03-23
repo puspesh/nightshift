@@ -1,0 +1,7 @@
+{
+  "producer": { "displayName": "producer", "color": "#00cccc" },
+  "planner":  { "displayName": "planner",  "color": "#cccc00" },
+  "reviewer": { "displayName": "reviewer", "color": "#cc00cc" },
+  "coder":    { "displayName": null,        "color": "#0066cc" },
+  "tester":   { "displayName": "tester",    "color": "#00cc00" }
+}

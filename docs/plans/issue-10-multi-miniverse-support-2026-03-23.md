@@ -2,11 +2,11 @@
 
 > Issue: #10
 > Date: 2026-03-23
-> Status: draft
+> Status: revised
 
 ## Overview
 
-Currently each team starts its own miniverse server on a separate port. This plan consolidates to a single shared server on port 4321 that serves multiple team worlds. The server already has multi-world infrastructure (`readWorld(worldId)`, `/worlds/{id}/...` static paths, `worldCache`) — we leverage it by storing each team's world under `worlds/{team}/` and adding a team selector to the frontend. The key changes are: restructure the world directory to repo-level, modify `/api/world` to accept a `?team=` parameter, add a `/api/worlds` listing endpoint, and build a frontend team selector that re-initializes the miniverse engine on switch.
+Currently each team starts its own miniverse server on a separate port. This plan consolidates to a single shared server on port 4321 that serves multiple team worlds. Each team's world is stored directly at `{publicDir}/{team}/` (not nested under `worlds/`), which aligns with the existing `/worlds/` static asset route that strips the `/worlds/` prefix. The server's `loadWorldData`, `getWorldPath`, and `getDefaultWorldId` methods are updated to match this flat layout (removing the `worlds/` path segment — a 3-line change). Each team's `world.json` is a merge of `base-world.json` (floor, props, tiles) and the dynamic config (citizens, workstations) using a simple property spread over disjoint key sets. The frontend gets a team selector and filters agents by team.
 
 ## Requirements
 
@@ -17,9 +17,9 @@ Currently each team starts its own miniverse server on a separate port. This pla
 
 ## Architecture Changes
 
-- **Modified**: `lib/miniverse/server/server.ts` — modify `/api/world` to accept `?team=`, add `/api/worlds` endpoint
-- **Modified**: `lib/miniverse/server/frontend.ts` — add team selector dropdown, re-initialize on switch
-- **Modified**: `lib/start.ts` — restructure world dir to repo-level, reuse running server
+- **Modified**: `lib/miniverse/server/server.ts` — modify `/api/world` to accept `?team=`, add `/api/worlds` endpoint, update `getWorldPath`/`loadWorldData`/`getDefaultWorldId` to flat layout, remove world cache
+- **Modified**: `lib/miniverse/server/frontend.ts` — add team selector dropdown, `getTeam()` helper, re-initialize on switch
+- **Modified**: `lib/start.ts` — restructure world dir to repo-level, reuse running server, guard `stopSession` against killing shared server
 - **Modified**: `lib/visualize.ts` — repo-level PID/port files, skip start if server running
 - **Modified**: `lib/world-config.ts` — merge base world and dynamic config into one file
 - **Modified**: `tests/visualize.test.ts` — update PID/port path tests
@@ -30,18 +30,29 @@ Currently each team starts its own miniverse server on a separate port. This pla
 ### Phase 1: Shared server directory structure
 
 1. **Restructure world directory to repo-level** (`lib/start.ts`)
-   - Action: Change the world directory from `~/.nightshift/{repo}/{team}/world/` to `~/.nightshift/{repo}/miniverse/worlds/{team}/`. Currently (line 127): `const worldDir = join(getTeamDir(repoName, team), 'world')`. Change to:
+   - Action: Change the world directory from `~/.nightshift/{repo}/{team}/world/` to `~/.nightshift/{repo}/miniverse/{team}/`. Currently (line 127): `const worldDir = join(getTeamDir(repoName, team), 'world')`. Change to:
      ```typescript
      const miniverseDir = join(homedir(), '.nightshift', repoName, 'miniverse');
-     const teamWorldDir = join(miniverseDir, 'worlds', team);
+     const teamWorldDir = join(miniverseDir, team);
      ```
-     Copy base world assets (world_assets/, base-world.json) into `teamWorldDir/` as before. Copy universal_assets/ and core/ to the shared `miniverseDir/` level (not per-team). Pass `miniverseDir` as the server's publicDir instead of the team-specific worldDir.
-   - Why: A single publicDir at repo-level lets the server serve all teams' worlds. The `worlds/{team}/` subdirectory structure matches the existing `readWorld(worldId)` path pattern.
+     Teams are placed **directly** under `miniverseDir/` (NOT nested in a `worlds/` subdirectory). This is critical: the existing `/worlds/` static route (server.ts:667) strips the `/worlds/` prefix from URLs and resolves the remainder relative to `publicDir`. With `publicDir = miniverseDir` and teams at `{miniverseDir}/{team}/`, a URL like `/worlds/dev/world_assets/tiles/main_floor.png` resolves to `{miniverseDir}/dev/world_assets/tiles/main_floor.png` — which is the correct file location.
+
+     Copy base world assets (world_assets/, base-world.json) into `teamWorldDir/` as before. Copy universal_assets/ to the shared `miniverseDir/` level (not per-team). Copy core/ to `{miniverseDir}/../core/` (already served by the `/miniverse-core.js` route). Pass `miniverseDir` as the server's `publicDir`.
+   - Why: A single publicDir at repo-level lets the server serve all teams' worlds. The flat `{publicDir}/{team}/` layout aligns with the static route's path stripping — no route changes needed.
    - Dependencies: none
 
 2. **Merge base world and dynamic config** (`lib/world-config.ts`)
-   - Action: Add a new function `mergeWorldConfig(baseWorldPath: string, dynamicConfig: WorldConfig): Record<string, any>` that reads `base-world.json`, then overlays the dynamic config (citizens, workstations) onto it. The merged result includes floor, props, tiles, wanderPoints (from base) plus citizens (from dynamic config). Write the merged result as `world.json` in the team's world directory.
-   - Why: Currently `/api/world` serves `base-world.json` (static layout) and the dynamic config (citizens) is separate. For multi-world support, the server uses `readWorld(teamId)` which reads `worlds/{team}/world.json` — this file must contain everything the frontend needs in one read.
+   - Action: Add a new function `mergeWorldConfig(baseWorldPath: string, dynamicConfig: WorldConfig): Record<string, any>` that reads `base-world.json` and spreads the dynamic config on top:
+     ```typescript
+     const baseWorld = JSON.parse(readFileSync(baseWorldPath, 'utf-8'));
+     return { ...baseWorld, ...dynamicConfig };
+     ```
+     The key sets are **disjoint** — no collision handling needed:
+     - Base world provides: `gridCols`, `gridRows`, `floor`, `tiles`, `propImages`, `props`, `wanderPoints`
+     - Dynamic config provides: `canvas`, `tileSize`, `scale`, `theme`, `workstations`, `citizens`
+
+     The existing `writeWorldConfig` (line 70-73) writes only dynamic config to `world.json`. Replace this: instead of calling `writeWorldConfig(worldConfig, worldDir)` in `start.ts`, call `mergeWorldConfig()` then write the merged result. The merged file is what the frontend needs — it replaces both the old separate `base-world.json` and `world.json`.
+   - Why: The frontend fetches `/api/world?team=X` expecting a single JSON with floor, tiles, AND citizens. Without merging, the dynamic `world.json` has no floor/tiles data and the frontend renders a blank world.
    - Dependencies: step 1
 
 3. **Move PID/port files to repo-level** (`lib/visualize.ts`)
@@ -54,10 +65,23 @@ Currently each team starts its own miniverse server on a separate port. This pla
    - Why: Multiple teams sharing one server is the core requirement. Without this, each team would still start its own server.
    - Dependencies: steps 1, 3
 
-### Phase 2: Server multi-world endpoints
+### Phase 2: Server changes for flat layout
 
-5. **Modify `/api/world` endpoint** (`lib/miniverse/server/server.ts`)
-   - Action: Change the handler at line 653 to accept an optional `?team=` query parameter:
+5. **Update server world path methods for flat layout** (`lib/miniverse/server/server.ts`)
+   - Action: Three small changes to remove the `worlds/` path segment from world data methods:
+     1. `getWorldPath(worldId)` (line 264-268): Change `path.join(publicDir, 'worlds', safeId, 'world.json')` to `path.join(publicDir, safeId, 'world.json')`
+     2. `getDefaultWorldId()` (line 588-598): Change scan dir from `path.join(publicDir, 'worlds')` to `publicDir`. The `existsSync(path.join(dir, d, 'world.json'))` filter already prevents non-team directories (universal_assets, core) from being returned.
+     3. `loadWorldData(worldId)` (line 600-613): Change `path.join(publicDir, 'worlds', safeId, 'world.json')` to `path.join(publicDir, safeId, 'world.json')`
+   - Why: With teams stored at `{publicDir}/{team}/` (flat, no `worlds/` nesting), the server's world-loading paths must match. This also makes the `loadWorldData` path consistent with the `/worlds/` static route's resolution.
+   - Dependencies: step 1
+
+6. **Remove world cache** (`lib/miniverse/server/server.ts`)
+   - Action: Remove `worldCache` (line 34) and all references to it. In `loadWorldData()`, always read from disk instead of checking the cache. In `writeWorld()`, remove the `this.worldCache.delete(worldId)` line. Remove the `worldCache` field from the constructor.
+   - Why: Team world.json files are written externally by `start.ts`, not through the server's `writeWorld()` method. The cache has no invalidation path for external writes, so it would serve stale data when a team restarts with different agents. The files are small (<10KB) and read infrequently — disk reads are fast enough.
+   - Dependencies: none
+
+7. **Modify `/api/world` endpoint** (`lib/miniverse/server/server.ts`)
+   - Action: Change the handler at line 653 to accept an optional `?team=` query parameter. Use `loadWorldData(team)` (updated in step 5) which now reads from `{publicDir}/{team}/world.json`:
      ```typescript
      if (req.method === 'GET' && url.pathname === '/api/world') {
        const team = url.searchParams.get('team');
@@ -77,78 +101,105 @@ Currently each team starts its own miniverse server on a separate port. This pla
        }
      }
      ```
-     This reuses the existing `loadWorldData()` and `getDefaultWorldId()` methods — no new loading logic needed.
-   - Why: The only server endpoint change needed for multi-world reads. `loadWorldData(team)` reads from `{publicDir}/worlds/{team}/world.json` which is where step 2 writes the merged world.
-   - Dependencies: step 2
+   - Why: Reuses the updated `loadWorldData()` and `getDefaultWorldId()` — no new loading logic needed.
+   - Dependencies: steps 2, 5
 
-6. **Add `/api/worlds` endpoint** (`lib/miniverse/server/server.ts`)
-   - Action: Add a new `GET /api/worlds` route that scans `{publicDir}/worlds/` for directories containing `world.json`. Return a list of team objects with id and basic metadata:
+8. **Add `/api/worlds` endpoint** (`lib/miniverse/server/server.ts`)
+   - Action: Add a new `GET /api/worlds` route. Reuse the same scan logic as `getDefaultWorldId()` (now scanning `publicDir/` directly after step 5):
      ```typescript
      if (req.method === 'GET' && url.pathname === '/api/worlds') {
        const publicDir = this.publicDir ?? '.';
-       const worldsDir = path.join(publicDir, 'worlds');
        const teams: { id: string; agents: number }[] = [];
-       if (existsSync(worldsDir)) {
-         for (const entry of readdirSync(worldsDir, { withFileTypes: true })) {
-           if (entry.isDirectory() && existsSync(path.join(worldsDir, entry.name, 'world.json'))) {
+       try {
+         for (const entry of readdirSync(publicDir, { withFileTypes: true })) {
+           if (entry.isDirectory() && existsSync(path.join(publicDir, entry.name, 'world.json'))) {
              const world = this.loadWorldData(entry.name) as any;
              teams.push({ id: entry.name, agents: world?.citizens?.length ?? 0 });
            }
          }
-       }
+       } catch { /* publicDir may not exist yet */ }
        res.writeHead(200, { 'Content-Type': 'application/json' });
        res.end(JSON.stringify({ worlds: teams }));
      }
      ```
-   - Why: The frontend needs this to populate the team selector dropdown. Reuses `loadWorldData()`.
-   - Dependencies: none
+     Returns `{ worlds: [] }` when no teams are initialized yet.
+   - Why: The frontend needs this to populate the team selector dropdown. Returns empty list gracefully if no teams exist.
+   - Dependencies: step 5
 
 ### Phase 3: Frontend team selector
 
-7. **Add team selector UI** (`lib/miniverse/server/frontend.ts`)
+9. **Add team selector UI** (`lib/miniverse/server/frontend.ts`)
    - Action: Add a selector bar between the `<h1>` and the `#canvas-container`. HTML:
      ```html
      <div id="team-selector">
        <label for="team-select">Team:</label>
        <select id="team-select"></select>
+       <span id="team-empty" style="display:none">No teams available</span>
      </div>
      ```
-     CSS: style the selector to match the dark theme (`background: #161b22`, `border: #30363d`, `color: #c9d1d9`).
-   - Why: The user needs a way to switch between team worlds.
+     CSS: style the selector to match the dark theme (`background: #161b22`, `border: #30363d`, `color: #c9d1d9`). Hide the dropdown and show the `#team-empty` message when `/api/worlds` returns an empty list.
+   - Why: The user needs a way to switch between team worlds. The empty state message prevents a confusing blank dropdown.
    - Dependencies: none
 
-8. **Wire up team selector logic** (`lib/miniverse/server/frontend.ts`)
-   - Action: In the `<script>` section:
-     1. On page load, fetch `GET /api/worlds` to populate the dropdown
-     2. Check URL query param `?team=` for initial selection; default to first team
-     3. Pass selected team to `startWorld(teamId)` — modify `startWorld()` to fetch `/api/world?team={teamId}` instead of `/api/world`
-     4. On dropdown change: destroy current Miniverse instance, update URL query param, call `startWorld(newTeam)` to re-initialize
-     5. Update static asset paths: the frontend currently fetches tiles/props from `/worlds/...`. Since team worlds are at `/worlds/{team}/world_assets/...`, update the tile path prefix in `startWorld()` to use `/worlds/{teamId}` instead of `/worlds`.
-   - Why: This connects the selector to the world loading pipeline. URL query params make team selection shareable/bookmarkable.
-   - Dependencies: steps 5, 6, 7
+10. **Add `getTeam()` helper and wire up team selector logic** (`lib/miniverse/server/frontend.ts`)
+    - Action: In the `<script>` section:
+      1. Add a `getTeam(agentId)` helper alongside the existing `getRole(agentId)`:
+         ```javascript
+         function getTeam(agentId) {
+           const parts = agentId.split('-');
+           return parts.length >= 3 ? parts[1] : null;
+         }
+         ```
+      2. On page load, fetch `GET /api/worlds` to populate the dropdown. If empty, show `#team-empty`.
+      3. Check URL query param `?team=` for initial selection; default to first team.
+      4. Pass selected team to `startWorld(teamId)` — modify `startWorld()` to fetch `/api/world?team={teamId}` instead of `/api/world`.
+      5. On dropdown change: destroy current Miniverse instance (remove canvas from `#canvas-container`, call `destroy()` if available), update URL with `history.replaceState` (not `pushState` — avoids polluting back button), call `startWorld(newTeam)` to re-initialize.
+      6. Update static asset paths: the frontend currently uses `basePath = '/worlds'` for tile/prop URLs. Change to `basePath = '/worlds/' + teamId` so tiles resolve to `/worlds/{team}/world_assets/...`.
+    - Why: This connects the selector to the world loading pipeline. `getTeam()` centralizes team extraction from agent IDs. `replaceState` keeps URL bookmarkable without polluting navigation history.
+    - Dependencies: steps 7, 8, 9
 
-9. **Filter status panel by team** (`lib/miniverse/server/frontend.ts`)
-   - Action: In `renderCard()`, derive the team from the agent ID (agent IDs follow `ns-{team}-{role}` pattern, e.g., `ns-dev-producer`). Only render cards for agents matching the currently selected team. When switching teams, clear the status panel and re-render only matching agents.
-   - Why: Without filtering, the status panel shows all agents from all teams, which is confusing.
-   - Dependencies: step 8
+11. **Filter status panel by team** (`lib/miniverse/server/frontend.ts`)
+    - Action: In `renderCard()`, use `getTeam(agent.agent)` to extract the team. Only render cards matching the currently selected team. When switching teams, clear the `#status-panel` inner HTML and re-render only matching agents from the `agents` Map.
+    - Why: Without filtering, the status panel shows all agents from all teams, which is confusing.
+    - Dependencies: step 10
 
-### Phase 4: Tests and cleanup
+### Phase 4: stopSession guard and tests
 
-10. **Update PID/port path tests** (`tests/visualize.test.ts`)
+12. **Guard `stopSession` against killing shared server** (`lib/start.ts`)
+    - Action: Update `stopSession()` (line 268). Before calling `stopServer(repoName)`, check if other nightshift tmux sessions exist for this repo:
+      ```typescript
+      // Only stop the server if no other team sessions are running
+      const sessionPrefix = `nightshift-${repoName}-`;
+      try {
+        const sessions = execSync('tmux list-sessions -F "#{session_name}"', { encoding: 'utf-8' });
+        const otherSessions = sessions.split('\n').filter(s => s.startsWith(sessionPrefix) && s !== session);
+        if (otherSessions.length === 0) {
+          stopServer(repoName);
+        }
+      } catch {
+        // No tmux server running — safe to stop
+        stopServer(repoName);
+      }
+      ```
+    - Why: With a shared server, `nightshift stop --team dev` should only kill the dev tmux session, not the miniverse server that also serves the infra team. The server is only killed when the last team stops.
+    - Dependencies: step 3
+
+13. **Update PID/port path tests** (`tests/visualize.test.ts`)
     - Action: Update `getPidFilePath` and `getPortFilePath` test assertions to expect repo-level paths (`~/.nightshift/{repo}/miniverse.{pid,port}`) instead of team-level paths. Remove the `team` parameter from test calls.
     - Why: Step 3 changed the function signatures and paths.
     - Dependencies: step 3
 
-11. **Add world merging tests** (`tests/visualize.test.ts` or new `tests/world-config.test.ts`)
+14. **Add world merging tests** (`tests/world-config.test.ts`)
     - Action: Test `mergeWorldConfig()`:
-      - Verify merged output contains floor/props from base world AND citizens from dynamic config
-      - Verify base world properties (gridCols, tiles, etc.) are preserved
-      - Verify citizens array is correctly added
+      - Verify merged output contains floor/props/tiles from base world AND citizens/workstations from dynamic config
+      - Verify the merge is a property spread (no array concatenation needed — key sets are disjoint)
+      - Verify base world properties (gridCols, gridRows, floor, tiles, propImages, props, wanderPoints) are all preserved
+      - Verify dynamic config properties (canvas, tileSize, scale, theme, workstations, citizens) are all present
     - Why: The merge is the critical correctness point — wrong merge means broken worlds.
     - Dependencies: step 2
 
-12. **Update start.ts tests** (`tests/start.test.ts`)
-    - Action: If there are tests that validate the worldDir path or server startup flow, update them for the new repo-level directory structure.
+15. **Update start.ts tests** (`tests/start.test.ts`)
+    - Action: If there are tests that validate the worldDir path or server startup flow, update them for the new repo-level directory structure (`miniverse/{team}/` instead of `{team}/world/`).
     - Why: Prevents regressions from the directory restructure.
     - Dependencies: step 1
 
@@ -180,3 +231,29 @@ Currently each team starts its own miniverse server on a separate port. This pla
 
 - **Risk**: Multiple `nightshift start` commands race to start the server
   - Mitigation: The `isServerRunning()` check uses PID file + `process.kill(pid, 0)` to verify the process is alive. If the first team's server is still starting (PID file exists but not healthy yet), the second team can retry `waitForServer()` with the existing URL. Add a brief wait-and-retry before starting a new server.
+
+## Revision Notes
+
+### Feedback received
+Reviewer found 2 critical issues, 2 warnings, and 3 suggestions.
+
+### What changed
+
+1. **Fixed static asset path mismatch (Critical #1)**: Changed directory layout from `{miniverseDir}/worlds/{team}/` to `{miniverseDir}/{team}/` (flat, no `worlds/` nesting). This aligns with the `/worlds/` static route which strips `/worlds/` from URLs and resolves relative to `publicDir`. Added new step 5 to update `getWorldPath`, `loadWorldData`, and `getDefaultWorldId` in server.ts — removing the `worlds/` path segment (3-line change). The overview and step 1 were rewritten to reflect this.
+
+2. **Specified merge algorithm (Critical #2)**: Step 2 now explicitly documents the merge as `{ ...baseWorld, ...dynamicConfig }` with the disjoint key sets enumerated (base: gridCols/floor/tiles/etc., dynamic: canvas/citizens/etc.). Also clarified that the merged file replaces both the old separate `base-world.json` and `world.json`.
+
+3. **Added `stopSession` guard (Warning #1)**: New step 12 adds a tmux session check before killing the shared server. `stopSession` only kills the miniverse server when the last team stops — otherwise it just kills the team's tmux session.
+
+4. **Removed world cache (Warning #2)**: New step 6 removes `worldCache` entirely. World files are small (<10KB) and written externally by `start.ts` — caching has no invalidation path for external writes. Reading from disk each time is simpler and avoids stale data.
+
+5. **Added `getTeam()` helper (Suggestion)**: Step 10 now includes a `getTeam(agentId)` function alongside the existing `getRole()`, centralizing team extraction from agent IDs.
+
+6. **Empty worlds handling (Suggestion)**: Step 9 now includes a `#team-empty` span shown when no teams are available. Step 8's `/api/worlds` endpoint returns `{ worlds: [] }` gracefully.
+
+7. **`history.replaceState` (Suggestion)**: Step 10 now specifies `replaceState` instead of `pushState` for team switch URL updates.
+
+### What was kept and why
+- The phased approach structure was kept — it was praised by the reviewer
+- Client-side agent filtering (no server-side WebSocket routing) was kept — confirmed pragmatic for expected scale
+- Repo-level PID/port approach was kept — the `stopSession` guard addresses the shared-server lifecycle concern

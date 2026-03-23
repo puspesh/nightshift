@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentEntry, WorldConfig, WorkstationAnchor, CitizenConfig } from './types.js';
 
@@ -70,4 +70,21 @@ export function generateWorldConfig(agents: AgentEntry[], team: string): WorldCo
 export function writeWorldConfig(config: WorldConfig, outputDir: string): void {
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(join(outputDir, 'world.json'), JSON.stringify(config, null, 2) + '\n');
+}
+
+/**
+ * Merge base world data (floor, props, tiles) with dynamic config (citizens, workstations).
+ * Key sets are disjoint — base provides gridCols/gridRows/floor/tiles/propImages/props/wanderPoints,
+ * dynamic provides canvas/tileSize/scale/theme/workstations/citizens.
+ */
+export function mergeWorldConfig(baseWorldPath: string, dynamicConfig: WorldConfig): Record<string, unknown> {
+  if (!existsSync(baseWorldPath)) {
+    return dynamicConfig as unknown as Record<string, unknown>;
+  }
+  try {
+    const baseWorld = JSON.parse(readFileSync(baseWorldPath, 'utf-8'));
+    return { ...baseWorld, ...dynamicConfig };
+  } catch {
+    return dynamicConfig as unknown as Record<string, unknown>;
+  }
 }

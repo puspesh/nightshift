@@ -9,24 +9,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Get the path to the miniverse PID file for a team.
+ * Get the path to the miniverse PID file (repo-level, shared across teams).
  */
-export function getPidFilePath(repoName: string, team: string): string {
-  return join(homedir(), '.nightshift', repoName, team, 'miniverse.pid');
+export function getPidFilePath(repoName: string): string {
+  return join(homedir(), '.nightshift', repoName, 'miniverse.pid');
 }
 
 /**
- * Get the path to the miniverse port file for a team.
+ * Get the path to the miniverse port file (repo-level, shared across teams).
  */
-export function getPortFilePath(repoName: string, team: string): string {
-  return join(homedir(), '.nightshift', repoName, team, 'miniverse.port');
+export function getPortFilePath(repoName: string): string {
+  return join(homedir(), '.nightshift', repoName, 'miniverse.port');
 }
 
 /**
- * Get the path to the miniverse log file for a team.
+ * Get the path to the miniverse log file (repo-level, shared across teams).
  */
-export function getLogFilePath(repoName: string, team: string): string {
-  return join(homedir(), '.nightshift', repoName, team, 'miniverse.log');
+export function getLogFilePath(repoName: string): string {
+  return join(homedir(), '.nightshift', repoName, 'miniverse.log');
 }
 
 /**
@@ -35,17 +35,15 @@ export function getLogFilePath(repoName: string, team: string): string {
  */
 export function startServer(
   port: number,
-  worldDir: string,
+  publicDir: string,
   repoName: string,
-  team: string,
-  repoRoot: string,
 ): { pid: number; url: string } | null {
-  const pidFile = getPidFilePath(repoName, team);
-  const portFile = getPortFilePath(repoName, team);
-  const logFile = getLogFilePath(repoName, team);
+  const pidFile = getPidFilePath(repoName);
+  const portFile = getPortFilePath(repoName);
+  const logFile = getLogFilePath(repoName);
 
   // Ensure parent directory exists
-  mkdirSync(join(homedir(), '.nightshift', repoName, team), { recursive: true });
+  mkdirSync(join(homedir(), '.nightshift', repoName), { recursive: true });
 
   // Use the vendored miniverse server CLI
   const miniverse = join(__dirname, 'miniverse', 'server', 'cli.js');
@@ -57,7 +55,7 @@ export function startServer(
   const logFd = openSync(logFile, 'a');
 
   // Start as detached process using node
-  const child = spawn(process.execPath, [miniverse, '--port', String(port), '--public', worldDir, '--no-browser'], {
+  const child = spawn(process.execPath, [miniverse, '--port', String(port), '--public', publicDir, '--no-browser'], {
     detached: true,
     stdio: ['ignore', logFd, logFd],
     env: { ...process.env },
@@ -141,9 +139,9 @@ export async function registerAgents(url: string, agents: AgentEntry[], team: st
 /**
  * Stop the miniverse server by reading the PID file and killing the process.
  */
-export function stopServer(repoName: string, team: string): void {
-  const pidFile = getPidFilePath(repoName, team);
-  const portFile = getPortFilePath(repoName, team);
+export function stopServer(repoName: string): void {
+  const pidFile = getPidFilePath(repoName);
+  const portFile = getPortFilePath(repoName);
 
   if (!existsSync(pidFile)) return;
 
@@ -168,8 +166,8 @@ export function stopServer(repoName: string, team: string): void {
 /**
  * Check if the miniverse server is running for a team.
  */
-export function isServerRunning(repoName: string, team: string): boolean {
-  const pidFile = getPidFilePath(repoName, team);
+export function isServerRunning(repoName: string): boolean {
+  const pidFile = getPidFilePath(repoName);
   if (!existsSync(pidFile)) return false;
 
   try {

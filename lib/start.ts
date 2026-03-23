@@ -9,7 +9,7 @@ import { detectRepoRoot, detectRepoName } from './detect.js';
 import { startServer, waitForServer, registerAgents, stopServer } from './visualize.js';
 import { generateWorldConfig, writeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
-import { loadCitizenConfig, resolveCitizenProps } from './citizen-config.js';
+import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
 import type { AgentEntry } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -206,10 +206,8 @@ export async function startSession(team: string, options?: { port?: number }): P
   for (let i = 0; i < allPanes.length; i++) {
     const a = allPanes[i];
     const resolved = resolveCitizenProps(a.role, citizenOverrides);
-    const color = `fg=black,bg=${resolved.color}`;
-    // Role name for status file: coders use "coder" (shared base), producer/planner/reviewer/tester use their role
-    const statusRole = a.role.startsWith('coder-') ? a.role : a.role;
-    const statusFile = join(statusDir, statusRole);
+    const color = hexToTmuxStyle(resolved.color);
+    const statusFile = join(statusDir, a.role);
     tmux(`set-option -p -t "${session}:0.${i}" @agent_label "${a.role}  ·  /loop 15m @${a.agent}"`);
     tmux(`set-option -p -t "${session}:0.${i}" @agent_color "${color}"`);
     tmux(`set-option -p -t "${session}:0.${i}" @status_file "${statusFile}"`);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadCitizenConfig, resolveCitizenProps, DEFAULT_ROLE_COLORS, DEFAULT_CODER_COLOR } from '../lib/citizen-config.js';
+import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle, DEFAULT_ROLE_COLORS, DEFAULT_CODER_COLOR } from '../lib/citizen-config.js';
 
 let tmp: string;
 
@@ -108,5 +108,26 @@ describe('resolveCitizenProps', () => {
     const result = resolveCitizenProps('tester', overrides);
     assert.equal(result.displayName, 'tester');
     assert.equal(result.color, '#00ff00');
+  });
+});
+
+describe('hexToTmuxStyle', () => {
+  it('uses black fg on light backgrounds', () => {
+    assert.equal(hexToTmuxStyle('#cccc00'), 'fg=black,bg=#cccc00');
+    assert.equal(hexToTmuxStyle('#00cccc'), 'fg=black,bg=#00cccc');
+  });
+
+  it('uses white fg on dark backgrounds', () => {
+    assert.equal(hexToTmuxStyle('#0066cc'), 'fg=white,bg=#0066cc');
+    assert.equal(hexToTmuxStyle('#cc00cc'), 'fg=white,bg=#cc00cc');
+    assert.equal(hexToTmuxStyle('#00cc00'), 'fg=white,bg=#00cc00');
+  });
+
+  it('uses black fg on white', () => {
+    assert.equal(hexToTmuxStyle('#ffffff'), 'fg=black,bg=#ffffff');
+  });
+
+  it('uses white fg on black', () => {
+    assert.equal(hexToTmuxStyle('#000000'), 'fg=white,bg=#000000');
   });
 });

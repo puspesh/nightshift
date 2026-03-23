@@ -72,3 +72,17 @@ function getDefaultColor(role: string): string {
   }
   return DEFAULT_ROLE_COLORS[role] ?? DEFAULT_CODER_COLOR;
 }
+
+/**
+ * Convert a hex color to a tmux-compatible style string with appropriate
+ * foreground color based on background luminance.
+ */
+export function hexToTmuxStyle(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  // Relative luminance (ITU-R BT.709)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const fg = luminance > 0.5 ? 'black' : 'white';
+  return `fg=${fg},bg=${hex}`;
+}

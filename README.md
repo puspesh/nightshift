@@ -1,6 +1,15 @@
-# nightshift
+<p align="center">
+  <img src="assets/logo.svg" alt="nightshift" width="400">
+</p>
 
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <a href="https://www.npmjs.com/package/nightshift"><img src="https://img.shields.io/npm/v/nightshift" alt="npm version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node.js >= 18">
+  <img src="https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Claude_Code-compatible-blueviolet" alt="Claude Code">
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
+</p>
 
 Coordinating AI agents for your development pipeline. Set up a team of agents
 in any repository that autonomously triage issues, write plans, review code,
@@ -192,6 +201,10 @@ See the `examples/` directory for ready-to-use extension sets:
 - **Go service** (go test, golangci-lint, testcontainers)
 
 Copy any example's files into your `.claude/nightshift/` directory as a starting point.
+
+## Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests.
 
 ## License
 

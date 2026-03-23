@@ -93,17 +93,17 @@ describe('writeWorldConfig', () => {
 });
 
 describe('PID file helpers', () => {
-  it('getPidFilePath returns expected path', () => {
-    const p = getPidFilePath('myapp', 'dev');
-    assert.ok(p.includes('.nightshift/myapp/dev/miniverse.pid'));
+  it('getPidFilePath returns repo-level path', () => {
+    const p = getPidFilePath('myapp');
+    assert.ok(p.includes('.nightshift/myapp/miniverse.pid'));
   });
 
-  it('getPortFilePath returns expected path', () => {
-    const p = getPortFilePath('myapp', 'dev');
-    assert.ok(p.includes('.nightshift/myapp/dev/miniverse.port'));
+  it('getPortFilePath returns repo-level path', () => {
+    const p = getPortFilePath('myapp');
+    assert.ok(p.includes('.nightshift/myapp/miniverse.port'));
   });
 
   it('isServerRunning returns false when no PID file', () => {
-    assert.equal(isServerRunning('nonexistent-repo-xyz', 'dev'), false);
+    assert.equal(isServerRunning('nonexistent-repo-xyz'), false);
   });
 });

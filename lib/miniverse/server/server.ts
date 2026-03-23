@@ -476,6 +476,10 @@ export class MiniverseServer {
     const agentName = (data as any).name
       ?? (shortSession ? `Claude (${folder} #${shortSession})` : `Claude (${folder})`);
 
+    // Only accept agents that were pre-registered (ns-<team>-<role> pattern)
+    // Ignore hook events from unrelated Claude sessions
+    if (!this.store.has(agentId)) return;
+
     const toolName = data.tool_name as string | undefined;
     const prompt = data.prompt as string | undefined;
 

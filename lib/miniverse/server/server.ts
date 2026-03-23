@@ -465,16 +465,22 @@ export class MiniverseServer {
     const event = data.hook_event_name as string | undefined;
     if (!event) return;
 
-    // Derive agent ID from session_id (unique per instance) + cwd (human-readable)
-    const sessionId = data.session_id as string | undefined;
-    const cwd = data.cwd as string | undefined;
-    const folder = (cwd ?? '').split('/').pop() || 'code';
-    const shortSession = sessionId ? sessionId.slice(0, 6) : '';
+    let agentId: string;
+    let agentName: string;
 
-    const agentId = (data as any).agent
-      ?? (shortSession ? `claude-${folder}-${shortSession}` : `claude-${folder}`);
-    const agentName = (data as any).name
-      ?? (shortSession ? `Claude (${folder} #${shortSession})` : `Claude (${folder})`);
+    if (data.agent) {
+      // Pre-registered agent (nightshift-managed) — use query-param-provided identity
+      agentId = data.agent as string;
+      agentName = (data.name as string) ?? agentId;
+    } else {
+      // Anonymous Claude Code instance — derive ID from session + cwd
+      const sessionId = data.session_id as string | undefined;
+      const cwd = data.cwd as string | undefined;
+      const folder = (cwd ?? '').split('/').pop() || 'code';
+      const shortSession = sessionId ? sessionId.slice(0, 6) : '';
+      agentId = shortSession ? `claude-${folder}-${shortSession}` : `claude-${folder}`;
+      agentName = shortSession ? `Claude (${folder} #${shortSession})` : `Claude (${folder})`;
+    }
 
     const toolName = data.tool_name as string | undefined;
     const prompt = data.prompt as string | undefined;
@@ -533,7 +539,7 @@ export class MiniverseServer {
           : `${agentId}-sub-${Math.random().toString(36).slice(2, 8)}`;
         const subName = subagentTask
           ? `Claude (${truncate(subagentTask, 20)})`
-          : `Claude (sub of ${folder})`;
+          : `Claude (sub of ${agentName})`;
         this.store.heartbeat({ agent: subId, name: subName, state: 'working', task: subagentTask ?? 'Running' });
         this.startKeepalive(subId, subName);
         // Track sub-agent under parent so we can clean up on SessionEnd

@@ -9,6 +9,7 @@ describe('generateHookConfig', () => {
   it('generates command hooks with curl to /api/hooks/claude-code', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
     const events = Object.keys(config.hooks);
+    assert.ok(events.includes('SessionStart'));
     assert.ok(events.includes('PreToolUse'));
     assert.ok(events.includes('PostToolUse'));
     assert.ok(events.includes('UserPromptSubmit'));

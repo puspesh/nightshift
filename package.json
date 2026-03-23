@@ -30,10 +30,13 @@
     "agents",
     "pipeline",
     "claude",
+    "claude-code",
     "development",
     "automation",
     "code-review",
-    "planning"
+    "planning",
+    "github",
+    "tmux"
   ],
   "author": "Nightshift Agents <https://github.com/nightshift-agents>",
   "license": "MIT",

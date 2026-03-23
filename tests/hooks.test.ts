@@ -9,6 +9,8 @@ describe('generateHookConfig', () => {
   it('generates command hooks with curl to /api/hooks/claude-code', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
     const events = Object.keys(config.hooks);
+    assert.equal(events.length, 5);
+    assert.ok(events.includes('SessionStart'));
     assert.ok(events.includes('PreToolUse'));
     assert.ok(events.includes('PostToolUse'));
     assert.ok(events.includes('UserPromptSubmit'));
@@ -42,6 +44,12 @@ describe('generateHookConfig', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
     const cmd = config.hooks['Stop'][0].hooks[0].command;
     assert.ok(cmd.includes('"hook_event_name":"Stop"'));
+  });
+
+  it('SessionStart hook includes correct event name in POST body', () => {
+    const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
+    const cmd = config.hooks['SessionStart'][0].hooks[0].command;
+    assert.ok(cmd.includes('"hook_event_name":"SessionStart"'));
   });
 });
 

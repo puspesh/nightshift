@@ -97,6 +97,16 @@ git checkout _ns/dev/reviewer
    git pull origin issue-<number>-<slug>
    ```
 
+   Post a starting comment so progress is visible from GitHub:
+   ```bash
+   # REVIEW_TYPE is "Plan Review" for dev:plan-review, "Code Review" for dev:code-review
+   gh issue comment <number> --body "### @ns-dev-reviewer -- Review started
+   **Status**: in-progress
+   **Type**: <Plan Review | Code Review>
+   **Branch**: \`issue-<number>-<slug>\`
+   **Next**: Reviewing..."
+   ```
+
 3. **For plan reviews** (`dev:plan-review`):
    - The plan file is on this branch — read it directly
    - Read `.claude/nightshift/ns-dev-review-criteria.md` for design review criteria

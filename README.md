@@ -44,6 +44,9 @@ Each pane has a color-coded label showing its role, the `/loop` command to type,
 and a live status indicator (working/idle with countdown timer). Navigate panes
 with `Ctrl+b, arrow`. Detach with `Ctrl+b, d` (agents keep running).
 
+A visualization server also launches at `http://localhost:4321` showing a pixel-art
+office world with agents as animated citizens, plus a real-time status panel.
+
 You can also start agents individually in separate terminals:
 
 ```bash

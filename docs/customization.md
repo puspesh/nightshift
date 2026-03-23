@@ -36,7 +36,7 @@ Organize criteria by severity:
 
 ## Configuring Your Test Runner
 
-Edit `.claude/nightshift/testing.md` with:
+Edit `.claude/nightshift/ns-<team>-test-config.md` with:
 
 1. **Framework and command**: What test runner, how to invoke it
 2. **File patterns**: Where test files live

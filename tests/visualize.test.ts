@@ -35,7 +35,7 @@ describe('generateWorldConfig', () => {
   it('citizen names match agent roles', () => {
     const agents = makeAgents(2);
     const config = generateWorldConfig(agents, 'dev');
-    const names = config.citizens.map(c => c.displayName);
+    const names = config.citizens.map(c => c.name);
     assert.deepEqual(names, ['producer', 'planner', 'reviewer', 'coder-1', 'coder-2', 'tester']);
   });
 
@@ -65,7 +65,6 @@ describe('generateWorldConfig', () => {
     const config = generateWorldConfig(agents, 'dev');
     for (const c of config.citizens) {
       assert.ok(c.name, `${c.id} should have a name`);
-      assert.equal(c.name, c.displayName, 'name should equal displayName');
       assert.ok(c.sprite, `${c.id} should have a sprite`);
     }
   });
@@ -79,12 +78,12 @@ describe('generateWorldConfig', () => {
     assert.equal(sprites[1], sprites[5]);
   });
 
-  it('citizen displayName uses override when provided', () => {
+  it('citizen name uses override when provided', () => {
     const agents = makeAgents(1);
     const overrides = { producer: { displayName: 'Boss' } };
     const config = generateWorldConfig(agents, 'dev', overrides);
     const producer = config.citizens.find(c => c.role === 'producer')!;
-    assert.equal(producer.displayName, 'Boss');
+    assert.equal(producer.name, 'Boss');
   });
 
   it('citizen color uses override when provided', () => {
@@ -99,7 +98,7 @@ describe('generateWorldConfig', () => {
     const agents = makeAgents(1);
     const config = generateWorldConfig(agents, 'dev');
     const producer = config.citizens.find(c => c.role === 'producer')!;
-    assert.equal(producer.displayName, 'producer');
+    assert.equal(producer.name, 'producer');
     assert.equal(producer.color, '#00cccc');
     const coder = config.citizens.find(c => c.role === 'coder-1')!;
     assert.equal(coder.color, '#0066cc');

@@ -16,13 +16,12 @@ const HEARTBEAT_SCRIPT = join(__dirname, '..', 'bin', 'ns-heartbeat.sh');
  * Identified by URL containing the miniverse claude-code hook endpoint.
  */
 function isNightshiftHook(hook: Record<string, unknown>): boolean {
-  // Check new format: {matcher, hooks: [{type: "command", command: "curl ... /api/hooks/claude-code ..."}]}
   if (Array.isArray(hook.hooks)) {
     return hook.hooks.some((h: Record<string, unknown>) =>
-      typeof h.command === 'string' && h.command.includes(HOOK_URL_PATTERN)
+      typeof h.command === 'string' && (h.command.includes(HOOK_URL_PATTERN) || h.command.includes('ns-heartbeat.sh'))
     );
   }
-  // Check old format: {type: "http", url: "..."}
+  // Legacy format: {type: "http", url: "..."}
   return typeof hook.url === 'string' && hook.url.includes(HOOK_URL_PATTERN);
 }
 

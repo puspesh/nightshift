@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 import { getTeamDir, discoverCoderCount } from './worktrees.js';
 import { detectRepoRoot, detectRepoName } from './detect.js';
-import { startServer, waitForServer, registerAgents, stopServer, isServerRunning, getPortFilePath } from './visualize.js';
+import { startServer, waitForServer, registerAgents, stopServer } from './visualize.js';
 import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
 import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
@@ -154,9 +154,7 @@ export async function startSession(team: string, options?: { port?: number }): P
     }
 
     // Always restart the server to ensure latest code is served
-    if (isServerRunning()) {
-      stopServer();
-    }
+    stopServer();
     let serverUrl: string;
     const result = startServer(vizPort, miniverseDir);
     if (!result) {

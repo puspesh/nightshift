@@ -43,7 +43,6 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
     citizens.push({
       id: `ns-${team}-${agent.role}`,
       name: resolved.displayName,
-      displayName: resolved.displayName,
       sprite,
       role: agent.role,
       workstationId: stationId,

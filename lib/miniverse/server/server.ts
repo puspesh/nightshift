@@ -278,7 +278,7 @@ export class MiniverseServer {
   }
 
   private async handleWorldAction(agentId: string, action: { type: string; [key: string]: unknown }) {
-    const worldId = ((action.world as string) ?? this.getDefaultWorldId() ?? 'default').replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
+    const worldId = ((action.world as string) ?? this.findWorldId() ?? 'default').replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
     const actionType = action.type;
 
     try {
@@ -594,32 +594,24 @@ export class MiniverseServer {
     }
   }
 
-  /** Find a team's world by scanning all repos (for ?team= without ?repo=) */
-  private findTeamWorldId(team: string): string | null {
+  /** Scan publicDir for a world matching an optional team filter. Returns "repo/team" or null. */
+  private findWorldId(teamFilter?: string): string | null {
     const publicDir = this.publicDir ?? './public';
     if (!existsSync(publicDir)) return null;
-    const safeTeam = team.replace(/[^a-zA-Z0-9_-]/g, '');
-    try {
-      for (const repoEntry of readdirSync(publicDir, { withFileTypes: true })) {
-        if (!repoEntry.isDirectory()) continue;
-        if (existsSync(path.join(publicDir, repoEntry.name, safeTeam, 'world.json'))) {
-          return repoEntry.name + '/' + safeTeam;
-        }
-      }
-      return null;
-    } catch { return null; }
-  }
-
-  private getDefaultWorldId(): string | null {
-    const publicDir = this.publicDir ?? './public';
-    if (!existsSync(publicDir)) return null;
+    const safeTeam = teamFilter?.replace(/[^a-zA-Z0-9_-]/g, '');
     try {
       for (const repoEntry of readdirSync(publicDir, { withFileTypes: true })) {
         if (!repoEntry.isDirectory()) continue;
         const repoPath = path.join(publicDir, repoEntry.name);
-        for (const teamEntry of readdirSync(repoPath, { withFileTypes: true })) {
-          if (teamEntry.isDirectory() && existsSync(path.join(repoPath, teamEntry.name, 'world.json'))) {
-            return repoEntry.name + '/' + teamEntry.name;
+        if (safeTeam) {
+          if (existsSync(path.join(repoPath, safeTeam, 'world.json'))) {
+            return repoEntry.name + '/' + safeTeam;
+          }
+        } else {
+          for (const teamEntry of readdirSync(repoPath, { withFileTypes: true })) {
+            if (teamEntry.isDirectory() && existsSync(path.join(repoPath, teamEntry.name, 'world.json'))) {
+              return repoEntry.name + '/' + teamEntry.name;
+            }
           }
         }
       }
@@ -659,7 +651,7 @@ export class MiniverseServer {
     // Routes
     if (req.method === 'GET' && url.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(getFrontendHtml(this.port));
+      res.end(getFrontendHtml());
       return;
     }
 
@@ -684,10 +676,10 @@ export class MiniverseServer {
       if (repo && team) {
         worldData = this.loadWorldData(repo + '/' + team);
       } else if (team) {
-        const teamWorldId = this.findTeamWorldId(team);
+        const teamWorldId = this.findWorldId(team);
         worldData = teamWorldId ? this.loadWorldData(teamWorldId) : null;
       } else {
-        const defaultId = this.getDefaultWorldId();
+        const defaultId = this.findWorldId();
         worldData = defaultId ? this.loadWorldData(defaultId) : null;
       }
       if (worldData) {
@@ -763,7 +755,7 @@ export class MiniverseServer {
     if (req.method === 'GET' && url.pathname === '/api/info') {
       const agents = this.store.getPublicList();
       const online = agents.filter((a: any) => a.state !== 'offline').length;
-      const worldId = this.getDefaultWorldId();
+      const worldId = this.findWorldId();
       const world = worldId ? this.readWorld(worldId) : null;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({

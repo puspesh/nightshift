@@ -2,7 +2,7 @@
  * Nightshift visualization frontend.
  * Serves the pixel-art world + status panel using @miniverse/core.
  */
-export function getFrontendHtml(wsPort: number): string {
+export function getFrontendHtml(): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

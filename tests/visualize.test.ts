@@ -65,6 +65,23 @@ describe('generateWorldConfig', () => {
     assert.equal(unique.size, positions.length, 'Workstations must have unique positions');
   });
 
+  it('desk props do not overlap for various team sizes', () => {
+    for (const coderCount of [1, 2, 3, 4]) {
+      const agents = makeAgents(coderCount);
+      const config = generateWorldConfig(agents, 'dev');
+      const desks = config.props.filter(p => p.id.startsWith('desk_corner'));
+      for (let i = 0; i < desks.length; i++) {
+        for (let j = i + 1; j < desks.length; j++) {
+          const a = desks[i], b = desks[j];
+          const xOverlap = a.x < b.x + b.w && b.x < a.x + a.w;
+          const yOverlap = a.y < b.y + b.h && b.y < a.y + a.h;
+          assert.ok(!(xOverlap && yOverlap),
+            `Desks ${i} (x=${a.x.toFixed(1)}) and ${j} (x=${b.x.toFixed(1)}) overlap with ${coderCount} coders`);
+        }
+      }
+    }
+  });
+
   it('uses gear-supply theme', () => {
     const agents = makeAgents(1);
     const config = generateWorldConfig(agents, 'dev');

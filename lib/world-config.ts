@@ -24,16 +24,17 @@ const CHAIR_H = 1.9;
  * Each agent gets a desk + chair prop pair.
  */
 export function generateWorldConfig(agents: AgentEntry[], team: string, overrides?: CitizenOverrides): WorldConfig {
-  const cols = Math.min(agents.length, 4);
+  // Layout desks across the grid, ensuring no overlap
+  // Each desk needs DESK_W + 1 tile gap minimum
+  const deskSlot = DESK_W + 1;
+  const maxCols = Math.floor(GRID_COLS / deskSlot);
+  const cols = Math.min(agents.length, maxCols);
   const rows = Math.ceil(agents.length / cols);
 
-  // Position desks in a grid across the office area (tiles 8-18 x, 3-9 y)
-  const xStart = 8;
-  const xEnd = 18;
+  // Evenly distribute across the full grid
+  const xSpacing = GRID_COLS / cols;
   const yStart = 3;
-  const yEnd = 9;
-  const xSpacing = (xEnd - xStart - DESK_W) / Math.max(cols - 1, 1);
-  const ySpacing = (yEnd - yStart - DESK_H) / Math.max(rows - 1, 1);
+  const ySpacing = Math.max(DESK_H + 1, (GRID_ROWS - yStart - DESK_H) / Math.max(rows - 1, 1));
 
   const workstations: WorkstationAnchor[] = [];
   const citizens: CitizenConfig[] = [];
@@ -44,8 +45,8 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
     const col = i % cols;
     const row = Math.floor(i / cols);
 
-    // Tile position for this desk
-    const deskX = xStart + col * xSpacing;
+    // Tile position for this desk (centered within each column slot)
+    const deskX = col * xSpacing + (xSpacing - DESK_W) / 2;
     const deskY = yStart + row * ySpacing;
 
     // Pixel position for workstation anchor (center of desk area)

@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 
 const HOOK_EVENTS = ['SessionStart', 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
 const HOOK_URL_PATTERN = '/api/hooks/claude-code';
-const HEARTBEAT_SCRIPT = join(__dirname, '..', 'bin', 'ns-heartbeat.sh');
+const HEARTBEAT_SCRIPT = join(__dirname, '..', '..', 'bin', 'ns-heartbeat.sh');
 
 /**
  * Check if a hook entry is a nightshift visualization hook.

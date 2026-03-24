@@ -107,7 +107,7 @@ describe('PID file helpers', () => {
     assert.ok(p.includes('.nightshift/miniverse.port'));
   });
 
-  it('isServerRunning returns false when no PID file', () => {
+  it('isServerRunning returns false when no PID file', { skip: isServerRunning() ? 'server is currently running' : undefined }, () => {
     assert.equal(isServerRunning(), false);
   });
 });

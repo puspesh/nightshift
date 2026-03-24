@@ -153,24 +153,22 @@ export async function startSession(team: string, options?: { port?: number }): P
       execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
-    // Reuse running global server or start a new one
-    let serverUrl: string;
+    // Always restart the server to ensure latest code is served
     if (isServerRunning()) {
-      const port = readFileSync(getPortFilePath(), 'utf-8').trim();
-      serverUrl = `http://localhost:${port}`;
-    } else {
-      const result = startServer(vizPort, miniverseDir);
-      if (!result) {
-        console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
-        throw new Error('Server start failed');
-      }
-      const healthy = await waitForServer(result.url, 10000);
-      if (!healthy) {
-        console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
-        throw new Error('Server health check failed');
-      }
-      serverUrl = result.url;
+      stopServer();
     }
+    let serverUrl: string;
+    const result = startServer(vizPort, miniverseDir);
+    if (!result) {
+      console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
+      throw new Error('Server start failed');
+    }
+    const healthy = await waitForServer(result.url, 10000);
+    if (!healthy) {
+      console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
+      throw new Error('Server health check failed');
+    }
+    serverUrl = result.url;
 
     await registerAgents(serverUrl, agents, team, citizenOverrides);
     vizUrl = serverUrl;

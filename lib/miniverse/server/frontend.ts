@@ -134,9 +134,9 @@ h1 {
 <h1>nightshift</h1>
 
 <div id="team-selector">
-  <label for="team-select">Team:</label>
+  <label for="team-select">World:</label>
   <select id="team-select"></select>
-  <span id="team-empty" style="display:none">No teams available</span>
+  <span id="team-empty" style="display:none">No worlds available</span>
 </div>
 
 <div id="canvas-container"></div>
@@ -182,8 +182,9 @@ function getTeam(agentId) {
 }
 
 function renderCard(agent) {
-  // Only render agents matching the current team
-  if (currentTeam && getTeam(agent.agent) !== currentTeam) return;
+  // Only render agents matching the current team (show unaffiliated agents always)
+  const agentTeam = getTeam(agent.agent);
+  if (currentTeam && agentTeam && agentTeam !== currentTeam) return;
 
   const role = getRole(agent.agent);
   let card = document.querySelector('[data-agent="' + agent.agent + '"]');
@@ -214,17 +215,24 @@ function refreshStatusPanel() {
 let currentMv = null;
 
 // --- Load world and start miniverse ---
-async function startWorld(teamId) {
+// worldKey is "repo/team" (e.g. "nightshift/dev")
+async function startWorld(worldKey) {
   // Destroy previous Miniverse instance if it exists
   if (currentMv) {
-    try { currentMv.destroy?.() || currentMv.stop?.(); } catch {}
+    try { currentMv.stop?.(); } catch {}
     currentMv = null;
   }
   container.innerHTML = '';
 
   let worldData;
   try {
-    const url = teamId ? '/api/world?team=' + encodeURIComponent(teamId) : '/api/world';
+    let url = '/api/world';
+    if (worldKey && worldKey.includes('/')) {
+      const [repo, team] = worldKey.split('/');
+      url = '/api/world?repo=' + encodeURIComponent(repo) + '&team=' + encodeURIComponent(team);
+    } else if (worldKey) {
+      url = '/api/world?team=' + encodeURIComponent(worldKey);
+    }
     worldData = await fetch(url).then(r => r.json());
   } catch {
     console.warn('No world data available');
@@ -234,7 +242,7 @@ async function startWorld(teamId) {
   const gridCols = worldData.gridCols || 16;
   const gridRows = worldData.gridRows || 12;
   const tileSize = 32;
-  const basePath = '/worlds/' + (teamId || '');
+  const basePath = '/worlds/' + (worldKey || '');
 
   // Build scene config
   const floor = worldData.floor || Array.from({ length: gridRows }, () => Array(gridCols).fill(''));
@@ -369,41 +377,59 @@ function connect() {
 async function initTeamSelector() {
   const select = document.getElementById('team-select');
   const empty = document.getElementById('team-empty');
-  let worlds = [];
+  let repos = [];
   try {
     const res = await fetch('/api/worlds');
     const data = await res.json();
-    worlds = data.worlds || [];
+    repos = data.repos || [];
   } catch {}
 
-  if (worlds.length === 0) {
+  const allWorlds = repos.flatMap(r => r.teams.map(t => r.repo + '/' + t.id));
+  if (allWorlds.length === 0) {
     select.style.display = 'none';
     empty.style.display = 'inline';
     return;
   }
 
-  for (const w of worlds) {
-    const opt = document.createElement('option');
-    opt.value = w.id;
-    opt.textContent = w.id + ' (' + w.agents + ' agents)';
-    select.appendChild(opt);
+  if (repos.length === 1) {
+    // Single repo — show team names only
+    for (const t of repos[0].teams) {
+      const opt = document.createElement('option');
+      opt.value = repos[0].repo + '/' + t.id;
+      opt.textContent = t.id + ' (' + t.agents + ' agents)';
+      select.appendChild(opt);
+    }
+  } else {
+    // Multiple repos — use optgroups
+    for (const r of repos) {
+      const group = document.createElement('optgroup');
+      group.label = r.repo;
+      for (const t of r.teams) {
+        const opt = document.createElement('option');
+        opt.value = r.repo + '/' + t.id;
+        opt.textContent = t.id + ' (' + t.agents + ' agents)';
+        group.appendChild(opt);
+      }
+      select.appendChild(group);
+    }
   }
 
-  // Check URL for initial team selection
-  const urlTeam = new URLSearchParams(location.search).get('team');
-  if (urlTeam && worlds.some(w => w.id === urlTeam)) {
-    select.value = urlTeam;
+  // Check URL for initial selection
+  const urlWorld = new URLSearchParams(location.search).get('world');
+  if (urlWorld && allWorlds.includes(urlWorld)) {
+    select.value = urlWorld;
   }
 
-  currentTeam = select.value;
+  // Extract team from world key for agent filtering
+  currentTeam = select.value.split('/')[1] || select.value;
   refreshStatusPanel();
-  startWorld(currentTeam).catch(console.error);
+  startWorld(select.value).catch(console.error);
 
   select.addEventListener('change', () => {
-    currentTeam = select.value;
-    history.replaceState(null, '', '?team=' + encodeURIComponent(currentTeam));
+    currentTeam = select.value.split('/')[1] || select.value;
+    history.replaceState(null, '', '?world=' + encodeURIComponent(select.value));
     refreshStatusPanel();
-    startWorld(currentTeam).catch(console.error);
+    startWorld(select.value).catch(console.error);
   });
 }
 

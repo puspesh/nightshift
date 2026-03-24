@@ -261,7 +261,7 @@ export class MiniverseServer {
 
   private getWorldPath(worldId: string): string {
     const publicDir = this.publicDir ?? './public';
-    const safeId = worldId.replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeId = worldId.replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
     return path.join(publicDir, safeId, 'world.json');
   }
 
@@ -278,7 +278,7 @@ export class MiniverseServer {
   }
 
   private async handleWorldAction(agentId: string, action: { type: string; [key: string]: unknown }) {
-    const worldId = ((action.world as string) ?? 'cozy-startup').replace(/[^a-zA-Z0-9_-]/g, '');
+    const worldId = ((action.world as string) ?? this.getDefaultWorldId() ?? 'default').replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
     const actionType = action.type;
 
     try {
@@ -594,19 +594,41 @@ export class MiniverseServer {
     }
   }
 
+  /** Find a team's world by scanning all repos (for ?team= without ?repo=) */
+  private findTeamWorldId(team: string): string | null {
+    const publicDir = this.publicDir ?? './public';
+    if (!existsSync(publicDir)) return null;
+    const safeTeam = team.replace(/[^a-zA-Z0-9_-]/g, '');
+    try {
+      for (const repoEntry of readdirSync(publicDir, { withFileTypes: true })) {
+        if (!repoEntry.isDirectory()) continue;
+        if (existsSync(path.join(publicDir, repoEntry.name, safeTeam, 'world.json'))) {
+          return repoEntry.name + '/' + safeTeam;
+        }
+      }
+      return null;
+    } catch { return null; }
+  }
+
   private getDefaultWorldId(): string | null {
     const publicDir = this.publicDir ?? './public';
     if (!existsSync(publicDir)) return null;
     try {
-      const dirs = readdirSync(publicDir).filter(d => {
-        return existsSync(path.join(publicDir, d, 'world.json'));
-      });
-      return dirs[0] ?? null;
+      for (const repoEntry of readdirSync(publicDir, { withFileTypes: true })) {
+        if (!repoEntry.isDirectory()) continue;
+        const repoPath = path.join(publicDir, repoEntry.name);
+        for (const teamEntry of readdirSync(repoPath, { withFileTypes: true })) {
+          if (teamEntry.isDirectory() && existsSync(path.join(repoPath, teamEntry.name, 'world.json'))) {
+            return repoEntry.name + '/' + teamEntry.name;
+          }
+        }
+      }
+      return null;
     } catch { return null; }
   }
 
   private loadWorldData(worldId: string): unknown | null {
-    const safeId = worldId.replace(/[^a-zA-Z0-9_-]/g, '');
+    const safeId = worldId.replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
     const publicDir = this.publicDir ?? './public';
     const worldPath = path.join(publicDir, safeId, 'world.json');
     if (!existsSync(worldPath)) return null;
@@ -654,12 +676,16 @@ export class MiniverseServer {
       return;
     }
 
-    // Serve world data as JSON (supports ?team= for multi-team)
+    // Serve world data as JSON (supports ?repo=X&team=Y for multi-repo)
     if (req.method === 'GET' && url.pathname === '/api/world') {
+      const repo = url.searchParams.get('repo');
       const team = url.searchParams.get('team');
       let worldData: unknown | null;
-      if (team) {
-        worldData = this.loadWorldData(team);
+      if (repo && team) {
+        worldData = this.loadWorldData(repo + '/' + team);
+      } else if (team) {
+        const teamWorldId = this.findTeamWorldId(team);
+        worldData = teamWorldId ? this.loadWorldData(teamWorldId) : null;
       } else {
         const defaultId = this.getDefaultWorldId();
         worldData = defaultId ? this.loadWorldData(defaultId) : null;
@@ -674,20 +700,28 @@ export class MiniverseServer {
       return;
     }
 
-    // List available team worlds
+    // List available repo/team worlds (two-level scan)
     if (req.method === 'GET' && url.pathname === '/api/worlds') {
       const publicDir = this.publicDir ?? '.';
-      const teams: { id: string; agents: number }[] = [];
+      const repos: { repo: string; teams: { id: string; agents: number }[] }[] = [];
       try {
-        for (const entry of readdirSync(publicDir, { withFileTypes: true })) {
-          if (entry.isDirectory() && existsSync(path.join(publicDir, entry.name, 'world.json'))) {
-            const world = this.loadWorldData(entry.name) as any;
-            teams.push({ id: entry.name, agents: world?.citizens?.length ?? 0 });
+        for (const repoEntry of readdirSync(publicDir, { withFileTypes: true })) {
+          if (!repoEntry.isDirectory()) continue;
+          const repoPath = path.join(publicDir, repoEntry.name);
+          const teams: { id: string; agents: number }[] = [];
+          for (const teamEntry of readdirSync(repoPath, { withFileTypes: true })) {
+            if (teamEntry.isDirectory() && existsSync(path.join(repoPath, teamEntry.name, 'world.json'))) {
+              const world = this.loadWorldData(repoEntry.name + '/' + teamEntry.name) as any;
+              teams.push({ id: teamEntry.name, agents: world?.citizens?.length ?? 0 });
+            }
+          }
+          if (teams.length > 0) {
+            repos.push({ repo: repoEntry.name, teams });
           }
         }
       } catch { /* publicDir may not exist yet */ }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ worlds: teams }));
+      res.end(JSON.stringify({ repos }));
       return;
     }
 
@@ -932,7 +966,7 @@ export class MiniverseServer {
 
       const publicDir = this.publicDir ?? './public';
       const slug = data.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
-      const worldId = (data.worldId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      const worldId = (data.worldId || '').replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
       const worldDir = worldId ? path.join(publicDir, worldId) : publicDir;
 
       // Handle base64 reference image

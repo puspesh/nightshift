@@ -126,8 +126,8 @@ export async function startSession(team: string, options?: { port?: number }): P
   const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
   let vizUrl: string | null = null;
   try {
-    const miniverseDir = join(homedir(), '.nightshift', repoName, 'miniverse');
-    const teamWorldDir = join(miniverseDir, team);
+    const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
+    const teamWorldDir = join(miniverseDir, repoName, team);
 
     // Generate dynamic world config
     const worldConfig = generateWorldConfig(agents, team, citizenOverrides);
@@ -137,7 +137,7 @@ export async function startSession(team: string, options?: { port?: number }): P
     mkdirSync(teamWorldDir, { recursive: true });
     if (existsSync(baseWorldDir)) {
       execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
-      // Copy universal_assets to shared miniverse level
+      // Copy universal_assets to shared miniverse level (global, not per-repo)
       execSync(`cp -R "${baseWorldDir}/universal_assets" "${miniverseDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
@@ -153,13 +153,13 @@ export async function startSession(team: string, options?: { port?: number }): P
       execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
-    // Reuse running server or start a new one
+    // Reuse running global server or start a new one
     let serverUrl: string;
-    if (isServerRunning(repoName)) {
-      const port = readFileSync(getPortFilePath(repoName), 'utf-8').trim();
+    if (isServerRunning()) {
+      const port = readFileSync(getPortFilePath(), 'utf-8').trim();
       serverUrl = `http://localhost:${port}`;
     } else {
-      const result = startServer(vizPort, miniverseDir, repoName);
+      const result = startServer(vizPort, miniverseDir);
       if (!result) {
         console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
         throw new Error('Server start failed');
@@ -280,17 +280,17 @@ export function stopSession(team: string): void {
   const repoName = detectRepoName();
   const session = getSessionName(repoName, team);
 
-  // Only stop the shared server if no other team sessions are running
-  const sessionPrefix = `nightshift-${repoName}-`;
+  // Only stop the global server if no other nightshift sessions are running (across all repos)
+  const sessionPrefix = 'nightshift-';
   try {
     const sessions = execSync('tmux list-sessions -F "#{session_name}"', { encoding: 'utf-8' });
-    const otherSessions = sessions.split('\n').filter(s => s.startsWith(sessionPrefix) && s !== session);
+    const otherSessions = sessions.split('\n').map(s => s.trim()).filter(s => s.startsWith(sessionPrefix) && s !== session);
     if (otherSessions.length === 0) {
-      stopServer(repoName);
+      stopServer();
     }
   } catch {
     // No tmux server running — safe to stop
-    stopServer(repoName);
+    stopServer();
   }
 
   try {

@@ -1,9 +1,6 @@
-import { describe, it, afterEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { generateWorldConfig, writeWorldConfig } from '../lib/world-config.js';
+import { generateWorldConfig } from '../lib/world-config.js';
 import { getPidFilePath, getPortFilePath, isServerRunning } from '../lib/visualize.js';
 import type { AgentEntry } from '../lib/types.js';
 
@@ -99,37 +96,18 @@ describe('generateWorldConfig', () => {
   });
 });
 
-describe('writeWorldConfig', () => {
-  const tmp = join(tmpdir(), `ns-worldconfig-test-${Date.now()}`);
-
-  afterEach(() => {
-    try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
-  });
-
-  it('writes world.json to the output directory', () => {
-    const agents = makeAgents(1);
-    const config = generateWorldConfig(agents, 'dev');
-    const outDir = join(tmp, 'world');
-    writeWorldConfig(config, outDir);
-
-    const written = JSON.parse(readFileSync(join(outDir, 'world.json'), 'utf-8'));
-    assert.equal(written.theme, 'gear-supply');
-    assert.equal(written.workstations.length, 5);
-  });
-});
-
 describe('PID file helpers', () => {
-  it('getPidFilePath returns repo-level path', () => {
-    const p = getPidFilePath('myapp');
-    assert.ok(p.includes('.nightshift/myapp/miniverse.pid'));
+  it('getPidFilePath returns global path', () => {
+    const p = getPidFilePath();
+    assert.ok(p.includes('.nightshift/miniverse.pid'));
   });
 
-  it('getPortFilePath returns repo-level path', () => {
-    const p = getPortFilePath('myapp');
-    assert.ok(p.includes('.nightshift/myapp/miniverse.port'));
+  it('getPortFilePath returns global path', () => {
+    const p = getPortFilePath();
+    assert.ok(p.includes('.nightshift/miniverse.port'));
   });
 
   it('isServerRunning returns false when no PID file', () => {
-    assert.equal(isServerRunning('nonexistent-repo-xyz'), false);
+    assert.equal(isServerRunning(), false);
   });
 });

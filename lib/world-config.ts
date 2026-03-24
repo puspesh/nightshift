@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import type { AgentEntry, CitizenOverrides, WorldConfig, WorkstationAnchor, CitizenConfig } from './types.js';
 import { resolveCitizenProps } from './citizen-config.js';
 
@@ -53,15 +52,6 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
     workstations,
     citizens,
   };
-}
-
-/**
- * Write the world configuration files to a directory.
- * @deprecated Replaced by `mergeWorldConfig` + direct `writeFileSync` in `start.ts`.
- */
-export function writeWorldConfig(config: WorldConfig, outputDir: string): void {
-  mkdirSync(outputDir, { recursive: true });
-  writeFileSync(join(outputDir, 'world.json'), JSON.stringify(config, null, 2) + '\n');
 }
 
 /**

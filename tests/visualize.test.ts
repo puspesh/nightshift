@@ -60,6 +60,25 @@ describe('generateWorldConfig', () => {
     assert.equal(config.theme, 'gear-supply');
   });
 
+  it('citizens have name and sprite fields', () => {
+    const agents = makeAgents(1);
+    const config = generateWorldConfig(agents, 'dev');
+    for (const c of config.citizens) {
+      assert.ok(c.name, `${c.id} should have a name`);
+      assert.equal(c.name, c.displayName, 'name should equal displayName');
+      assert.ok(c.sprite, `${c.id} should have a sprite`);
+    }
+  });
+
+  it('assigns sprites round-robin from available characters', () => {
+    const agents = makeAgents(4); // 8 agents total
+    const config = generateWorldConfig(agents, 'dev');
+    const sprites = config.citizens.map(c => c.sprite);
+    // 4 sprites cycle: dexter, morty, nova, rio, dexter, morty, nova, rio
+    assert.equal(sprites[0], sprites[4]);
+    assert.equal(sprites[1], sprites[5]);
+  });
+
   it('citizen displayName uses override when provided', () => {
     const agents = makeAgents(1);
     const overrides = { producer: { displayName: 'Boss' } };

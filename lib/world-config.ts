@@ -7,6 +7,9 @@ const CANVAS_HEIGHT = 384;
 const TILE_SIZE = 32;
 const SCALE = 2;
 
+/** Available citizen sprite characters — assigned round-robin to agents */
+const CITIZEN_SPRITES = ['dexter', 'morty', 'nova', 'rio'];
+
 /**
  * Generate a miniverse world configuration from a list of agents.
  * Workstations are placed in a grid layout that adapts to agent count.
@@ -35,9 +38,13 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
 
     const resolved = resolveCitizenProps(agent.role, overrides ?? {});
 
+    const sprite = CITIZEN_SPRITES[i % CITIZEN_SPRITES.length];
+
     citizens.push({
       id: `ns-${team}-${agent.role}`,
+      name: resolved.displayName,
       displayName: resolved.displayName,
+      sprite,
       role: agent.role,
       workstationId: stationId,
       color: resolved.color,

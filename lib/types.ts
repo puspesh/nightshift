@@ -21,7 +21,9 @@ export interface WorkstationAnchor {
 
 export interface CitizenConfig {
   id: string;
+  name: string;
   displayName: string;
+  sprite: string;
   role: string;
   workstationId: string;
   color: string;

@@ -392,11 +392,11 @@ async function initTeamSelector() {
   }
 
   if (repos.length === 1) {
-    // Single repo — show team names only
+    // Single repo — show repo/team
     for (const t of repos[0].teams) {
       const opt = document.createElement('option');
       opt.value = repos[0].repo + '/' + t.id;
-      opt.textContent = t.id + ' (' + t.agents + ' agents)';
+      opt.textContent = repos[0].repo + ' / ' + t.id + ' (' + t.agents + ' agents)';
       select.appendChild(opt);
     }
   } else {

@@ -59,6 +59,27 @@ describe('mergeWorldConfig', () => {
     assert.equal((merged.citizens as any[]).length, 2);
   });
 
+  it('filters work-type base props and keeps decorative + dynamic props', () => {
+    const baseWorld = {
+      props: [
+        { id: 'rug', x: 1, y: 1, w: 2, h: 2, layer: 'below' },
+        { id: 'desk', x: 5, y: 5, w: 3, h: 3, layer: 'below', anchors: [{ name: 'ws', ox: 1, oy: 2, type: 'work' }] },
+      ],
+    };
+    const basePath = join(tmp, 'base-world.json');
+    writeFileSync(basePath, JSON.stringify(baseWorld));
+
+    const dynamicConfig = generateWorldConfig(makeAgents(), 'dev');
+    const merged = mergeWorldConfig(basePath, dynamicConfig);
+
+    const props = merged.props as any[];
+    // Base rug kept, base desk removed, dynamic desk+chair props added
+    assert.ok(props.some((p: any) => p.id === 'rug'), 'decorative rug should be kept');
+    assert.ok(!props.some((p: any) => p.id === 'desk' && p.x === 5), 'base work desk should be removed');
+    // 2 agents × 2 props + 1 decorative = 5
+    assert.equal(props.length, 1 + dynamicConfig.props.length);
+  });
+
   it('returns dynamic config when base world file does not exist', () => {
     const dynamicConfig = generateWorldConfig(makeAgents(), 'dev');
     const merged = mergeWorldConfig(join(tmp, 'nonexistent.json'), dynamicConfig);

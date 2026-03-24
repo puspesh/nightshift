@@ -32,6 +32,17 @@ describe('generateWorldConfig', () => {
     assert.equal(config.citizens.length, 8);
   });
 
+  it('generates desk+chair props per agent', () => {
+    const agents = makeAgents(1); // 5 agents
+    const config = generateWorldConfig(agents, 'dev');
+    // 2 props per agent: desk + chair
+    assert.equal(config.props.length, 10);
+    const desks = config.props.filter(p => p.id.startsWith('desk_corner'));
+    const chairs = config.props.filter(p => p.id === 'desk_chair_dark');
+    assert.equal(desks.length, 5);
+    assert.equal(chairs.length, 5);
+  });
+
   it('citizen names match agent roles', () => {
     const agents = makeAgents(2);
     const config = generateWorldConfig(agents, 'dev');

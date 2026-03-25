@@ -37,7 +37,7 @@ h1 {
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 24px;
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 
 #status-panel {

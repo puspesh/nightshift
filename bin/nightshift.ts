@@ -55,6 +55,7 @@ Options (teardown):
 Options (start/stop):
   --team <name>     Team to start or stop (required)
   --port <number>   Port for visualization server (default: 4321)
+  --headless        Run agents as background processes (no tmux)
 
 Options:
   --help, -h        Show this help message
@@ -119,8 +120,9 @@ async function main(): Promise<void> {
       }
       const portStr = parseFlag(commandArgs, '--port');
       const port = portStr ? parseInt(portStr, 10) : undefined;
+      const headless = commandArgs.includes('--headless');
       const { startSession } = await import('../lib/start.js');
-      await startSession(team, { port });
+      await startSession(team, { port, headless });
       break;
     }
     case 'stop': {

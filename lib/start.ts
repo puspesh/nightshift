@@ -1,5 +1,5 @@
-import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { execSync, spawn } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, openSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +10,7 @@ import { startServer, waitForServer, registerAgents, stopServer } from './visual
 import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
 import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
-import type { AgentEntry } from './types.js';
+import type { AgentEntry, StartOptions, CitizenOverrides } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -88,18 +88,181 @@ function tmux(cmd: string): void {
   execSync(`tmux ${cmd}`, { stdio: ['pipe', 'pipe', 'pipe'] });
 }
 
-/**
- * Launch all agents for a team in a tmux session.
- *
- * Layout:
- *   Left sidebar (30%): producer, planner, reviewer, tester — 4 equal panes
- *   Right column (70%): coder-1..N — equally divided
- *
- * @param {string} team
- */
 const DEFAULT_VIZ_PORT = 4321;
+const AGENT_LOOP_SCRIPT = join(__dirname, '..', 'bin', 'ns-agent-loop.sh');
 
-export async function startSession(team: string, options?: { port?: number }): Promise<void> {
+/**
+ * Set up visualization server, hooks, and world config.
+ * Shared between tmux and headless modes.
+ */
+async function setupVisualization(
+  team: string, agents: AgentEntry[], repoRoot: string,
+  repoName: string, citizenOverrides: CitizenOverrides, vizPort: number,
+): Promise<string | null> {
+  let vizUrl: string | null = null;
+  try {
+    const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
+    const teamWorldDir = join(miniverseDir, repoName, team);
+
+    const worldConfig = generateWorldConfig(agents, team, citizenOverrides);
+
+    const baseWorldDir = join(__dirname, '..', 'worlds', 'nightshift');
+    mkdirSync(teamWorldDir, { recursive: true });
+    if (existsSync(baseWorldDir)) {
+      execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp -R "${baseWorldDir}/universal_assets" "${miniverseDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+    }
+
+    const baseWorldPath = join(teamWorldDir, 'base-world.json');
+    const merged = mergeWorldConfig(baseWorldPath, worldConfig);
+    writeFileSync(join(teamWorldDir, 'world.json'), JSON.stringify(merged, null, 2) + '\n');
+
+    const coreDir = join(__dirname, 'miniverse', 'core');
+    mkdirSync(join(miniverseDir, '..', 'core'), { recursive: true });
+    if (existsSync(join(coreDir, 'miniverse-core.js'))) {
+      execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
+    }
+
+    stopServer();
+    const result = startServer(vizPort, miniverseDir);
+    if (!result) {
+      console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
+      throw new Error('Server start failed');
+    }
+    const healthy = await waitForServer(result.url, 10000);
+    if (!healthy) {
+      console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
+      throw new Error('Server health check failed');
+    }
+
+    await registerAgents(result.url, agents, team, citizenOverrides);
+    vizUrl = result.url;
+
+    const allRoles = agents.map(a => a.role);
+    installHooks(repoName, team, allRoles, result.url, repoRoot);
+  } catch (err) {
+    if (!vizUrl) {
+      console.warn(chalk.yellow(`  Warning: Visualization failed to start: ${(err as Error).message}`));
+    }
+  }
+  return vizUrl;
+}
+
+// --- Headless PID management ---
+
+export function getHeadlessPidDir(repoName: string, team: string): string {
+  return join(getTeamDir(repoName, team), 'pids');
+}
+
+function writeAgentPid(repoName: string, team: string, role: string, pid: number): void {
+  const dir = getHeadlessPidDir(repoName, team);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${role}.pid`), String(pid));
+}
+
+export function stopHeadlessAgents(repoName: string, team: string): number {
+  const dir = getHeadlessPidDir(repoName, team);
+  if (!existsSync(dir)) return 0;
+  let stopped = 0;
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith('.pid')) continue;
+    const pidStr = readFileSync(join(dir, file), 'utf-8').trim();
+    const pid = parseInt(pidStr, 10);
+    if (!isNaN(pid)) {
+      try {
+        process.kill(pid, 0); // check if alive (reviewer S2)
+        process.kill(pid);
+        stopped++;
+      } catch { /* already dead */ }
+    }
+    try { unlinkSync(join(dir, file)); } catch { /* ignore */ }
+  }
+  return stopped;
+}
+
+/**
+ * Launch agents as background processes without tmux.
+ */
+async function startHeadlessSession(team: string, options?: StartOptions): Promise<void> {
+  const repoRoot = detectRepoRoot();
+  const repoName = detectRepoName();
+  const coderCount = discoverCoderCount(repoName, team);
+
+  if (coderCount === 0) {
+    console.error(chalk.red(`Team "${team}" is not initialized. Run: npx nightshift init --team ${team}`));
+    process.exit(1);
+  }
+
+  const agents = buildAgentList(team, coderCount, repoRoot, repoName);
+  const runner = parseRunner(repoRoot);
+  const citizenOverrides = loadCitizenConfig(repoRoot, team);
+
+  // Stop any existing headless agents and tmux sessions (reviewer S3)
+  stopHeadlessAgents(repoName, team);
+  const session = getSessionName(repoName, team);
+  try { tmux(`kill-session -t "${session}"`); } catch { /* no tmux session */ }
+
+  const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
+  const vizUrl = await setupVisualization(team, agents, repoRoot, repoName, citizenOverrides, vizPort);
+
+  const statusDir = join(getTeamDir(repoName, team), 'status');
+  const logDir = join(getTeamDir(repoName, team), 'logs');
+  mkdirSync(statusDir, { recursive: true });
+  mkdirSync(logDir, { recursive: true });
+
+  for (const agent of agents) {
+    const statusFile = join(statusDir, agent.role);
+    const logFile = join(logDir, `${agent.role}.log`);
+    const logFd = openSync(logFile, 'a');
+
+    const child = spawn('bash', [
+      AGENT_LOOP_SCRIPT, agent.agent, agent.cwd,
+      String(LOOP_INTERVAL), runner, statusFile,
+    ], {
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+    });
+
+    if (child.pid) {
+      child.unref();
+      writeAgentPid(repoName, team, agent.role, child.pid);
+    }
+  }
+
+  // Print summary
+  console.log(chalk.bold(`
+       _       __    __       __    _ ______
+ ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
+/ _ \\/ / __ \`/ __ \\/ __/ ___/ __ \\/ / /_/ __/
+/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
+/_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
+        /____/`));
+  console.log(chalk.dim(`  Started ${agents.length} agents in headless mode`));
+  console.log(chalk.dim(`  Runner: ${runner}`));
+  if (vizUrl) {
+    console.log(chalk.dim(`  Visualization: ${vizUrl}`));
+    try { execSync(`open "${vizUrl}"`, { stdio: 'pipe' }); } catch { /* */ }
+  }
+  console.log('');
+  console.log(chalk.bold('  Agents:'));
+  for (const a of agents) {
+    console.log(`    ${a.role.padEnd(10)} → @${a.agent}`);
+  }
+  console.log('');
+  console.log(chalk.dim(`  Logs: ${logDir}/`));
+  console.log(chalk.dim(`  Stop: npx nightshift stop --team ${team}`));
+  console.log('');
+}
+
+/**
+ * Launch all agents for a team.
+ * Dispatches to headless or tmux mode based on options.
+ */
+export async function startSession(team: string, options?: StartOptions): Promise<void> {
+  if (options?.headless) {
+    return startHeadlessSession(team, options);
+  }
+
   // Check tmux is available
   try {
     execSync('which tmux', { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -122,63 +285,11 @@ export async function startSession(team: string, options?: { port?: number }): P
   const runner = parseRunner(repoRoot);
   const citizenOverrides = loadCitizenConfig(repoRoot, team);
 
-  // Start visualization server (non-blocking — failure doesn't prevent agents from launching)
+  // Stop any existing headless agents (reviewer S3)
+  stopHeadlessAgents(repoName, team);
+
   const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
-  let vizUrl: string | null = null;
-  try {
-    const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
-    const teamWorldDir = join(miniverseDir, repoName, team);
-
-    // Generate dynamic world config
-    const worldConfig = generateWorldConfig(agents, team, citizenOverrides);
-
-    // Copy base world assets to team world dir
-    const baseWorldDir = join(__dirname, '..', 'worlds', 'nightshift');
-    mkdirSync(teamWorldDir, { recursive: true });
-    if (existsSync(baseWorldDir)) {
-      execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
-      // Copy universal_assets to shared miniverse level (global, not per-repo)
-      execSync(`cp -R "${baseWorldDir}/universal_assets" "${miniverseDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
-    }
-
-    // Merge base world and dynamic config into a single world.json
-    const baseWorldPath = join(teamWorldDir, 'base-world.json');
-    const merged = mergeWorldConfig(baseWorldPath, worldConfig);
-    writeFileSync(join(teamWorldDir, 'world.json'), JSON.stringify(merged, null, 2) + '\n');
-
-    // Copy miniverse core bundle so the server can serve it
-    const coreDir = join(__dirname, 'miniverse', 'core');
-    mkdirSync(join(miniverseDir, '..', 'core'), { recursive: true });
-    if (existsSync(join(coreDir, 'miniverse-core.js'))) {
-      execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
-    }
-
-    // Always restart the server to ensure latest code is served
-    stopServer();
-    let serverUrl: string;
-    const result = startServer(vizPort, miniverseDir);
-    if (!result) {
-      console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
-      throw new Error('Server start failed');
-    }
-    const healthy = await waitForServer(result.url, 10000);
-    if (!healthy) {
-      console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
-      throw new Error('Server health check failed');
-    }
-    serverUrl = result.url;
-
-    await registerAgents(serverUrl, agents, team, citizenOverrides);
-    vizUrl = serverUrl;
-
-    // Install/update hooks with the actual server URL so heartbeats reach the right port
-    const allRoles = agents.map(a => a.role);
-    installHooks(repoName, team, allRoles, serverUrl, repoRoot);
-  } catch (err) {
-    if (!vizUrl) {
-      console.warn(chalk.yellow(`  Warning: Visualization failed to start: ${(err as Error).message}`));
-    }
-  }
+  const vizUrl = await setupVisualization(team, agents, repoRoot, repoName, citizenOverrides, vizPort);
 
   const sidebar = agents.filter(a => !a.role.startsWith('coder-'));
   const coders = agents.filter(a => a.role.startsWith('coder-'));
@@ -275,6 +386,12 @@ export async function startSession(team: string, options?: { port?: number }): P
 export function stopSession(team: string): void {
   const repoName = detectRepoName();
   const session = getSessionName(repoName, team);
+
+  // Stop headless agents (if any)
+  const headlessStopped = stopHeadlessAgents(repoName, team);
+  if (headlessStopped > 0) {
+    console.log(chalk.green(`Stopped ${headlessStopped} headless agent(s).`));
+  }
 
   // Only stop the global server if no other nightshift sessions are running (across all repos)
   const sessionPrefix = 'nightshift-';

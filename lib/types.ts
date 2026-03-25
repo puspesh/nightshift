@@ -47,6 +47,11 @@ export interface CitizenOverride {
 
 export type CitizenOverrides = Record<string, CitizenOverride>;
 
+export interface StartOptions {
+  port?: number;
+  headless?: boolean;
+}
+
 export interface HookConfig {
   hooks: Record<string, HookEntry[]>;
 }

@@ -1,9 +1,9 @@
-import { describe, it } from 'node:test';
+import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { getSessionName, buildAgentList, parseRunner } from '../lib/start.js';
+import { getSessionName, buildAgentList, parseRunner, getHeadlessPidDir, stopHeadlessAgents } from '../lib/start.js';
 
 describe('getSessionName', () => {
   it('returns nightshift-<repo>-<team>', () => {
@@ -101,5 +101,32 @@ claude --dangerously-skip-permissions --model sonnet
     writeFileSync(join(dir, 'repo.md'), '# Repo\n\n## Commands\n');
     assert.equal(parseRunner(join(tmp, 'b')), 'claude --dangerously-skip-permissions');
     rmSync(join(tmp, 'b'), { recursive: true, force: true });
+  });
+});
+
+describe('headless PID management', () => {
+  const pidTmp = join(tmpdir(), `ns-headless-pid-test-${Date.now()}`);
+
+  afterEach(() => {
+    try { rmSync(pidTmp, { recursive: true, force: true }); } catch { /* */ }
+  });
+
+  it('getHeadlessPidDir returns expected path', () => {
+    const dir = getHeadlessPidDir('myapp', 'dev');
+    assert.ok(dir.includes('.nightshift/myapp/dev/pids'));
+  });
+
+  it('stopHeadlessAgents returns 0 when no PID directory exists', () => {
+    const stopped = stopHeadlessAgents('nonexistent-repo-xyz', 'dev');
+    assert.equal(stopped, 0);
+  });
+
+  it('PID files can be created and read at expected path', () => {
+    const pidDir = join(pidTmp, 'pids');
+    mkdirSync(pidDir, { recursive: true });
+    writeFileSync(join(pidDir, 'producer.pid'), '12345');
+    const content = readFileSync(join(pidDir, 'producer.pid'), 'utf-8');
+    assert.equal(content, '12345');
+    assert.ok(existsSync(join(pidDir, 'producer.pid')));
   });
 });

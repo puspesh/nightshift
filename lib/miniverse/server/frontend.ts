@@ -212,22 +212,48 @@ function refreshStatusPanel() {
   }
 }
 
-let currentMv = null;
+// --- World instance cache (LRU, max 5) ---
+const MAX_CACHED_WORLDS = 5;
+const worldCache = new Map(); // worldKey → { mv, container: div }
+const worldOrder = [];        // LRU order, most recent last
 let currentWorldKey = null;
+
+function showWorld(worldKey) {
+  // Hide all cached world containers
+  for (const [, entry] of worldCache) {
+    entry.container.style.display = 'none';
+  }
+  // Show the selected one
+  const entry = worldCache.get(worldKey);
+  if (entry) {
+    entry.container.style.display = '';
+  }
+  currentWorldKey = worldKey;
+}
+
+function evictOldest() {
+  if (worldOrder.length <= MAX_CACHED_WORLDS) return;
+  const oldest = worldOrder.shift();
+  const entry = worldCache.get(oldest);
+  if (entry) {
+    try { entry.mv.stop?.(); } catch {}
+    entry.container.remove();
+    worldCache.delete(oldest);
+  }
+}
 
 // --- Load world and start miniverse ---
 // worldKey is "repo/team" (e.g. "nightshift/dev")
 async function startWorld(worldKey) {
-  // Skip if already showing this world
-  if (worldKey === currentWorldKey && currentMv) return;
-  currentWorldKey = worldKey;
-
-  // Destroy previous Miniverse instance if it exists
-  if (currentMv) {
-    try { currentMv.stop?.(); } catch {}
-    currentMv = null;
+  // Already cached — just show it
+  if (worldCache.has(worldKey)) {
+    // Move to end of LRU order
+    const idx = worldOrder.indexOf(worldKey);
+    if (idx !== -1) worldOrder.splice(idx, 1);
+    worldOrder.push(worldKey);
+    showWorld(worldKey);
+    return;
   }
-  container.innerHTML = '';
 
   let worldData;
   try {
@@ -290,8 +316,13 @@ async function startWorld(worldKey) {
     spriteSheets[def.sprite] = createStandardSpriteConfig(def.sprite);
   }
 
+  // Create a dedicated container for this world
+  const worldContainer = document.createElement('div');
+  worldContainer.style.display = 'none';
+  container.appendChild(worldContainer);
+
   const mv = new Miniverse({
-    container,
+    container: worldContainer,
     world: 'nightshift',
     scene: 'main',
     signal: {
@@ -328,7 +359,6 @@ async function startWorld(worldKey) {
   mv.updateWalkability(props.getBlockedTiles());
 
   await mv.start();
-  currentMv = mv;
 
   mv.addLayer({ order: 5, render: (ctx) => props.renderBelow(ctx) });
   mv.addLayer({ order: 15, render: (ctx) => props.renderAbove(ctx) });
@@ -342,11 +372,17 @@ async function startWorld(worldKey) {
     setTimeout(() => { tooltip.style.display = 'none'; }, 3000);
   });
 
-  container.addEventListener('mousemove', (e) => {
-    tooltip.style.left = e.clientX + 12 + 'px';
-    tooltip.style.top = e.clientY + 12 + 'px';
-  });
+  // Cache this world instance
+  worldCache.set(worldKey, { mv, container: worldContainer });
+  worldOrder.push(worldKey);
+  evictOldest();
+  showWorld(worldKey);
 }
+
+container.addEventListener('mousemove', (e) => {
+  tooltip.style.left = e.clientX + 12 + 'px';
+  tooltip.style.top = e.clientY + 12 + 'px';
+});
 
 // --- WebSocket for status panel ---
 function connect() {

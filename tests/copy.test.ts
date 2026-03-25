@@ -14,7 +14,9 @@ import {
   removeExtensionFiles,
   copyRepoMd,
   removeRepoMd,
+  getPresetDefaultsDir,
 } from '../lib/copy.js';
+import { readdirSync } from 'node:fs';
 
 let tmp: string;
 
@@ -50,16 +52,11 @@ describe('copyExtensionFiles', () => {
     }
   });
 
-  it('copies the expected 5 default files including JSON', () => {
+  it('copies all default files from preset defaults directory', () => {
     const { copied } = copyExtensionFiles(tmp, 'dev');
 
-    const expected = [
-      'ns-dev-citizens.json',
-      'ns-dev-plan-template.md',
-      'ns-dev-pr-template.md',
-      'ns-dev-review-criteria.md',
-      'ns-dev-test-config.md',
-    ];
+    const defaultsDir = getPresetDefaultsDir('dev');
+    const expected = readdirSync(defaultsDir).filter(f => f.endsWith('.md') || f.endsWith('.json'));
     assert.deepEqual(copied.sort(), expected.sort());
   });
 

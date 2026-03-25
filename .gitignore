@@ -10,3 +10,7 @@ CLAUDE.md
 
 # Superpowers plans/specs
 docs/superpowers/
+
+# Claude Code runtime (added by nightshift)
+.claude/agent-memory/
+.claude/scheduled_tasks.lock

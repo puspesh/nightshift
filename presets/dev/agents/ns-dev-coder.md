@@ -104,9 +104,33 @@ git checkout issue-<number>-<slug>
 git pull origin issue-<number>-<slug>
 ```
 
-- Post a starting comment so progress is visible from GitHub:
+- Check the producer's triage comment to determine the workflow:
+  ```bash
+  gh issue view <number> --json comments --jq '.comments[].body' | head -20
+  ```
+
+- **If fast-tracked** (producer comment says "Workflow: bug/fix — skipping plan review"):
+  There is no plan file. Read the issue body directly as your requirements:
+  ```bash
+  gh issue view <number> --json title,body --jq '.title + "\n\n" + .body'
+  ```
+  Post a starting comment:
+  ```bash
+  gh issue comment <number> --body "### @ns-dev-coder -- Implementation started
+  **Status**: in-progress
+  **Branch**: \`issue-<number>-<slug>\`
+  **Workflow**: fast-track (bug/fix, no plan)
+  **Next**: Implementing fix"
+  ```
+
+- **If standard workflow** (producer comment says "Assigned to @ns-dev-planner"):
+  Find the plan file from the planner's comment on the issue:
   ```bash
   PLAN_FILE=$(gh issue view <number> --json comments --jq '.comments[].body' | grep -o 'docs/plans/[^ ]*\.md' | head -1)
+  ```
+  The plan file is on this branch — read it directly.
+  Post a starting comment:
+  ```bash
   gh issue comment <number> --body "### @ns-dev-coder -- Implementation started
   **Status**: in-progress
   **Branch**: \`issue-<number>-<slug>\`
@@ -114,12 +138,7 @@ git pull origin issue-<number>-<slug>
   **Next**: Implementing phase by phase"
   ```
 
-- Find the plan file from the planner's comment on the issue:
-  ```bash
-  gh issue view <number> --json comments --jq '.comments[].body' | grep -o 'docs/plans/[^ ]*\.md'
-  ```
-- The plan file is on this branch — read it directly
-- Understand every phase and step before writing any code
+- Understand every phase/requirement before writing any code
 - **Check for prior progress** — a previous cycle may have partially completed this issue:
   ```bash
   git log --oneline origin/main..HEAD

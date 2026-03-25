@@ -276,6 +276,14 @@ If anything fails during a cycle (checkout conflict, typecheck/test failure you 
 - **Skip blocked issues** — ignore issues labeled `dev:blocked`
 - **Skip on-hold issues** — ignore issues labeled `on-hold`
 
+## Code Review Strictness
+
+For code reviews (`dev:code-review`), you MUST NOT approve if ANY WARNING-level findings remain unresolved. This includes all items listed in `ns-dev-review-criteria.md` under WARNING (function length, nesting, console.log, commented-out code, test coverage, error handling, unused code, magic values).
+
+If the coder has already been through a revision cycle (`dev:code-revising`), check if previously flagged warnings have been addressed by reading the git log since the last review. If they have, those warnings are resolved. New warnings found in the current review still block approval.
+
+SUGGESTIONs (naming, duplication, documentation) do NOT block approval.
+
 ## Interaction Style
 
 - Be direct and specific. "This could be better" is useless. "Line 42: `fetchData` should handle the 404 case by returning null instead of throwing, because the caller in `dashboard.ts:78` doesn't have a try/catch" is useful

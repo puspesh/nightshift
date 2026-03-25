@@ -35,7 +35,9 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
 
   const xSpacing = deskAvailWidth / cols;
   const yStart = 3;
-  const ySpacing = Math.max(DESK_H + 1, (GRID_ROWS - yStart - DESK_H) / Math.max(rows - 1, 1));
+  // Ensure desks don't overlap vertically, and leave pathway at bottom
+  const maxYSpace = (GRID_ROWS - yStart - DESK_H - 1) / Math.max(rows - 1, 1);
+  const ySpacing = Math.max(DESK_H + 1, Math.min(maxYSpace, DESK_H + 2));
 
   const workstations: WorkstationAnchor[] = [];
   const citizens: CitizenConfig[] = [];
@@ -46,8 +48,10 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
     const col = i % cols;
     const row = Math.floor(i / cols);
 
-    // Tile position for this desk (centered within each column slot, offset past kitchen)
-    const deskX = deskXStart + col * xSpacing + (xSpacing - DESK_W) / 2;
+    // Center partial rows (e.g. 2 desks in a 3-col grid) to leave pathway on left
+    const agentsInRow = Math.min(cols, agents.length - row * cols);
+    const rowXOffset = (cols - agentsInRow) * xSpacing / 2;
+    const deskX = deskXStart + rowXOffset + col * xSpacing + (xSpacing - DESK_W) / 2;
     const deskY = yStart + row * ySpacing;
 
     // Pixel position for workstation anchor (center of desk area)

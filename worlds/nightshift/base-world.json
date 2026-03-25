@@ -294,16 +294,16 @@
     },
     {
       "id": "yellow_armchair",
-      "x": 0.5,
-      "y": 7.25,
+      "x": 1,
+      "y": 5.5,
       "w": 2,
       "h": 2,
       "layer": "below",
-      "anchors": [{ "name": "armchair_left", "ox": 1, "oy": 1, "type": "rest" }]
+      "anchors": [{ "name": "armchair_top", "ox": 1, "oy": 1, "type": "rest" }]
     },
     {
       "id": "yellow_armchair",
-      "x": 3.5,
+      "x": 4.75,
       "y": 8,
       "w": 2,
       "h": 2,
@@ -357,8 +357,8 @@
     },
     {
       "id": "coffee_table_low",
-      "x": 14,
-      "y": 8,
+      "x": 5,
+      "y": 9,
       "w": 2.8,
       "h": 2,
       "layer": "below"

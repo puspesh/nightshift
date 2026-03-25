@@ -213,10 +213,15 @@ function refreshStatusPanel() {
 }
 
 let currentMv = null;
+let currentWorldKey = null;
 
 // --- Load world and start miniverse ---
 // worldKey is "repo/team" (e.g. "nightshift/dev")
 async function startWorld(worldKey) {
+  // Skip if already showing this world
+  if (worldKey === currentWorldKey && currentMv) return;
+  currentWorldKey = worldKey;
+
   // Destroy previous Miniverse instance if it exists
   if (currentMv) {
     try { currentMv.stop?.(); } catch {}

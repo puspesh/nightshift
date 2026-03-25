@@ -37,6 +37,7 @@ export interface CitizenConfig {
   role: string;
   workstationId: string;
   color: string;
+  position: { x: number; y: number };
 }
 
 export interface CitizenOverride {

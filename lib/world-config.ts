@@ -93,6 +93,7 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
       role: agent.role,
       workstationId: stationId,
       color: resolved.color,
+      position: { x: deskX + 1.5, y: deskY + 2 },
     });
   }
 

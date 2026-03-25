@@ -1,9 +1,6 @@
-import { describe, it, afterEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { generateWorldConfig, writeWorldConfig } from '../lib/world-config.js';
+import { generateWorldConfig } from '../lib/world-config.js';
 import { getPidFilePath, getPortFilePath, isServerRunning } from '../lib/visualize.js';
 import type { AgentEntry } from '../lib/types.js';
 
@@ -35,10 +32,21 @@ describe('generateWorldConfig', () => {
     assert.equal(config.citizens.length, 8);
   });
 
+  it('generates desk+chair props per agent', () => {
+    const agents = makeAgents(1); // 5 agents
+    const config = generateWorldConfig(agents, 'dev');
+    // 2 props per agent: desk + chair
+    assert.equal(config.props.length, 10);
+    const desks = config.props.filter(p => p.id.startsWith('desk_corner'));
+    const chairs = config.props.filter(p => p.id === 'desk_chair_dark');
+    assert.equal(desks.length, 5);
+    assert.equal(chairs.length, 5);
+  });
+
   it('citizen names match agent roles', () => {
     const agents = makeAgents(2);
     const config = generateWorldConfig(agents, 'dev');
-    const names = config.citizens.map(c => c.displayName);
+    const names = config.citizens.map(c => c.name);
     assert.deepEqual(names, ['producer', 'planner', 'reviewer', 'coder-1', 'coder-2', 'tester']);
   });
 
@@ -57,18 +65,53 @@ describe('generateWorldConfig', () => {
     assert.equal(unique.size, positions.length, 'Workstations must have unique positions');
   });
 
+  it('desk props do not overlap for various team sizes', () => {
+    for (const coderCount of [1, 2, 3, 4]) {
+      const agents = makeAgents(coderCount);
+      const config = generateWorldConfig(agents, 'dev');
+      const desks = config.props.filter(p => p.id.startsWith('desk_corner'));
+      for (let i = 0; i < desks.length; i++) {
+        for (let j = i + 1; j < desks.length; j++) {
+          const a = desks[i], b = desks[j];
+          const xOverlap = a.x < b.x + b.w && b.x < a.x + a.w;
+          const yOverlap = a.y < b.y + b.h && b.y < a.y + a.h;
+          assert.ok(!(xOverlap && yOverlap),
+            `Desks ${i} (x=${a.x.toFixed(1)}) and ${j} (x=${b.x.toFixed(1)}) overlap with ${coderCount} coders`);
+        }
+      }
+    }
+  });
+
   it('uses gear-supply theme', () => {
     const agents = makeAgents(1);
     const config = generateWorldConfig(agents, 'dev');
     assert.equal(config.theme, 'gear-supply');
   });
 
-  it('citizen displayName uses override when provided', () => {
+  it('citizens have name and sprite fields', () => {
+    const agents = makeAgents(1);
+    const config = generateWorldConfig(agents, 'dev');
+    for (const c of config.citizens) {
+      assert.ok(c.name, `${c.id} should have a name`);
+      assert.ok(c.sprite, `${c.id} should have a sprite`);
+    }
+  });
+
+  it('assigns sprites round-robin from available characters', () => {
+    const agents = makeAgents(4); // 8 agents total
+    const config = generateWorldConfig(agents, 'dev');
+    const sprites = config.citizens.map(c => c.sprite);
+    // 4 sprites cycle: dexter, morty, nova, rio, dexter, morty, nova, rio
+    assert.equal(sprites[0], sprites[4]);
+    assert.equal(sprites[1], sprites[5]);
+  });
+
+  it('citizen name uses override when provided', () => {
     const agents = makeAgents(1);
     const overrides = { producer: { displayName: 'Boss' } };
     const config = generateWorldConfig(agents, 'dev', overrides);
     const producer = config.citizens.find(c => c.role === 'producer')!;
-    assert.equal(producer.displayName, 'Boss');
+    assert.equal(producer.name, 'Boss');
   });
 
   it('citizen color uses override when provided', () => {
@@ -83,7 +126,7 @@ describe('generateWorldConfig', () => {
     const agents = makeAgents(1);
     const config = generateWorldConfig(agents, 'dev');
     const producer = config.citizens.find(c => c.role === 'producer')!;
-    assert.equal(producer.displayName, 'producer');
+    assert.equal(producer.name, 'producer');
     assert.equal(producer.color, '#00cccc');
     const coder = config.citizens.find(c => c.role === 'coder-1')!;
     assert.equal(coder.color, '#0066cc');
@@ -99,37 +142,18 @@ describe('generateWorldConfig', () => {
   });
 });
 
-describe('writeWorldConfig', () => {
-  const tmp = join(tmpdir(), `ns-worldconfig-test-${Date.now()}`);
-
-  afterEach(() => {
-    try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
-  });
-
-  it('writes world.json to the output directory', () => {
-    const agents = makeAgents(1);
-    const config = generateWorldConfig(agents, 'dev');
-    const outDir = join(tmp, 'world');
-    writeWorldConfig(config, outDir);
-
-    const written = JSON.parse(readFileSync(join(outDir, 'world.json'), 'utf-8'));
-    assert.equal(written.theme, 'gear-supply');
-    assert.equal(written.workstations.length, 5);
-  });
-});
-
 describe('PID file helpers', () => {
-  it('getPidFilePath returns expected path', () => {
-    const p = getPidFilePath('myapp', 'dev');
-    assert.ok(p.includes('.nightshift/myapp/dev/miniverse.pid'));
+  it('getPidFilePath returns global path', () => {
+    const p = getPidFilePath();
+    assert.ok(p.includes('.nightshift/miniverse.pid'));
   });
 
-  it('getPortFilePath returns expected path', () => {
-    const p = getPortFilePath('myapp', 'dev');
-    assert.ok(p.includes('.nightshift/myapp/dev/miniverse.port'));
+  it('getPortFilePath returns global path', () => {
+    const p = getPortFilePath();
+    assert.ok(p.includes('.nightshift/miniverse.port'));
   });
 
-  it('isServerRunning returns false when no PID file', () => {
-    assert.equal(isServerRunning('nonexistent-repo-xyz', 'dev'), false);
+  it('isServerRunning returns false when no PID file', { skip: isServerRunning() ? 'server is currently running' : undefined }, () => {
+    assert.equal(isServerRunning(), false);
   });
 });

@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -7,14 +7,14 @@ import chalk from 'chalk';
 import { getTeamDir, discoverCoderCount } from './worktrees.js';
 import { detectRepoRoot, detectRepoName } from './detect.js';
 import { startServer, waitForServer, registerAgents, stopServer } from './visualize.js';
-import { generateWorldConfig, writeWorldConfig } from './world-config.js';
+import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
 import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
 import type { AgentEntry } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const STATUS_SCRIPT = join(__dirname, '..', '..', 'bin', 'ns-status.sh');
+const STATUS_SCRIPT = join(__dirname, '..', 'bin', 'ns-status.sh');
 const DEFAULT_RUNNER = 'claude --dangerously-skip-permissions';
 const LOOP_INTERVAL = 900; // 15 minutes in seconds
 
@@ -126,42 +126,58 @@ export async function startSession(team: string, options?: { port?: number }): P
   const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
   let vizUrl: string | null = null;
   try {
-    const worldDir = join(getTeamDir(repoName, team), 'world');
+    const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
+    const teamWorldDir = join(miniverseDir, repoName, team);
 
-    // Generate and write dynamic world config first (creates the directory)
+    // Generate dynamic world config
     const worldConfig = generateWorldConfig(agents, team, citizenOverrides);
-    writeWorldConfig(worldConfig, worldDir);
 
-    // Copy base world assets and core bundle to the world dir
-    const baseWorldDir = join(__dirname, '..', '..', 'worlds', 'nightshift');
+    // Copy base world assets to team world dir
+    const baseWorldDir = join(__dirname, '..', 'worlds', 'nightshift');
+    mkdirSync(teamWorldDir, { recursive: true });
     if (existsSync(baseWorldDir)) {
-      execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/universal_assets" "${baseWorldDir}/base-world.json" "${worldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      // Copy universal_assets to shared miniverse level (global, not per-repo)
+      execSync(`cp -R "${baseWorldDir}/universal_assets" "${miniverseDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
+
+    // Merge base world and dynamic config into a single world.json
+    const baseWorldPath = join(teamWorldDir, 'base-world.json');
+    const merged = mergeWorldConfig(baseWorldPath, worldConfig);
+    writeFileSync(join(teamWorldDir, 'world.json'), JSON.stringify(merged, null, 2) + '\n');
+
     // Copy miniverse core bundle so the server can serve it
     const coreDir = join(__dirname, 'miniverse', 'core');
-    mkdirSync(join(worldDir, '..', 'core'), { recursive: true });
+    mkdirSync(join(miniverseDir, '..', 'core'), { recursive: true });
     if (existsSync(join(coreDir, 'miniverse-core.js'))) {
-      execSync(`cp "${coreDir}/miniverse-core.js" "${join(worldDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
-    const result = startServer(vizPort, worldDir, repoName, team, repoRoot);
-    if (result) {
-      const healthy = await waitForServer(result.url, 10000);
-      if (healthy) {
-        await registerAgents(result.url, agents, team, citizenOverrides);
-        vizUrl = result.url;
-
-        // Install/update hooks with the actual server URL so heartbeats reach the right port
-        const allRoles = agents.map(a => a.role);
-        installHooks(repoName, team, allRoles, result.url, repoRoot);
-      } else {
-        console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
-      }
-    } else {
+    // Always restart the server to ensure latest code is served
+    stopServer();
+    let serverUrl: string;
+    const result = startServer(vizPort, miniverseDir);
+    if (!result) {
       console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
+      throw new Error('Server start failed');
     }
+    const healthy = await waitForServer(result.url, 10000);
+    if (!healthy) {
+      console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
+      throw new Error('Server health check failed');
+    }
+    serverUrl = result.url;
+
+    await registerAgents(serverUrl, agents, team, citizenOverrides);
+    vizUrl = serverUrl;
+
+    // Install/update hooks with the actual server URL so heartbeats reach the right port
+    const allRoles = agents.map(a => a.role);
+    installHooks(repoName, team, allRoles, serverUrl, repoRoot);
   } catch (err) {
-    console.warn(chalk.yellow(`  Warning: Visualization failed to start: ${(err as Error).message}`));
+    if (!vizUrl) {
+      console.warn(chalk.yellow(`  Warning: Visualization failed to start: ${(err as Error).message}`));
+    }
   }
 
   const sidebar = agents.filter(a => !a.role.startsWith('coder-'));
@@ -260,11 +276,17 @@ export function stopSession(team: string): void {
   const repoName = detectRepoName();
   const session = getSessionName(repoName, team);
 
-  // Stop visualization server before killing tmux
+  // Only stop the global server if no other nightshift sessions are running (across all repos)
+  const sessionPrefix = 'nightshift-';
   try {
-    stopServer(repoName, team);
+    const sessions = execSync('tmux list-sessions -F "#{session_name}"', { encoding: 'utf-8' });
+    const otherSessions = sessions.split('\n').map(s => s.trim()).filter(s => s.startsWith(sessionPrefix) && s !== session);
+    if (otherSessions.length === 0) {
+      stopServer();
+    }
   } catch {
-    // Non-critical — continue with tmux cleanup
+    // No tmux server running — safe to stop
+    stopServer();
   }
 
   try {

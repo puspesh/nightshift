@@ -70,6 +70,11 @@ gh issue edit <number> --add-label "{{team_name}}:wip"
 echo '{"issue": <number>, "agent": "{{agent_name}}", "started": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
 ```
 
+**Capture start timestamp** (immediately after claiming):
+```bash
+WORK_START=$(date +%s)
+```
+
 ### 2. Read the issue and checkout branch
 
 ```bash
@@ -130,6 +135,10 @@ gh issue comment <number> --body "$(cat <<'EOF'
 **Plan**: `docs/plans/issue-<number>-<slug>-<YYYY-MM-DD>.md`
 **Branch**: `issue-<number>-<slug>`
 **Summary**: <2-3 sentence overview of the approach>
+**Cost**:
+- Duration: <DURATION>s (compute via `echo $(( $(date +%s) - WORK_START ))`)
+- Model: opus
+- Subagents: <N> launched, <total_tokens from usage tags> tokens (or "none")
 **Next**: Ready for @ns-{{team_name}}-reviewer review (label: `{{team_name}}:plan-review`)
 EOF
 )"
@@ -216,6 +225,16 @@ If anything fails during a cycle (git checkout conflict, push failure, unexpecte
    gh issue edit <number> --remove-label "{{team_name}}:wip" --remove-label "{{team_name}}:planning" --add-label "{{team_name}}:blocked"
    ```
 5. Continue checking for other issues in the same cycle — don't stop the loop
+
+## Cost Tracking
+
+You MUST track and report cost data accurately. Do NOT estimate or hallucinate numbers.
+
+- **Duration**: Run `WORK_START=$(date +%s)` immediately after claiming an issue. At completion, compute: `echo $(( $(date +%s) - WORK_START ))`.
+- **Subagent tokens**: When you use the Agent tool, the result includes `<usage>total_tokens: XXXXX</usage>`. Sum ALL subagent total_tokens values and report the total. If you launched no subagents, report "none".
+- **Model**: Report the model from your profile frontmatter (opus).
+- Include these in your completion comment under a `**Cost**:` section.
+- Numbers must be exact — from bash timestamps and usage tags, never estimated.
 
 ## Guard Rails
 

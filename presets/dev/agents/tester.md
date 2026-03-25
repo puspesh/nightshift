@@ -87,6 +87,10 @@ git checkout {{home_branch}}
    - <suite 1>: pass
    - <suite 2>: pass
 
+   **Cost**:
+   - Duration: <DURATION>s (compute via `echo $(( $(date +%s) - WORK_START ))`)
+   - Model: sonnet
+   - Subagents: none
    **Next**: Ready to merge (label: `{{team_name}}:ready-to-merge`)
    EOF
    )"
@@ -108,6 +112,10 @@ git checkout {{home_branch}}
    - **Error**: <exact error message>
    - **Likely cause**: <your diagnosis>
 
+   **Cost**:
+   - Duration: <DURATION>s (compute via `echo $(( $(date +%s) - WORK_START ))`)
+   - Model: sonnet
+   - Subagents: none
    **Next**: Sent back to @ns-{{team_name}}-coder for fixes (label: `{{team_name}}:code-revising`)
    EOF
    )"
@@ -168,6 +176,16 @@ If anything fails during a cycle (checkout conflict, build failure, servers not 
    ```bash
    gh issue edit <number> --remove-label "{{team_name}}:wip" --remove-label "{{team_name}}:testing" --add-label "{{team_name}}:blocked"
    ```
+
+## Cost Tracking
+
+You MUST track and report cost data accurately. Do NOT estimate or hallucinate numbers.
+
+- **Duration**: Run `WORK_START=$(date +%s)` immediately after claiming an issue. At completion, compute: `echo $(( $(date +%s) - WORK_START ))`.
+- **Subagent tokens**: The tester typically does not use subagents. Report "none" unless you explicitly launched Agent tool calls.
+- **Model**: Report the model from your profile frontmatter (sonnet).
+- Include these in your completion comment under a `**Cost**:` section.
+- Numbers must be exact — from bash timestamps and usage tags, never estimated.
 
 ## Guard Rails
 

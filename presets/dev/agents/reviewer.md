@@ -161,6 +161,10 @@ gh issue comment <number> --body "comment text"
 
 </details>
 
+**Cost**:
+- Duration: <DURATION>s (compute via `echo $(( $(date +%s) - WORK_START ))`)
+- Model: opus
+- Subagents: none
 **Next**: <label set to {{team_name}}:approved/testing | Sent back to @ns-{{team_name}}-planner/@ns-{{team_name}}-coder (label: {{team_name}}:plan-revising/code-revising)>
 ```
 
@@ -248,6 +252,16 @@ If anything fails during a cycle (checkout conflict, typecheck/test failure you 
    # For code reviews:
    gh issue edit <number> --remove-label "{{team_name}}:wip" --remove-label "{{team_name}}:code-review" --add-label "{{team_name}}:blocked"
    ```
+
+## Cost Tracking
+
+You MUST track and report cost data accurately. Do NOT estimate or hallucinate numbers.
+
+- **Duration**: Run `WORK_START=$(date +%s)` immediately after claiming an issue. At completion, compute: `echo $(( $(date +%s) - WORK_START ))`.
+- **Subagent tokens**: The reviewer typically does not use subagents. Report "none" unless you explicitly launched Agent tool calls.
+- **Model**: Report the model from your profile frontmatter (opus).
+- Include these in your completion comment under a `**Cost**:` section.
+- Numbers must be exact — from bash timestamps and usage tags, never estimated.
 
 ## Guard Rails
 

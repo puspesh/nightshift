@@ -47,6 +47,14 @@ export interface CitizenOverride {
 
 export type CitizenOverrides = Record<string, CitizenOverride>;
 
+export interface AgentModelConfig {
+  model?: string;
+  thinkingBudget?: string;
+  reasoningEffort?: string;
+}
+
+export type AgentConfigs = Record<string, AgentModelConfig>;
+
 export interface HookConfig {
   hooks: Record<string, HookEntry[]>;
 }

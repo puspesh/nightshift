@@ -12,6 +12,8 @@ customize the pipeline by editing the extension files in `.claude/nightshift/`.
 | `ns-<team>-plan-template.md` | Implementation plan format | Planner |
 | `ns-<team>-pr-template.md` | PR body format | Coder |
 | `ns-<team>-test-config.md` | Test runner configuration | Tester |
+| `ns-<team>-agents.json` | Per-agent model/effort/thinking config | Start command |
+| `ns-<team>-citizens.json` | Per-agent display name and color | Visualization |
 
 ## Writing Review Criteria for Your Stack
 
@@ -50,19 +52,46 @@ Labels are defined in the preset's `labels.json` and created with the team prefi
 Note: Changing label names requires updating the agent profiles too, which
 is not recommended unless you fork the profiles.
 
-## Adjusting Agent Models
+## Per-Agent Model and Reasoning Configuration
 
-The agent models table in `repo.md` controls which Claude model each agent
-uses. This affects both cost and capability:
+Edit `.claude/nightshift/ns-<team>-agents.json` to configure each agent's
+model, thinking budget, and reasoning effort independently:
+
+```json
+{
+  "producer": { "model": "sonnet" },
+  "planner": { "model": "opus", "thinkingBudget": "high" },
+  "reviewer": { "model": "opus", "reasoningEffort": "high" },
+  "coder": { "model": "opus", "thinkingBudget": "10000" },
+  "tester": { "model": "sonnet", "reasoningEffort": "low" }
+}
+```
+
+### Available options
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| `model` | `sonnet`, `opus`, `haiku` | Claude model to use |
+| `thinkingBudget` | `low`, `medium`, `high`, or a number | Thinking token budget |
+| `reasoningEffort` | `low`, `medium`, `high` | Reasoning effort level |
+
+### Resolution order
+
+1. Exact role match (e.g., `"coder-1"` overrides `"coder"`)
+2. Base role wildcard (`"coder"` applies to all coder-N agents)
+3. Global runner from `repo.md` (base command)
+
+### When changes take effect
+
+Changes to this file take effect the next time you run `nightshift start`.
+You do not need to re-run `nightshift init`.
+
+### Cost optimization
 
 | Model | Best for | Cost |
 |-------|---------|------|
 | sonnet | Fast, simple tasks (triage, test execution) | Lower |
 | opus | Complex reasoning (planning, reviewing, coding) | Higher |
-
-To optimize cost:
-- Use sonnet for producer and tester (simple state-checking tasks)
-- Use opus for planner, reviewer, and coder (need deep reasoning)
 
 ## Customizing the Plan Template
 

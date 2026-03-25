@@ -14,7 +14,7 @@ import type { AgentEntry } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const STATUS_SCRIPT = join(__dirname, '..', '..', 'bin', 'ns-status.sh');
+const STATUS_SCRIPT = join(__dirname, '..', 'bin', 'ns-status.sh');
 const DEFAULT_RUNNER = 'claude --dangerously-skip-permissions';
 const LOOP_INTERVAL = 900; // 15 minutes in seconds
 
@@ -133,7 +133,7 @@ export async function startSession(team: string, options?: { port?: number }): P
     const worldConfig = generateWorldConfig(agents, team, citizenOverrides);
 
     // Copy base world assets to team world dir
-    const baseWorldDir = join(__dirname, '..', '..', 'worlds', 'nightshift');
+    const baseWorldDir = join(__dirname, '..', 'worlds', 'nightshift');
     mkdirSync(teamWorldDir, { recursive: true });
     if (existsSync(baseWorldDir)) {
       execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });

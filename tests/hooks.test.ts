@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { generateHookConfig } from '../lib/hooks.js';
 
 describe('generateHookConfig', () => {
-  it('generates command hooks with curl to /api/hooks/claude-code', () => {
+  it('generates command hooks using ns-heartbeat.sh script', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
     const events = Object.keys(config.hooks);
     assert.equal(events.length, 5);
@@ -22,34 +22,32 @@ describe('generateHookConfig', () => {
       assert.equal(entries[0].matcher, '');
       assert.equal(entries[0].hooks.length, 1);
       assert.equal(entries[0].hooks[0].type, 'command');
-      assert.ok(entries[0].hooks[0].command.includes('/api/hooks/claude-code'));
-      assert.ok(entries[0].hooks[0].command.includes('|| true'));
+      assert.ok(entries[0].hooks[0].command.includes('ns-heartbeat.sh'));
     }
   });
 
-  it('includes agent name in curl command', () => {
+  it('includes agent name in command', () => {
     const config = generateHookConfig('ns-dev-reviewer', 'http://localhost:4321');
     const cmd = config.hooks['PreToolUse'][0].hooks[0].command;
-    assert.ok(cmd.includes('agent=ns-dev-reviewer'));
-    assert.ok(cmd.includes('name=ns-dev-reviewer'));
+    assert.ok(cmd.includes('ns-dev-reviewer'));
   });
 
   it('uses correct server URL', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:9999');
     const cmd = config.hooks['PreToolUse'][0].hooks[0].command;
-    assert.ok(cmd.includes('http://localhost:9999/api/hooks/claude-code'));
+    assert.ok(cmd.includes('http://localhost:9999'));
   });
 
-  it('includes event name in POST body', () => {
+  it('includes event name in command args', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
     const cmd = config.hooks['Stop'][0].hooks[0].command;
-    assert.ok(cmd.includes('"hook_event_name":"Stop"'));
+    assert.ok(cmd.includes('"Stop"'));
   });
 
-  it('SessionStart hook includes correct event name in POST body', () => {
+  it('SessionStart hook includes correct event name', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
     const cmd = config.hooks['SessionStart'][0].hooks[0].command;
-    assert.ok(cmd.includes('"hook_event_name":"SessionStart"'));
+    assert.ok(cmd.includes('"SessionStart"'));
   });
 });
 
@@ -69,7 +67,7 @@ describe('installHooks (integration via file simulation)', () => {
     const written = JSON.parse(readFileSync(join(settingsDir, 'settings.local.json'), 'utf-8'));
     assert.ok(written.hooks.PreToolUse);
     assert.equal(written.hooks.PreToolUse[0].matcher, '');
-    assert.ok(written.hooks.PreToolUse[0].hooks[0].command.includes('/api/hooks/claude-code'));
+    assert.ok(written.hooks.PreToolUse[0].hooks[0].command.includes('ns-heartbeat.sh'));
   });
 
   it('merges with existing settings (does not overwrite)', () => {

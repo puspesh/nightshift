@@ -23,7 +23,7 @@ export interface CopyResult {
  * Get the path to a team's preset directory.
  */
 export function getPresetDir(team: string): string {
-  return join(__dirname, '..', '..', 'presets', team);
+  return join(__dirname, '..', 'presets', team);
 }
 
 /**
@@ -44,7 +44,7 @@ export function getPresetDefaultsDir(team: string): string {
  * Get the path to the nightshift package's shared defaults directory.
  */
 export function getDefaultsDir(): string {
-  return join(__dirname, '..', '..', 'defaults');
+  return join(__dirname, '..', 'defaults');
 }
 
 /**

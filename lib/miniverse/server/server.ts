@@ -30,8 +30,6 @@ export class MiniverseServer {
   /** Webhook callbacks: agent ID → callback URL */
   private webhooks: Map<string, string> = new Map();
   private publicDir: string | null;
-  /** World ID → world.json data cache */
-  private worldCache: Map<string, unknown> = new Map();
 
   constructor(config: MiniverseServerConfig = {}) {
     this.port = config.port ?? 4321;
@@ -263,8 +261,8 @@ export class MiniverseServer {
 
   private getWorldPath(worldId: string): string {
     const publicDir = this.publicDir ?? './public';
-    const safeId = worldId.replace(/[^a-zA-Z0-9_-]/g, '');
-    return path.join(publicDir, 'worlds', safeId, 'world.json');
+    const safeId = worldId.replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
+    return path.join(publicDir, safeId, 'world.json');
   }
 
   private readWorld(worldId: string): Record<string, any> | null {
@@ -277,11 +275,10 @@ export class MiniverseServer {
     const worldPath = this.getWorldPath(worldId);
     mkdirSync(path.dirname(worldPath), { recursive: true });
     writeFileSync(worldPath, JSON.stringify(data, null, 2) + '\n');
-    this.worldCache.delete(worldId); // invalidate cache
   }
 
   private async handleWorldAction(agentId: string, action: { type: string; [key: string]: unknown }) {
-    const worldId = ((action.world as string) ?? 'cozy-startup').replace(/[^a-zA-Z0-9_-]/g, '');
+    const worldId = ((action.world as string) ?? this.findWorldId() ?? 'default').replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
     const actionType = action.type;
 
     try {
@@ -366,7 +363,7 @@ export class MiniverseServer {
         }
 
         const publicDir = this.publicDir ?? './public';
-        const tilesDir = path.join(publicDir, 'worlds', worldId, 'world_assets', 'tiles');
+        const tilesDir = path.join(publicDir, worldId, 'world_assets', 'tiles');
         mkdirSync(tilesDir, { recursive: true });
         const outPath = path.join(tilesDir, `${id}.png`);
         await gen.generateTexture({ prompt, output: outPath, size: 32 });
@@ -398,7 +395,7 @@ export class MiniverseServer {
         }
 
         const publicDir = this.publicDir ?? './public';
-        const propsDir = path.join(publicDir, 'worlds', worldId, 'world_assets', 'props');
+        const propsDir = path.join(publicDir, worldId, 'world_assets', 'props');
         mkdirSync(propsDir, { recursive: true });
         const existing = existsSync(propsDir) ? readdirSync(propsDir).filter((f: string) => f.startsWith('prop_')).length : 0;
         const filename = `prop_${existing}_${id}.png`;
@@ -597,28 +594,38 @@ export class MiniverseServer {
     }
   }
 
-  private getDefaultWorldId(): string | null {
+  /** Scan publicDir for a world matching an optional team filter. Returns "repo/team" or null. */
+  private findWorldId(teamFilter?: string): string | null {
     const publicDir = this.publicDir ?? './public';
-    const worldsDir = path.join(publicDir, 'worlds');
-    if (!existsSync(worldsDir)) return null;
+    if (!existsSync(publicDir)) return null;
+    const safeTeam = teamFilter?.replace(/[^a-zA-Z0-9_-]/g, '');
     try {
-      const dirs = readdirSync(worldsDir).filter(d => {
-        return existsSync(path.join(worldsDir, d, 'world.json'));
-      });
-      return dirs[0] ?? null;
+      for (const repoEntry of readdirSync(publicDir, { withFileTypes: true })) {
+        if (!repoEntry.isDirectory()) continue;
+        const repoPath = path.join(publicDir, repoEntry.name);
+        if (safeTeam) {
+          if (existsSync(path.join(repoPath, safeTeam, 'world.json'))) {
+            return repoEntry.name + '/' + safeTeam;
+          }
+        } else {
+          for (const teamEntry of readdirSync(repoPath, { withFileTypes: true })) {
+            if (teamEntry.isDirectory() && existsSync(path.join(repoPath, teamEntry.name, 'world.json'))) {
+              return repoEntry.name + '/' + teamEntry.name;
+            }
+          }
+        }
+      }
+      return null;
     } catch { return null; }
   }
 
   private loadWorldData(worldId: string): unknown | null {
-    const safeId = worldId.replace(/[^a-zA-Z0-9_-]/g, '');
-    if (this.worldCache.has(safeId)) return this.worldCache.get(safeId);
+    const safeId = worldId.replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
     const publicDir = this.publicDir ?? './public';
-    const worldPath = path.join(publicDir, 'worlds', safeId, 'world.json');
+    const worldPath = path.join(publicDir, safeId, 'world.json');
     if (!existsSync(worldPath)) return null;
     try {
-      const data = JSON.parse(readFileSync(worldPath, 'utf-8'));
-      this.worldCache.set(safeId, data);
-      return data;
+      return JSON.parse(readFileSync(worldPath, 'utf-8'));
     } catch {
       return null;
     }
@@ -644,7 +651,7 @@ export class MiniverseServer {
     // Routes
     if (req.method === 'GET' && url.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(getFrontendHtml(this.port));
+      res.end(getFrontendHtml());
       return;
     }
 
@@ -661,17 +668,52 @@ export class MiniverseServer {
       return;
     }
 
-    // Serve world data as JSON
+    // Serve world data as JSON (supports ?repo=X&team=Y for multi-repo)
     if (req.method === 'GET' && url.pathname === '/api/world') {
-      const publicDir = this.publicDir ?? '.';
-      const worldPath = path.join(publicDir, 'base-world.json');
-      if (existsSync(worldPath)) {
+      const repo = url.searchParams.get('repo');
+      const team = url.searchParams.get('team');
+      let worldData: unknown | null;
+      if (repo && team) {
+        worldData = this.loadWorldData(repo + '/' + team);
+      } else if (team) {
+        const teamWorldId = this.findWorldId(team);
+        worldData = teamWorldId ? this.loadWorldData(teamWorldId) : null;
+      } else {
+        const defaultId = this.findWorldId();
+        worldData = defaultId ? this.loadWorldData(defaultId) : null;
+      }
+      if (worldData) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(readFileSync(worldPath));
+        res.end(JSON.stringify(worldData));
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'No world data' }));
       }
+      return;
+    }
+
+    // List available repo/team worlds (two-level scan)
+    if (req.method === 'GET' && url.pathname === '/api/worlds') {
+      const publicDir = this.publicDir ?? '.';
+      const repos: { repo: string; teams: { id: string; agents: number }[] }[] = [];
+      try {
+        for (const repoEntry of readdirSync(publicDir, { withFileTypes: true })) {
+          if (!repoEntry.isDirectory()) continue;
+          const repoPath = path.join(publicDir, repoEntry.name);
+          const teams: { id: string; agents: number }[] = [];
+          for (const teamEntry of readdirSync(repoPath, { withFileTypes: true })) {
+            if (teamEntry.isDirectory() && existsSync(path.join(repoPath, teamEntry.name, 'world.json'))) {
+              const world = this.loadWorldData(repoEntry.name + '/' + teamEntry.name) as any;
+              teams.push({ id: teamEntry.name, agents: world?.citizens?.length ?? 0 });
+            }
+          }
+          if (teams.length > 0) {
+            repos.push({ repo: repoEntry.name, teams });
+          }
+        }
+      } catch { /* publicDir may not exist yet */ }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ repos }));
       return;
     }
 
@@ -713,7 +755,7 @@ export class MiniverseServer {
     if (req.method === 'GET' && url.pathname === '/api/info') {
       const agents = this.store.getPublicList();
       const online = agents.filter((a: any) => a.state !== 'offline').length;
-      const worldId = this.getDefaultWorldId();
+      const worldId = this.findWorldId();
       const world = worldId ? this.readWorld(worldId) : null;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
@@ -916,8 +958,8 @@ export class MiniverseServer {
 
       const publicDir = this.publicDir ?? './public';
       const slug = data.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
-      const worldId = (data.worldId || '').replace(/[^a-zA-Z0-9_-]/g, '');
-      const worldDir = worldId ? path.join(publicDir, 'worlds', worldId) : publicDir;
+      const worldId = (data.worldId || '').replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
+      const worldDir = worldId ? path.join(publicDir, worldId) : publicDir;
 
       // Handle base64 reference image
       let refImage: string | undefined;

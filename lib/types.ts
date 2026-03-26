@@ -11,6 +11,17 @@ export interface WorldConfig {
   theme: string;
   workstations: WorkstationAnchor[];
   citizens: CitizenConfig[];
+  props: WorldProp[];
+}
+
+export interface WorldProp {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  layer: 'below' | 'above';
+  anchors?: { name: string; ox: number; oy: number; type: string }[];
 }
 
 export interface WorkstationAnchor {
@@ -21,10 +32,12 @@ export interface WorkstationAnchor {
 
 export interface CitizenConfig {
   id: string;
-  displayName: string;
+  name: string;
+  sprite: string;
   role: string;
   workstationId: string;
   color: string;
+  position: { x: number; y: number };
 }
 
 export interface CitizenOverride {

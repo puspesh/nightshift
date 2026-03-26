@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { loadLabels } from '../lib/labels.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const presetDir = join(__dirname, '..', '..', 'presets', 'dev');
+const presetDir = join(__dirname, '..', 'presets', 'dev');
 
 const labels = loadLabels(presetDir);
 

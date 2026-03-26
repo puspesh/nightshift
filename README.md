@@ -1,13 +1,14 @@
-<pre align="center">
-       _       __    __       __    _ ______
- ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
-/ _ \/ / __ `/ __ \/ __/ ___/ __ \/ / /_/ __/
-/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
-/_/ /_/_/\__, /_/ /_/\__/____/_/ /_/_/_/  \__/
-        /____/
+<div align="center">
+<pre>
+███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗███████╗██╗  ██╗██╗███████╗████████╗
+████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝██╔════╝██║  ██║██║██╔════╝╚══██╔══╝
+██╔██╗ ██║██║██║  ███╗███████║   ██║   ███████╗███████║██║█████╗     ██║
+██║╚██╗██║██║██║   ██║██╔══██║   ██║   ╚════██║██╔══██║██║██╔══╝     ██║
+██║ ╚████║██║╚██████╔╝██║  ██║   ██║   ███████║██║  ██║██║██║        ██║
+╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝
 </pre>
-
-<p align="center">
+<p>Coordinating AI agents for your development pipeline.</p>
+<p>
   <a href="https://www.npmjs.com/package/nightshift"><img src="https://img.shields.io/npm/v/nightshift" alt="npm version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node.js >= 18">
@@ -15,10 +16,11 @@
   <img src="https://img.shields.io/badge/Claude_Code-compatible-blueviolet" alt="Claude Code">
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
 </p>
+</div>
 
-Coordinating AI agents for your development pipeline. Set up a team of agents
-in any repository that autonomously triage issues, write plans, review code,
-implement features, and run tests -- all orchestrated through GitHub labels.
+Set up a team of agents in any repository that autonomously triage issues,
+write plans, review code, implement features, and run tests -- all
+orchestrated through GitHub labels.
 
 ## Quick Start
 

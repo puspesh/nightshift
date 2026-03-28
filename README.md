@@ -73,6 +73,25 @@ You can also start agents individually in separate terminals:
 /loop 15m @ns-dev-tester
 ```
 
+### Headless Mode
+
+Run agents without tmux — each agent runs as a background process:
+
+```bash
+npx nightshift start --team dev --headless
+```
+
+Agents loop every 15 minutes, same as in tmux mode. Logs are written to
+`~/.nightshift/<repo>/<team>/logs/<role>.log`.
+
+```bash
+# Check agent logs
+tail -f ~/.nightshift/<repo>/<team>/logs/producer.log
+
+# Stop all agents (same command as tmux mode)
+npx nightshift stop --team dev
+```
+
 ### Multiple Coders
 
 Use the `--coders` flag to add multiple coder agents:

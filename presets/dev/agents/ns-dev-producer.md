@@ -38,7 +38,11 @@ Read `.claude/nightshift/repo.md` for branch naming pattern, label definitions, 
 | Issues with no `dev:*` label (bug/fix) | Validate, create branch, fast-track | `dev:approved` |
 | `dev:ready-to-merge` | Verify reviewer approved cleanly | _(human merges)_ or `dev:code-revising` |
 | `dev:blocked` | Skip — log and move on | _(unchanged)_ |
-| Stale issues (no agent activity in 90+ min) | Post warning comment | _(unchanged)_ |
+| Orphaned `dev:wip` (stale lock, 60+ min) | Clear lock, remove `dev:wip` | _(stage label unchanged)_ |
+| Conflicting `dev:*` stage labels | Keep most advanced, remove others | _(single label)_ |
+| `dev:wip` with no stage label | Determine state or block | _(repaired)_ or `dev:blocked` |
+| Stale issues (no activity, 90+ min) | Post warning comment | _(unchanged)_ |
+| Stuck issues (no activity, 3+ hours) | Escalate | `dev:blocked` |
 
 ## Workflow
 
@@ -95,13 +99,80 @@ For issues labeled `dev:needs-info`:
 - If yes: remove `dev:needs-info`, create branch if needed, add `dev:planning`
 - If no: skip — still waiting for clarification
 
-### 4. Monitor pipeline health
+### 4. Monitor pipeline health and repair stale issues
 
-For each issue with a `dev:*` label (skip `dev:blocked`, `dev:needs-info`, and issues with `dev:wip` label):
+For each issue with a `dev:*` label (skip `dev:blocked`, `dev:needs-info`):
+
+#### 4a. Detect orphaned `dev:wip` (agent crashed without cleanup)
+
+For issues that have BOTH `dev:wip` AND a pipeline stage label:
+```bash
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
+```
+- Check which agent's lock file references this issue number:
+  ```bash
+  grep -rl '"issue": <number>' ~/.nightshift/${REPO_NAME}/dev/locks/ 2>/dev/null
+  ```
+- If lock file exists and `started` is < 60 min ago → skip, agent is still working
+- If lock file is missing OR `started` is >= 60 min ago → **orphaned `dev:wip`**:
+  ```bash
+  # Remove stale lock if it exists
+  rm -f ~/.nightshift/${REPO_NAME}/dev/locks/<agent>.lock
+  # Remove orphaned dev:wip — the issue returns to its stage label for re-pickup
+  gh issue edit <number> --remove-label "dev:wip"
+  gh issue comment <number> --body "### @ns-dev-producer -- Stale lock cleared
+  **Status**: pipeline repair
+  **Reason**: \`dev:wip\` was set 60+ minutes ago with no active agent. Releasing issue for re-pickup.
+  **Next**: Awaiting agent (label: \`dev:<current-stage>\`)"
+  ```
+
+#### 4b. Detect conflicting labels (multiple pipeline stage labels)
+
+Valid pipeline stage labels (exactly ONE should be present): `planning`, `plan-review`, `plan-revising`, `approved`, `code-review`, `code-revising`, `testing`, `ready-to-merge`.
+
+If an issue has **2+ stage labels** (not counting `dev:wip`, `dev:blocked`, `dev:needs-info`):
+- Determine which is most advanced in the pipeline order:
+  `planning` → `plan-review` → `plan-revising` → `approved` → `code-review` → `code-revising` → `testing` → `ready-to-merge`
+- Keep the most advanced label, remove the others:
+  ```bash
+  gh issue edit <number> --remove-label "dev:<less-advanced>"
+  gh issue comment <number> --body "### @ns-dev-producer -- Label conflict resolved
+  **Status**: pipeline repair
+  **Reason**: Multiple stage labels detected: \`dev:<label1>\`, \`dev:<label2>\`. Kept most advanced: \`dev:<kept>\`.
+  **Next**: Awaiting agent (label: \`dev:<kept>\`)"
+  ```
+
+#### 4c. Detect `dev:wip` without any stage label
+
+If an issue has `dev:wip` but NO pipeline stage label — this means a label transition partially failed:
+- Read the last agent comment to determine what stage the issue should be in
+- If determinable: add the correct stage label and remove `dev:wip`
+- If not determinable: remove `dev:wip` and add `dev:blocked`:
+  ```bash
+  gh issue edit <number> --remove-label "dev:wip" --add-label "dev:blocked"
+  gh issue comment <number> --body "### @ns-dev-producer -- Orphaned issue detected
+  **Status**: pipeline repair
+  **Reason**: Issue had \`dev:wip\` but no pipeline stage label. Could not determine correct state.
+  **Next**: Needs human intervention (label: \`dev:blocked\`)"
+  ```
+
+#### 4d. Warn on stale issues (no `dev:wip`, no activity)
+
+For issues WITHOUT `dev:wip` in an active stage (`planning`, `plan-review`, `plan-revising`, `approved`, `code-review`, `code-revising`, `testing`):
 - Check last comment timestamp: `gh issue view <number> --json comments --jq '.comments[-1].createdAt'`
-- If no agent comment in 90+ minutes on an active status (`planning`, `plan-review`, `approved`, `code-review`, `testing`):
-  - Post warning: "This issue has been in `dev:<x>` for over 90 minutes with no agent activity."
-- **Skip issues with `dev:wip` label** — these are actively being worked on by an agent
+- **90+ minutes** with no agent comment → post warning:
+  ```
+  "⚠ This issue has been in `dev:<x>` for over 90 minutes with no agent activity."
+  ```
+- **3+ hours** with no agent comment → escalate — the issue is likely stuck:
+  ```bash
+  gh issue edit <number> --add-label "dev:blocked"
+  gh issue comment <number> --body "### @ns-dev-producer -- Issue stuck
+  **Status**: escalated to blocked
+  **Reason**: Issue has been in \`dev:<x>\` for 3+ hours with no agent picking it up.
+  **Next**: Needs human intervention (label: \`dev:blocked\`)"
+  ```
+- **Do not double-warn** — if the last comment is already a producer warning/escalation, skip
 
 ### 5. Handle ready-to-merge
 
@@ -122,7 +193,7 @@ For issues labeled `dev:ready-to-merge`:
 
 ### 6. Report and set idle status
 
-Log a one-line summary of what was processed (e.g., "Triaged 1 issue, 0 warnings, 2 ready-to-merge"). Then run this EXACT bash command:
+Log a one-line summary of what was processed (e.g., "Triaged 1 issue, 0 warnings, 1 repaired, 2 ready-to-merge"). Then run this EXACT bash command:
 
 ```bash
 REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')"); echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/producer
@@ -200,5 +271,9 @@ An issue **needs clarification** if:
 - **Don't re-triage** — skip issues that already have a `dev:*` label
 - **Skip blocked issues** — issues with `dev:blocked` are ignored until a human intervenes
 - **Skip on-hold issues** — issues with `on-hold` label are not ready for the pipeline. Do not triage them.
-- **Label transitions** — at triage you add `dev:planning`, `dev:needs-info`, or `dev:approved` (fast-track bugs). At the `dev:ready-to-merge` quality gate, you may remove `dev:ready-to-merge` and add `dev:code-revising` if the reviewer's last verdict has unresolved findings. No other label transitions.
+- **Label transitions** — allowed transitions:
+  - **Triage**: add `dev:planning`, `dev:needs-info`, or `dev:approved` (fast-track bugs)
+  - **Quality gate**: remove `dev:ready-to-merge`, add `dev:code-revising` (unresolved findings)
+  - **Stale repair**: remove orphaned `dev:wip`; remove conflicting stage labels (keep most advanced); add `dev:blocked` for stuck/unrecoverable issues
+  - No other label transitions.
 - **Don't merge PRs** — only humans merge

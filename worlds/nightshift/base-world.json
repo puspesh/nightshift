@@ -353,7 +353,7 @@
       "w": 2,
       "h": 1,
       "layer": "below",
-      "anchors": [{ "name": "coffee_table_lounge", "ox": 1.5, "oy": 2, "type": "social" }]
+      "anchors": [{ "name": "coffee_table_lounge", "ox": 1.5, "oy": 1, "type": "social" }]
     }
   ],
   "wanderPoints": [

@@ -288,7 +288,7 @@
       "id": "rug_patterned",
       "x": 0.5,
       "y": 7,
-      "w": 4,
+      "w": 3,
       "h": 3,
       "layer": "below"
     },
@@ -303,8 +303,8 @@
     },
     {
       "id": "yellow_armchair",
-      "x": 4.75,
-      "y": 8,
+      "x": 0,
+      "y": 8.5,
       "w": 2,
       "h": 2,
       "layer": "below",
@@ -339,7 +339,7 @@
     },
     {
       "id": "wood_cushion_chair",
-      "x": 3,
+      "x": 2,
       "y": 5,
       "w": 1.9,
       "h": 2,
@@ -348,20 +348,12 @@
     },
     {
       "id": "coffee_table_low",
-      "x": 6.5,
-      "y": 7.5,
-      "w": 3,
-      "h": 2,
+      "x": 1,
+      "y": 6.5,
+      "w": 2,
+      "h": 1,
       "layer": "below",
       "anchors": [{ "name": "coffee_table_lounge", "ox": 1.5, "oy": 2, "type": "social" }]
-    },
-    {
-      "id": "coffee_table_low",
-      "x": 5,
-      "y": 9,
-      "w": 2.8,
-      "h": 2,
-      "layer": "below"
     }
   ],
   "wanderPoints": [

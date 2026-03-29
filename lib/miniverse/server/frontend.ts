@@ -157,6 +157,8 @@ const STATE_LABELS = {
   sleeping: 'Sleeping', error: 'Error', offline: 'Offline', speaking: 'Speaking',
 };
 
+const DEBUG = new URLSearchParams(location.search).has('debug');
+
 const panel = document.getElementById('status-panel');
 const connStatus = document.getElementById('connection-status');
 const container = document.getElementById('canvas-container');
@@ -393,6 +395,7 @@ async function startWorld(worldKey) {
   worldOrder.push(worldKey);
   evictOldest();
   showWorld(worldKey);
+  if (DEBUG) console.log('[nightshift:world:loaded]', JSON.stringify({ worldKey, citizens: citizens.length }));
 }
 
 container.addEventListener('mousemove', (e) => {
@@ -407,6 +410,7 @@ function connect() {
   ws.onopen = () => {
     connStatus.textContent = 'Connected';
     connStatus.className = 'connected';
+    if (DEBUG) console.log('[nightshift:ws:connected]');
   };
 
   ws.onmessage = (event) => {
@@ -414,8 +418,28 @@ function connect() {
       const msg = JSON.parse(event.data);
       if (msg.type === 'agents' && Array.isArray(msg.agents)) {
         for (const agent of msg.agents) {
+          const existing = agents.get(agent.agent);
+          const isNew = !existing;
           agents.set(agent.agent, agent);
           renderCard(agent);
+
+          if (DEBUG) {
+            if (isNew) {
+              console.log('[nightshift:citizen:spawn]', JSON.stringify({
+                agentId: agent.agent,
+                name: agent.name,
+                state: agent.state,
+                task: agent.task
+              }));
+            } else if (existing.state !== agent.state) {
+              console.log('[nightshift:citizen:state]', JSON.stringify({
+                agentId: agent.agent,
+                from: existing.state,
+                to: agent.state,
+                task: agent.task
+              }));
+            }
+          }
         }
       }
     } catch {}

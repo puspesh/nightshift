@@ -99,6 +99,27 @@ describe('mergeWorldConfig', () => {
     assert.ok(Array.isArray(merged.citizens));
   });
 
+  it('generated chair props have no anchors (prevents walk-through)', () => {
+    const config = generateWorldConfig(makeAgents(), 'dev');
+    const chairs = config.props.filter((p) => p.id === 'desk_chair_dark');
+    assert.ok(chairs.length > 0, 'should have at least one chair prop');
+    for (const chair of chairs) {
+      assert.equal(chair.anchors, undefined, `chair at (${chair.x}, ${chair.y}) should not have anchors`);
+    }
+  });
+
+  it('generated desk props have anchor with oy 1.5 for sitting alignment', () => {
+    const config = generateWorldConfig(makeAgents(), 'dev');
+    const desks = config.props.filter((p) => p.id === 'desk_corner_right' || p.id === 'desk_corner_left');
+    assert.ok(desks.length > 0, 'should have at least one desk prop');
+    for (const desk of desks) {
+      assert.ok(desk.anchors, `desk at (${desk.x}, ${desk.y}) should have anchors`);
+      const workAnchor = desk.anchors!.find((a) => a.type === 'work');
+      assert.ok(workAnchor, 'desk should have a work anchor');
+      assert.equal(workAnchor!.oy, 1.5, 'desk work anchor oy should be 1.5 for chair alignment');
+    }
+  });
+
   it('dynamic config overrides base world on key collision', () => {
     const baseWorld = { theme: 'old-theme', gridCols: 16 };
     const basePath = join(tmp, 'base-world.json');

@@ -34,8 +34,9 @@ Read `.claude/nightshift/repo.md` for branch naming pattern, label definitions, 
 
 | Watch for | Action | Set label to |
 |-----------|--------|--------------|
-| Issues with no `dev:*` label | Validate, create branch, triage | `dev:planning` |
-| `dev:ready-to-merge` | Post summary, notify human | _(human merges)_ |
+| Issues with no `dev:*` label (feature) | Validate, create branch, triage | `dev:planning` |
+| Issues with no `dev:*` label (bug/fix) | Validate, create branch, fast-track | `dev:approved` |
+| `dev:ready-to-merge` | Verify reviewer approved cleanly | _(human merges)_ or `dev:code-revising` |
 | `dev:blocked` | Skip — log and move on | _(unchanged)_ |
 | Stale issues (no agent activity in 45+ min) | Post warning comment | _(unchanged)_ |
 
@@ -106,7 +107,7 @@ For each issue with a `dev:*` label (skip `dev:blocked`, `dev:needs-info`, and i
 
 For issues labeled `dev:ready-to-merge`:
 - Find the linked PR: `gh pr list --search "issue:<number>" --json number,url`
-- **Verify clean green flag**: Read the reviewer's LAST code review comment on the issue.
+- **Verify clean green flag**: Find the reviewer's last code review comment by filtering for comments matching `### @ns-dev-reviewer -- Code Review`. Read its verdict line.
   Confirm the verdict is "APPROVE" with no outstanding CRITICAL or WARNING findings.
   If the last reviewer comment shows unresolved findings, send it back:
   ```bash
@@ -199,5 +200,5 @@ An issue **needs clarification** if:
 - **Don't re-triage** — skip issues that already have a `dev:*` label
 - **Skip blocked issues** — issues with `dev:blocked` are ignored until a human intervenes
 - **Skip on-hold issues** — issues with `on-hold` label are not ready for the pipeline. Do not triage them.
-- **Only add labels** — you only add `dev:planning` or `dev:needs-info`. You never remove or transition existing status labels — that's done by downstream agents.
+- **Label transitions** — at triage you add `dev:planning`, `dev:needs-info`, or `dev:approved` (fast-track bugs). At the `dev:ready-to-merge` quality gate, you may remove `dev:ready-to-merge` and add `dev:code-revising` if the reviewer's last verdict has unresolved findings. No other label transitions.
 - **Don't merge PRs** — only humans merge

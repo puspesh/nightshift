@@ -23,7 +23,7 @@ export interface CopyResult {
  * Get the path to a team's preset directory.
  */
 export function getPresetDir(team: string): string {
-  return join(__dirname, '..', '..', 'presets', team);
+  return join(__dirname, '..', 'presets', team);
 }
 
 /**
@@ -44,7 +44,7 @@ export function getPresetDefaultsDir(team: string): string {
  * Get the path to the nightshift package's shared defaults directory.
  */
 export function getDefaultsDir(): string {
-  return join(__dirname, '..', '..', 'defaults');
+  return join(__dirname, '..', 'defaults');
 }
 
 /**
@@ -107,7 +107,7 @@ export function copyExtensionFiles(repoRoot: string, team: string): CopyResult {
 
   mkdirSync(targetDir, { recursive: true });
 
-  const files = readdirSync(defaultsDir).filter((f) => f.endsWith('.md'));
+  const files = readdirSync(defaultsDir).filter((f) => f.endsWith('.md') || f.endsWith('.json'));
 
   for (const file of files) {
     const targetPath = join(targetDir, file);
@@ -179,7 +179,7 @@ export function removeExtensionFiles(repoRoot: string, team: string): string[] {
   }
 
   const files = readdirSync(targetDir).filter(
-    (f) => f.startsWith(prefix) && f.endsWith('.md'),
+    (f) => f.startsWith(prefix) && (f.endsWith('.md') || f.endsWith('.json')),
   );
 
   for (const file of files) {

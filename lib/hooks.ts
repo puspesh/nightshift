@@ -1,23 +1,27 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import type { HookConfig, HookEntry } from './types.js';
 
-const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const HOOK_EVENTS = ['SessionStart', 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
 const HOOK_URL_PATTERN = '/api/hooks/claude-code';
+const HEARTBEAT_SCRIPT = join(__dirname, '..', 'bin', 'ns-heartbeat.sh');
 
 /**
  * Check if a hook entry is a nightshift visualization hook.
  * Identified by URL containing the miniverse claude-code hook endpoint.
  */
 function isNightshiftHook(hook: Record<string, unknown>): boolean {
-  // Check new format: {matcher, hooks: [{type: "command", command: "curl ... /api/hooks/claude-code ..."}]}
   if (Array.isArray(hook.hooks)) {
     return hook.hooks.some((h: Record<string, unknown>) =>
-      typeof h.command === 'string' && h.command.includes(HOOK_URL_PATTERN)
+      typeof h.command === 'string' && (h.command.includes(HOOK_URL_PATTERN) || h.command.includes('ns-heartbeat.sh'))
     );
   }
-  // Check old format: {type: "http", url: "..."}
+  // Legacy format: {type: "http", url: "..."}
   return typeof hook.url === 'string' && hook.url.includes(HOOK_URL_PATTERN);
 }
 
@@ -28,14 +32,13 @@ function isNightshiftHook(hook: Record<string, unknown>): boolean {
  */
 export function generateHookConfig(agentName: string, serverUrl: string): HookConfig {
   const hooks: Record<string, HookEntry[]> = {};
-  const url = `${serverUrl}/api/hooks/claude-code?agent=${encodeURIComponent(agentName)}&name=${encodeURIComponent(agentName)}`;
 
   for (const event of HOOK_EVENTS) {
     hooks[event] = [{
       matcher: '',
       hooks: [{
         type: 'command',
-        command: `curl -s -o /dev/null -X POST "${url}" -H "Content-Type: application/json" -d '{"hook_event_name":"${event}"}' 2>/dev/null || true`,
+        command: `"${HEARTBEAT_SCRIPT}" "${serverUrl}" "${agentName}" "${event}"`,
       }],
     }];
   }

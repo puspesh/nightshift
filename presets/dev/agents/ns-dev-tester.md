@@ -15,7 +15,7 @@ STOP. Do NOT check for skills, brainstorm, or explore. You are a pipeline agent.
 
 Your FIRST action must be this EXACT bash command — nothing else comes before it, do not modify it:
 ```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel)); echo "working|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/tester; cat ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-tester.lock 2>/dev/null
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')"); echo "working|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/tester; cat ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-tester.lock 2>/dev/null
 ```
 
 Then follow the Pipeline Workflow section step by step. If no work is found, output
@@ -43,7 +43,7 @@ This agent runs in its own worktree.
 All agents share a single feature branch per issue, created by @ns-dev-producer: `issue-<number>-<slug>`.
 
 ```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 
 # Start of cycle: sync and checkout the feature branch
 git fetch origin
@@ -64,7 +64,7 @@ git checkout _ns/dev/tester
 
    **Lock check** — skip if a previous cycle is still running:
    ```bash
-   REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+   REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
    cat ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-tester.lock 2>/dev/null
    ```
    - If file exists and `started` is < 60 min ago -> **stop, skip this cycle entirely**
@@ -80,7 +80,7 @@ git checkout _ns/dev/tester
 
    **Claim the issue** — do this immediately, before checkout or any work:
    ```bash
-   REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+   REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
    gh issue edit <number> --add-label "dev:wip"
    echo '{"issue": <number>, "agent": "ns-dev-tester", "started": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-tester.lock
    ```
@@ -147,7 +147,7 @@ git checkout _ns/dev/tester
    **Order matters** — release the branch BEFORE transitioning labels, so the next agent can check it out.
 
    ```bash
-   REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+   REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 
    # 1. Remove lock file
    rm -f ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-tester.lock
@@ -189,7 +189,7 @@ If anything fails during a cycle (checkout conflict, build failure, servers not 
    ```
 2. **Cleanup and release branch first**:
    ```bash
-   REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+   REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
    rm -f ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-tester.lock
    git checkout _ns/dev/tester
    ```

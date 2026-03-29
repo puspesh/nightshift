@@ -3,30 +3,31 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, openSync, unlinkSyn
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import type { AgentEntry } from './types.js';
+import type { AgentEntry, CitizenOverrides } from './types.js';
+import { resolveCitizenProps } from './citizen-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Get the path to the miniverse PID file for a team.
+ * Get the path to the global miniverse PID file.
  */
-export function getPidFilePath(repoName: string, team: string): string {
-  return join(homedir(), '.nightshift', repoName, team, 'miniverse.pid');
+export function getPidFilePath(): string {
+  return join(homedir(), '.nightshift', 'miniverse.pid');
 }
 
 /**
- * Get the path to the miniverse port file for a team.
+ * Get the path to the global miniverse port file.
  */
-export function getPortFilePath(repoName: string, team: string): string {
-  return join(homedir(), '.nightshift', repoName, team, 'miniverse.port');
+export function getPortFilePath(): string {
+  return join(homedir(), '.nightshift', 'miniverse.port');
 }
 
 /**
- * Get the path to the miniverse log file for a team.
+ * Get the path to the global miniverse log file.
  */
-export function getLogFilePath(repoName: string, team: string): string {
-  return join(homedir(), '.nightshift', repoName, team, 'miniverse.log');
+export function getLogFilePath(): string {
+  return join(homedir(), '.nightshift', 'miniverse.log');
 }
 
 /**
@@ -35,17 +36,14 @@ export function getLogFilePath(repoName: string, team: string): string {
  */
 export function startServer(
   port: number,
-  worldDir: string,
-  repoName: string,
-  team: string,
-  repoRoot: string,
+  publicDir: string,
 ): { pid: number; url: string } | null {
-  const pidFile = getPidFilePath(repoName, team);
-  const portFile = getPortFilePath(repoName, team);
-  const logFile = getLogFilePath(repoName, team);
+  const pidFile = getPidFilePath();
+  const portFile = getPortFilePath();
+  const logFile = getLogFilePath();
 
   // Ensure parent directory exists
-  mkdirSync(join(homedir(), '.nightshift', repoName, team), { recursive: true });
+  mkdirSync(join(homedir(), '.nightshift'), { recursive: true });
 
   // Use the vendored miniverse server CLI
   const miniverse = join(__dirname, 'miniverse', 'server', 'cli.js');
@@ -57,7 +55,7 @@ export function startServer(
   const logFd = openSync(logFile, 'a');
 
   // Start as detached process using node
-  const child = spawn(process.execPath, [miniverse, '--port', String(port), '--public', worldDir, '--no-browser'], {
+  const child = spawn(process.execPath, [miniverse, '--port', String(port), '--public', publicDir, '--no-browser'], {
     detached: true,
     stdio: ['ignore', logFd, logFd],
     env: { ...process.env },
@@ -101,13 +99,15 @@ export async function waitForServer(url: string, timeoutMs: number = 10000): Pro
  * Register all agents with the miniverse server via heartbeat API.
  * Includes retry logic for reliability.
  */
-export async function registerAgents(url: string, agents: AgentEntry[], team: string): Promise<void> {
+export async function registerAgents(url: string, agents: AgentEntry[], team: string, overrides?: CitizenOverrides): Promise<void> {
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
     const agentId = `ns-${team}-${agent.role}`;
+    const resolved = resolveCitizenProps(agent.role, overrides ?? {});
     const payload = {
       agent: agentId,
-      name: agent.role,
+      name: resolved.displayName,
+      color: resolved.color,
       state: 'idle',
       task: 'Initializing',
     };
@@ -139,11 +139,11 @@ export async function registerAgents(url: string, agents: AgentEntry[], team: st
 }
 
 /**
- * Stop the miniverse server by reading the PID file and killing the process.
+ * Stop the global miniverse server by reading the PID file and killing the process.
  */
-export function stopServer(repoName: string, team: string): void {
-  const pidFile = getPidFilePath(repoName, team);
-  const portFile = getPortFilePath(repoName, team);
+export function stopServer(): void {
+  const pidFile = getPidFilePath();
+  const portFile = getPortFilePath();
 
   if (!existsSync(pidFile)) return;
 
@@ -166,10 +166,10 @@ export function stopServer(repoName: string, team: string): void {
 }
 
 /**
- * Check if the miniverse server is running for a team.
+ * Check if the global miniverse server is running.
  */
-export function isServerRunning(repoName: string, team: string): boolean {
-  const pidFile = getPidFilePath(repoName, team);
+export function isServerRunning(): boolean {
+  const pidFile = getPidFilePath();
   if (!existsSync(pidFile)) return false;
 
   try {

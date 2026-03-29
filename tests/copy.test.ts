@@ -50,16 +50,28 @@ describe('copyExtensionFiles', () => {
     }
   });
 
-  it('copies the expected 4 default files', () => {
+  it('copies the expected 5 default files including JSON', () => {
     const { copied } = copyExtensionFiles(tmp, 'dev');
 
     const expected = [
+      'ns-dev-citizens.json',
       'ns-dev-plan-template.md',
       'ns-dev-pr-template.md',
       'ns-dev-review-criteria.md',
       'ns-dev-test-config.md',
     ];
     assert.deepEqual(copied.sort(), expected.sort());
+  });
+
+  it('copies .json files from presets', () => {
+    const { copied } = copyExtensionFiles(tmp, 'dev');
+    const jsonFiles = copied.filter(f => f.endsWith('.json'));
+    assert.ok(jsonFiles.length > 0, 'should copy at least one JSON file');
+
+    for (const file of jsonFiles) {
+      const target = join(tmp, '.claude', 'nightshift', file);
+      assert.ok(existsSync(target), `${file} should exist at target`);
+    }
   });
 
   it('skips files that already exist', () => {

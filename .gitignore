@@ -8,6 +8,10 @@ dist/
 .claude/
 CLAUDE.md
 
+# Playwright
+test-results/
+playwright-report/
+
 # Superpowers plans/specs
 docs/superpowers/
 

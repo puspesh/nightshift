@@ -67,10 +67,13 @@ For each unlabeled issue (skip issues with `on-hold` label):
   **Bug / small fix detection** — issue has `bug` label, OR title contains: bug, fix, broken, crash, error, fail, wrong, incorrect, typo, hotfix
 
   **If BUG or SMALL FIX** (fast-track):
-  - Create feature branch from main:
+  - Create feature branch from main (skip if branch already exists):
     ```bash
     git fetch origin
-    git push origin origin/main:refs/heads/issue-<number>-<slug>
+    # Check if branch already exists (e.g., from a previous triage that was blocked/repaired)
+    if ! git ls-remote --heads origin issue-<number>-<slug> | grep -q .; then
+      git push origin origin/main:refs/heads/issue-<number>-<slug>
+    fi
     ```
   - Add label: `gh issue edit <number> --add-label "dev:approved"` (skip planning and plan review)
   - Post triage comment:
@@ -84,10 +87,12 @@ For each unlabeled issue (skip issues with `on-hold` label):
     ```
 
   **If NORMAL FEATURE/IMPROVEMENT** (standard path):
-  - Create feature branch from main:
+  - Create feature branch from main (skip if branch already exists):
     ```bash
     git fetch origin
-    git push origin origin/main:refs/heads/issue-<number>-<slug>
+    if ! git ls-remote --heads origin issue-<number>-<slug> | grep -q .; then
+      git push origin origin/main:refs/heads/issue-<number>-<slug>
+    fi
     ```
   - Add label: `gh issue edit <number> --add-label "dev:planning"`
   - Post standard triage comment (see Comment Format below)
@@ -109,15 +114,19 @@ For issues that have BOTH `dev:wip` AND a pipeline stage label:
 ```bash
 REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 ```
-- Check which agent's lock file references this issue number:
+- Find the lock file referencing this issue number:
   ```bash
-  grep -rl '"issue": <number>' ~/.nightshift/${REPO_NAME}/dev/locks/ 2>/dev/null
+  STALE_LOCK=$(grep -rl '"issue": <number>' ~/.nightshift/${REPO_NAME}/dev/locks/ 2>/dev/null)
   ```
-- If lock file exists and `started` is < 60 min ago → skip, agent is still working
-- If lock file is missing OR `started` is >= 60 min ago → **orphaned `dev:wip`**:
+- If `$STALE_LOCK` is non-empty, read it and check the `started` timestamp:
+  - If `started` is < 60 min ago → skip, agent is still working
+  - If `started` is >= 60 min ago → stale lock, proceed to cleanup below
+- If `$STALE_LOCK` is empty (no lock file found) → orphaned `dev:wip`, proceed to cleanup
+
+**Cleanup** — remove stale lock and release the issue:
   ```bash
-  # Remove stale lock if it exists
-  rm -f ~/.nightshift/${REPO_NAME}/dev/locks/<agent>.lock
+  # Remove stale lock using the path from grep (if it exists)
+  if [ -n "$STALE_LOCK" ]; then rm -f "$STALE_LOCK"; fi
   # Remove orphaned dev:wip — the issue returns to its stage label for re-pickup
   gh issue edit <number> --remove-label "dev:wip"
   gh issue comment <number> --body "### @ns-dev-producer -- Stale lock cleared
@@ -131,23 +140,44 @@ REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | 
 Valid pipeline stage labels (exactly ONE should be present): `planning`, `plan-review`, `plan-revising`, `approved`, `code-review`, `code-revising`, `testing`, `ready-to-merge`.
 
 If an issue has **2+ stage labels** (not counting `dev:wip`, `dev:blocked`, `dev:needs-info`):
-- Determine which is most advanced in the pipeline order:
-  `planning` → `plan-review` → `plan-revising` → `approved` → `code-review` → `code-revising` → `testing` → `ready-to-merge`
-- Keep the most advanced label, remove the others:
+
+1. Read the last agent comment (`### @ns-dev-<agent> --` pattern) to determine what stage the issue actually reached
+2. **If the last comment confirms the more-advanced label** (e.g., coder posted "Implementation complete" and both `dev:approved` and `dev:code-review` are present) → keep the more-advanced label, remove the less-advanced one
+3. **If the last comment corresponds to the less-advanced label** (e.g., planner posted "Plan ready" but somehow `dev:approved` is also present) → keep the less-advanced label, remove the more-advanced one
+4. **If unsure** — cannot determine from comments → prefer blocking over advancing:
+   ```bash
+   gh issue edit <number> --remove-label "dev:<label1>" --remove-label "dev:<label2>" --add-label "dev:blocked"
+   gh issue comment <number> --body "### @ns-dev-producer -- Label conflict unresolvable
+   **Status**: pipeline repair
+   **Reason**: Multiple stage labels detected: \`dev:<label1>\`, \`dev:<label2>\`. Could not determine correct state from comments.
+   **Next**: Needs human intervention (label: \`dev:blocked\`)"
+   ```
+
+Pipeline order for reference: `planning` → `plan-review` → `plan-revising` → `approved` → `code-review` → `code-revising` → `testing` → `ready-to-merge`
+
+When resolved (not blocked), post:
   ```bash
-  gh issue edit <number> --remove-label "dev:<less-advanced>"
   gh issue comment <number> --body "### @ns-dev-producer -- Label conflict resolved
   **Status**: pipeline repair
-  **Reason**: Multiple stage labels detected: \`dev:<label1>\`, \`dev:<label2>\`. Kept most advanced: \`dev:<kept>\`.
+  **Reason**: Multiple stage labels detected: \`dev:<label1>\`, \`dev:<label2>\`. Kept \`dev:<kept>\` based on last agent comment.
   **Next**: Awaiting agent (label: \`dev:<kept>\`)"
   ```
 
 #### 4c. Detect `dev:wip` without any stage label
 
 If an issue has `dev:wip` but NO pipeline stage label — this means a label transition partially failed:
-- Read the last agent comment to determine what stage the issue should be in
+- Read the last agent comment (`### @ns-dev-<agent> --` pattern) and its `**Next**:` line to determine the intended stage:
+  - `@ns-dev-producer -- Triaged` → set `dev:planning` (or `dev:approved` if fast-track)
+  - `@ns-dev-planner -- Plan ready` → set `dev:plan-review`
+  - `@ns-dev-reviewer -- Plan Review` with APPROVE → set `dev:approved`
+  - `@ns-dev-reviewer -- Plan Review` with REVISE → set `dev:plan-revising`
+  - `@ns-dev-coder -- Implementation complete` → set `dev:code-review`
+  - `@ns-dev-reviewer -- Code Review` with APPROVE → set `dev:testing`
+  - `@ns-dev-reviewer -- Code Review` with REVISE → set `dev:code-revising`
+  - `@ns-dev-tester -- Tests passed` → set `dev:ready-to-merge`
+  - `@ns-dev-tester -- Tests failed` → set `dev:code-revising`
 - If determinable: add the correct stage label and remove `dev:wip`
-- If not determinable: remove `dev:wip` and add `dev:blocked`:
+- If not determinable (no matching comment pattern): remove `dev:wip` and add `dev:blocked`:
   ```bash
   gh issue edit <number> --remove-label "dev:wip" --add-label "dev:blocked"
   gh issue comment <number> --body "### @ns-dev-producer -- Orphaned issue detected
@@ -159,20 +189,26 @@ If an issue has `dev:wip` but NO pipeline stage label — this means a label tra
 #### 4d. Warn on stale issues (no `dev:wip`, no activity)
 
 For issues WITHOUT `dev:wip` in an active stage (`planning`, `plan-review`, `plan-revising`, `approved`, `code-review`, `code-revising`, `testing`):
-- Check last comment timestamp: `gh issue view <number> --json comments --jq '.comments[-1].createdAt'`
-- **90+ minutes** with no agent comment → post warning:
-  ```
-  "⚠ This issue has been in `dev:<x>` for over 90 minutes with no agent activity."
-  ```
-- **3+ hours** with no agent comment → escalate — the issue is likely stuck:
-  ```bash
-  gh issue edit <number> --add-label "dev:blocked"
-  gh issue comment <number> --body "### @ns-dev-producer -- Issue stuck
-  **Status**: escalated to blocked
-  **Reason**: Issue has been in \`dev:<x>\` for 3+ hours with no agent picking it up.
-  **Next**: Needs human intervention (label: \`dev:blocked\`)"
-  ```
-- **Do not double-warn** — if the last comment is already a producer warning/escalation, skip
+
+- **Do not double-warn** — if the last comment is already a producer warning/escalation (`### @ns-dev-producer -- Issue stuck` or `### @ns-dev-producer -- Stale warning`), skip this issue entirely
+- Use the issue's `updatedAt` field (already fetched in step 1) as the staleness baseline — this reflects the most recent label change, comment, or edit, and is more reliable than the last comment timestamp alone
+- **Check 3+ hours first** (escalate before warning):
+  - If `updatedAt` is 3+ hours ago → escalate — the issue is likely stuck:
+    ```bash
+    gh issue edit <number> --add-label "dev:blocked"
+    gh issue comment <number> --body "### @ns-dev-producer -- Issue stuck
+    **Status**: escalated to blocked
+    **Reason**: Issue has been in \`dev:<x>\` for 3+ hours with no agent picking it up.
+    **Next**: Needs human intervention (label: \`dev:blocked\`)"
+    ```
+  - **Do not also post a 90-minute warning** — the escalation supersedes it
+- **Otherwise, check 90+ minutes** (warning only):
+  - If `updatedAt` is 90+ minutes ago → post warning:
+    ```bash
+    gh issue comment <number> --body "### @ns-dev-producer -- Stale warning
+    **Status**: warning
+    **Reason**: This issue has been in \`dev:<x>\` for over 90 minutes with no agent activity."
+    ```
 
 ### 5. Handle ready-to-merge
 
@@ -274,6 +310,6 @@ An issue **needs clarification** if:
 - **Label transitions** — allowed transitions:
   - **Triage**: add `dev:planning`, `dev:needs-info`, or `dev:approved` (fast-track bugs)
   - **Quality gate**: remove `dev:ready-to-merge`, add `dev:code-revising` (unresolved findings)
-  - **Stale repair**: remove orphaned `dev:wip`; remove conflicting stage labels (keep most advanced); add `dev:blocked` for stuck/unrecoverable issues
+  - **Stale repair**: remove orphaned `dev:wip`; resolve conflicting stage labels (verify with last agent comment, block if unsure); restore correct stage label for wip-only issues (from comment mapping); add `dev:blocked` for stuck/unrecoverable issues
   - No other label transitions.
 - **Don't merge PRs** — only humans merge

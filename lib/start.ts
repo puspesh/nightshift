@@ -10,6 +10,7 @@ import { startServer, waitForServer, registerAgents, stopServer } from './visual
 import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
 import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
+import { loadAgentConfig, resolveAgentConfig, buildRunnerForAgent } from './agent-config.js';
 import type { AgentEntry } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -119,8 +120,9 @@ export async function startSession(team: string, options?: { port?: number }): P
 
   const session = getSessionName(repoName, team);
   const agents = buildAgentList(team, coderCount, repoRoot, repoName);
-  const runner = parseRunner(repoRoot);
+  const baseRunner = parseRunner(repoRoot);
   const citizenOverrides = loadCitizenConfig(repoRoot, team);
+  const agentConfigs = loadAgentConfig(repoRoot, team);
 
   // Start visualization server (non-blocking — failure doesn't prevent agents from launching)
   const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
@@ -230,16 +232,20 @@ export async function startSession(team: string, options?: { port?: number }): P
   const allPanes = [...sidebar, ...coders];
   for (let i = 0; i < allPanes.length; i++) {
     const a = allPanes[i];
+    const agentConfig = resolveAgentConfig(a.role, agentConfigs);
+    const modelSuffix = agentConfig.model ? ` [${agentConfig.model}]` : '';
     const resolved = resolveCitizenProps(a.role, citizenOverrides);
     const color = hexToTmuxStyle(resolved.color);
     const statusFile = join(statusDir, a.role);
-    tmux(`set-option -p -t "${session}:0.${i}" @agent_label "${a.role}  ·  /loop 15m @${a.agent}"`);
+    tmux(`set-option -p -t "${session}:0.${i}" @agent_label "${a.role}${modelSuffix}  ·  /loop 15m @${a.agent}"`);
     tmux(`set-option -p -t "${session}:0.${i}" @agent_color "${color}"`);
     tmux(`set-option -p -t "${session}:0.${i}" @status_file "${statusFile}"`);
   }
 
-  // Launch runner in each pane
+  // Launch runner in each pane with per-agent config
   for (let i = 0; i < allPanes.length; i++) {
+    const config = resolveAgentConfig(allPanes[i].role, agentConfigs);
+    const runner = buildRunnerForAgent(baseRunner, config);
     tmux(`send-keys -t "${session}:0.${i}" '${runner}' Enter`);
   }
 
@@ -252,7 +258,7 @@ export async function startSession(team: string, options?: { port?: number }): P
 /_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
         /____/`));
   console.log(chalk.dim(`  Starting ${team} team in tmux session: ${session}`));
-  console.log(chalk.dim(`  Runner: ${runner}`));
+  console.log(chalk.dim(`  Runner: ${baseRunner}`));
   if (vizUrl) {
     console.log(chalk.dim(`  Visualization: ${vizUrl}`));
     try {
@@ -262,7 +268,9 @@ export async function startSession(team: string, options?: { port?: number }): P
   console.log('');
   console.log(chalk.bold('  Agents:'));
   for (const a of agents) {
-    console.log(`    ${a.role.padEnd(10)} → @${a.agent}`);
+    const config = resolveAgentConfig(a.role, agentConfigs);
+    const model = config.model ? chalk.dim(` (${config.model})`) : '';
+    console.log(`    ${a.role.padEnd(10)} → @${a.agent}${model}`);
   }
   console.log('');
   console.log(chalk.dim('  Type the /loop command shown in each pane title to start.'));

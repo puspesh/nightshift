@@ -1,5 +1,5 @@
 import { execSync, spawn } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, openSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync, unlinkSync, openSync, closeSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -170,8 +170,8 @@ export function stopHeadlessAgents(repoName: string, team: string): number {
     const pid = parseInt(pidStr, 10);
     if (!isNaN(pid)) {
       try {
-        process.kill(pid, 0); // check if alive (reviewer S2)
-        process.kill(pid);
+        process.kill(pid, 0); // check if alive
+        process.kill(-pid); // kill entire process group (detached: true creates new group)
         stopped++;
       } catch { /* already dead */ }
     }
@@ -227,6 +227,7 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
       child.unref();
       writeAgentPid(repoName, team, agent.role, child.pid);
     }
+    closeSync(logFd);
   }
 
   // Print summary

@@ -123,6 +123,15 @@ describe('lock file paths', () => {
           p.content.includes('{{team_dir}}') || p.content.includes('.nightshift/'),
           `${p.name} lock path should reference {{team_dir}} or .nightshift/`
         );
+        const lockLines = p.content
+          .split('\n')
+          .filter((line) => line.includes('.lock'));
+        for (const line of lockLines) {
+          assert.ok(
+            !line.includes('/tmp/'),
+            `${p.name} should not use /tmp/ for locks: ${line.trim()}`
+          );
+        }
       }
     });
   }

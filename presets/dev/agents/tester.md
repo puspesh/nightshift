@@ -54,6 +54,7 @@ git checkout {{home_branch}}
    REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
    gh issue edit <number> --add-label "{{team_name}}:wip"
    echo '{"issue": <number>, "agent": "{{agent_name}}", "started": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
+   echo $(date +%s) > /tmp/ns-work-start-<number>
    ```
 
 2. **Checkout branch and build**
@@ -88,7 +89,7 @@ git checkout {{home_branch}}
    - <suite 2>: pass
 
    **Cost**:
-   - Duration: <DURATION>s (compute via `echo $(( $(date +%s) - WORK_START ))`)
+   - Duration: <DURATION>s (compute via `echo $(( $(date +%s) - $(cat /tmp/ns-work-start-<number>) ))`)
    - Model: sonnet
    - Subagents: none
    **Next**: Ready to merge (label: `{{team_name}}:ready-to-merge`)
@@ -113,7 +114,7 @@ git checkout {{home_branch}}
    - **Likely cause**: <your diagnosis>
 
    **Cost**:
-   - Duration: <DURATION>s (compute via `echo $(( $(date +%s) - WORK_START ))`)
+   - Duration: <DURATION>s (compute via `echo $(( $(date +%s) - $(cat /tmp/ns-work-start-<number>) ))`)
    - Model: sonnet
    - Subagents: none
    **Next**: Sent back to @ns-{{team_name}}-coder for fixes (label: `{{team_name}}:code-revising`)
@@ -181,7 +182,7 @@ If anything fails during a cycle (checkout conflict, build failure, servers not 
 
 You MUST track and report cost data accurately. Do NOT estimate or hallucinate numbers.
 
-- **Duration**: Run `WORK_START=$(date +%s)` immediately after claiming an issue. At completion, compute: `echo $(( $(date +%s) - WORK_START ))`.
+- **Duration**: The claim block persists the start timestamp to `/tmp/ns-work-start-<number>`. At completion, compute: `echo $(( $(date +%s) - $(cat /tmp/ns-work-start-<number>) ))`.
 - **Subagent tokens**: The tester typically does not use subagents. Report "none" unless you explicitly launched Agent tool calls.
 - **Model**: Report the model from your profile frontmatter (sonnet).
 - Include these in your completion comment under a `**Cost**:` section.

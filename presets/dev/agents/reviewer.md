@@ -58,6 +58,7 @@ git checkout {{home_branch}}
    REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
    gh issue edit <number> --add-label "{{team_name}}:wip"
    echo '{"issue": <number>, "agent": "{{agent_name}}", "started": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
+   echo $(date +%s) > /tmp/ns-work-start-<number>
    ```
 
 2. **Checkout the feature branch**
@@ -162,7 +163,7 @@ gh issue comment <number> --body "comment text"
 </details>
 
 **Cost**:
-- Duration: <DURATION>s (compute via `echo $(( $(date +%s) - WORK_START ))`)
+- Duration: <DURATION>s (compute via `echo $(( $(date +%s) - $(cat /tmp/ns-work-start-<number>) ))`)
 - Model: opus
 - Subagents: none
 **Next**: <label set to {{team_name}}:approved/testing | Sent back to @ns-{{team_name}}-planner/@ns-{{team_name}}-coder (label: {{team_name}}:plan-revising/code-revising)>
@@ -257,7 +258,7 @@ If anything fails during a cycle (checkout conflict, typecheck/test failure you 
 
 You MUST track and report cost data accurately. Do NOT estimate or hallucinate numbers.
 
-- **Duration**: Run `WORK_START=$(date +%s)` immediately after claiming an issue. At completion, compute: `echo $(( $(date +%s) - WORK_START ))`.
+- **Duration**: The claim block persists the start timestamp to `/tmp/ns-work-start-<number>`. At completion, compute: `echo $(( $(date +%s) - $(cat /tmp/ns-work-start-<number>) ))`.
 - **Subagent tokens**: The reviewer typically does not use subagents. Report "none" unless you explicitly launched Agent tool calls.
 - **Model**: Report the model from your profile frontmatter (opus).
 - Include these in your completion comment under a `**Cost**:` section.

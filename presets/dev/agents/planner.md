@@ -68,11 +68,7 @@ Pick the oldest issue across both queries. **If NEITHER query returns a result, 
 REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 gh issue edit <number> --add-label "{{team_name}}:wip"
 echo '{"issue": <number>, "agent": "{{agent_name}}", "started": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
-```
-
-**Capture start timestamp** (immediately after claiming):
-```bash
-WORK_START=$(date +%s)
+echo $(date +%s) > /tmp/ns-work-start-<number>
 ```
 
 ### 2. Read the issue and checkout branch
@@ -136,7 +132,7 @@ gh issue comment <number> --body "$(cat <<'EOF'
 **Branch**: `issue-<number>-<slug>`
 **Summary**: <2-3 sentence overview of the approach>
 **Cost**:
-- Duration: <DURATION>s (compute via `echo $(( $(date +%s) - WORK_START ))`)
+- Duration: <DURATION>s (compute via `echo $(( $(date +%s) - $(cat /tmp/ns-work-start-<number>) ))`)
 - Model: opus
 - Subagents: <N> launched, <total_tokens from usage tags> tokens (or "none")
 **Next**: Ready for @ns-{{team_name}}-reviewer review (label: `{{team_name}}:plan-review`)
@@ -230,8 +226,8 @@ If anything fails during a cycle (git checkout conflict, push failure, unexpecte
 
 You MUST track and report cost data accurately. Do NOT estimate or hallucinate numbers.
 
-- **Duration**: Run `WORK_START=$(date +%s)` immediately after claiming an issue. At completion, compute: `echo $(( $(date +%s) - WORK_START ))`.
-- **Subagent tokens**: When you use the Agent tool, the result includes `<usage>total_tokens: XXXXX</usage>`. Sum ALL subagent total_tokens values and report the total. If you launched no subagents, report "none".
+- **Duration**: The claim block persists the start timestamp to `/tmp/ns-work-start-<number>`. At completion, compute: `echo $(( $(date +%s) - $(cat /tmp/ns-work-start-<number>) ))`.
+- **Subagent tokens**: After each Agent tool call, append the total_tokens value to a temp file: `echo <total_tokens> >> /tmp/ns-subagent-tokens-<number>`. At completion, sum: `awk '{s+=$1} END {print s}' /tmp/ns-subagent-tokens-<number>`. If you launched no subagents, report "none".
 - **Model**: Report the model from your profile frontmatter (opus).
 - Include these in your completion comment under a `**Cost**:` section.
 - Numbers must be exact — from bash timestamps and usage tags, never estimated.

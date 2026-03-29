@@ -2,7 +2,7 @@
 
 > Issue: #36
 > Date: 2026-03-29
-> Status: draft
+> Status: revised
 
 ## Overview
 
@@ -57,13 +57,22 @@ Currently zero console logs in the frontend for citizen lifecycle events. Only `
 
 ### Phase 1: Add console log instrumentation to the frontend
 
-**Goal**: Emit structured, parseable console events that Playwright tests can capture.
+**Goal**: Emit structured, parseable console events that Playwright tests can capture. All logs are gated behind a `?debug=true` URL parameter so they don't fire in normal production usage.
 
-#### 1. Add console logs for agent state updates in the WebSocket handler
+**Tests covered by Phase 1 instrumentation**: Tests 1-6 in Phase 3 (step 9) all depend on these console logs. Specifically:
+- Step 1 logs → Tests 2, 3 (spawn and state change verification)
+- Step 2 logs → Tests 1-6 (all tests use WS connected as sync point)
+- Step 3 logs → Test 6 (canvas health check)
+
+#### 1. Add debug flag detection and console logs for agent state updates
 
 - **File**: `lib/miniverse/server/frontend.ts`
-- **Location**: Inside the `ws.onmessage` handler (around line 412-420), where the frontend processes incoming `agents` type messages
-- **Action**: After updating the agents map and rendering cards, emit structured console logs:
+- **Location**: Near the top of the `<script type="module">` block (after the constants, around line 155), and inside the `ws.onmessage` handler (around line 412-420)
+- **Action**: First, add a debug flag at the top of the script block:
+  ```javascript
+  const DEBUG = new URLSearchParams(location.search).has('debug');
+  ```
+  Then, inside the `ws.onmessage` handler, after updating the agents map and rendering cards, emit structured console logs only when debug is enabled:
   ```javascript
   if (msg.type === 'agents' && Array.isArray(msg.agents)) {
     for (const agent of msg.agents) {
@@ -72,53 +81,55 @@ Currently zero console logs in the frontend for citizen lifecycle events. Only `
       agents.set(agent.agent, agent);
       renderCard(agent);
 
-      if (isNew) {
-        console.log('[nightshift:citizen:spawn]', JSON.stringify({
-          agentId: agent.agent,
-          name: agent.name,
-          state: agent.state,
-          task: agent.task
-        }));
-      } else if (existing.state !== agent.state) {
-        console.log('[nightshift:citizen:state]', JSON.stringify({
-          agentId: agent.agent,
-          from: existing.state,
-          to: agent.state,
-          task: agent.task
-        }));
+      if (DEBUG) {
+        if (isNew) {
+          console.log('[nightshift:citizen:spawn]', JSON.stringify({
+            agentId: agent.agent,
+            name: agent.name,
+            state: agent.state,
+            task: agent.task
+          }));
+        } else if (existing.state !== agent.state) {
+          console.log('[nightshift:citizen:state]', JSON.stringify({
+            agentId: agent.agent,
+            from: existing.state,
+            to: agent.state,
+            task: agent.task
+          }));
+        }
       }
     }
   }
   ```
-- **Why**: The WebSocket `agents` broadcast is the single source of truth for all state changes. By comparing with the existing map entry before updating, we can distinguish spawns (new agent) from state transitions (existing agent, different state). JSON.stringify ensures the payload is parseable by tests.
+- **Why**: The WebSocket `agents` broadcast is the single source of truth for all state changes. By comparing with the existing map entry before updating, we can distinguish spawns (new agent) from state transitions (existing agent, different state). JSON.stringify ensures the payload is parseable by tests. Gating behind `?debug=true` prevents console clutter in normal production usage — nightshift is a dev tool, but the visualization is still user-facing.
 - **Dependencies**: none
 
 #### 2. Add console log for WebSocket connection status
 
 - **File**: `lib/miniverse/server/frontend.ts`
 - **Location**: Inside the `ws.onopen` handler (around line 407-409)
-- **Action**: Add a structured log when the WebSocket connects:
+- **Action**: Add a structured log when the WebSocket connects (also gated behind `DEBUG`):
   ```javascript
   ws.onopen = () => {
     connStatus.textContent = 'Connected';
     connStatus.className = 'connected';
-    console.log('[nightshift:ws:connected]');
+    if (DEBUG) console.log('[nightshift:ws:connected]');
   };
   ```
 - **Why**: Tests need to know when the WebSocket is ready before sending heartbeats. This log serves as a synchronization point.
-- **Dependencies**: none
+- **Dependencies**: step 1 (the `DEBUG` flag must be defined first)
 
 #### 3. Add console log for world load completion
 
 - **File**: `lib/miniverse/server/frontend.ts`
 - **Location**: At the end of `startWorld()` function, after `showWorld(worldKey)` (around line 395)
-- **Action**: Add a log after the world finishes loading:
+- **Action**: Add a log after the world finishes loading (gated behind `DEBUG`):
   ```javascript
   showWorld(worldKey);
-  console.log('[nightshift:world:loaded]', JSON.stringify({ worldKey, citizens: citizens.length }));
+  if (DEBUG) console.log('[nightshift:world:loaded]', JSON.stringify({ worldKey, citizens: citizens.length }));
   ```
 - **Why**: Tests need to know when the canvas is ready and how many citizens were loaded from the world config, before asserting spawn behavior.
-- **Dependencies**: none
+- **Dependencies**: step 1 (the `DEBUG` flag must be defined first)
 
 ### Phase 2: Set up Playwright infrastructure
 
@@ -181,17 +192,17 @@ Currently zero console logs in the frontend for citizen lifecycle events. Only `
 - **File**: `tests/e2e/helpers.ts`
 - **Action**: Create utilities that tests will use:
 
-  **a. Server lifecycle** — start/stop a MiniverseServer for tests:
+  **a. Server lifecycle** — start/stop a MiniverseServer for tests. Must accept `publicDir` so the server can find the test world and the miniverse-core bundle:
   ```typescript
   import { MiniverseServer } from '../../lib/miniverse/server/server.js';
 
-  export async function startTestServer(): Promise<{ server: MiniverseServer; port: number; baseUrl: string }> {
-    const server = new MiniverseServer({ port: 0 }); // port 0 = random available port
+  export async function startTestServer(publicDir: string): Promise<{ server: MiniverseServer; port: number; baseUrl: string }> {
+    const server = new MiniverseServer({ port: 14000 + Math.floor(Math.random() * 50000), publicDir });
     const port = await server.start();
     return { server, port, baseUrl: `http://localhost:${port}` };
   }
   ```
-  Note: The MiniverseServer constructor accepts a port, and `start()` returns the actual port (it auto-increments on EADDRINUSE). However, check if port 0 is supported — if not, use a high random port like `10000 + Math.floor(Math.random() * 50000)`.
+  Uses a random high port (14000-64000) instead of port 0. The server's EADDRINUSE handler auto-increments, so collisions resolve naturally. Port 0 would work for `listen(0)` in Node.js but the server's increment logic would go to port 1, which is wasteful — a random high port is more direct.
 
   **b. Heartbeat sender** — POST to `/api/heartbeat` to register/update agents:
   ```typescript
@@ -227,16 +238,37 @@ Currently zero console logs in the frontend for citizen lifecycle events. Only `
   }
   ```
 
-  **d. World config setup** — create a minimal test world.json for deterministic testing. The server needs a world config file to serve to the frontend. Create a minimal one in a temp directory:
+  **d. World config setup** — create a minimal test world.json and symlink miniverse-core.js for deterministic testing. The server serves `miniverse-core.js` from `path.join(publicDir, '..', 'core', 'miniverse-core.js')` (see `server.ts:660`), so the directory structure must place a `core/` sibling next to the `publicDir`.
+
   ```typescript
-  import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+  import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
   import { tmpdir } from 'node:os';
+  import { fileURLToPath } from 'node:url';
   import path from 'node:path';
 
-  export function createTestWorld(repoName: string, teamName: string): string {
-    const publicDir = mkdtempSync(path.join(tmpdir(), 'nightshift-e2e-'));
+  export function createTestWorld(repoName: string, teamName: string): { publicDir: string; cleanup: () => void } {
+    // Structure:
+    //   /tmp/nightshift-e2e-XXXXX/
+    //     public/              ← publicDir (passed to MiniverseServer)
+    //       <repoName>/
+    //         <teamName>/
+    //           world.json
+    //     core/
+    //       miniverse-core.js  ← symlink to lib/miniverse/core/miniverse-core.js
+    const rootDir = mkdtempSync(path.join(tmpdir(), 'nightshift-e2e-'));
+    const publicDir = path.join(rootDir, 'public');
     const worldDir = path.join(publicDir, repoName, teamName);
     mkdirSync(worldDir, { recursive: true });
+
+    // Create the core/ sibling with symlink to the actual miniverse-core.js
+    const coreDir = path.join(rootDir, 'core');
+    mkdirSync(coreDir, { recursive: true });
+    const thisFile = fileURLToPath(import.meta.url);
+    const repoRoot = path.resolve(path.dirname(thisFile), '..', '..');
+    const actualCorePath = path.join(repoRoot, 'lib', 'miniverse', 'core', 'miniverse-core.js');
+    symlinkSync(actualCorePath, path.join(coreDir, 'miniverse-core.js'));
+
+    // Write minimal test world
     writeFileSync(path.join(worldDir, 'world.json'), JSON.stringify({
       gridCols: 10,
       gridRows: 8,
@@ -249,11 +281,17 @@ Currently zero console logs in the frontend for citizen lifecycle events. Only `
         { agentId: 'ns-test-coder', name: 'Coder', sprite: 'nova', position: { x: 6, y: 3 }, type: 'agent' },
       ],
     }));
-    return publicDir;
+
+    return {
+      publicDir,
+      cleanup: () => { rmSync(rootDir, { recursive: true, force: true }); },
+    };
   }
   ```
 
-- **Why**: Encapsulating server lifecycle, heartbeats, and log collection keeps tests focused on assertions. The test world config ensures deterministic citizen positions.
+  **Usage in tests**: The `publicDir` is passed to `startTestServer(publicDir)`, and the `cleanup` function is called in `afterAll`. Playwright tests navigate to `baseUrl + '?world=test-repo/test-team&debug=true'` (the `debug=true` enables console log instrumentation from Phase 1).
+
+- **Why**: The miniverse server resolves the core bundle at `publicDir/../core/miniverse-core.js`. Without this directory structure, the frontend's `<script type="module">` import of `/miniverse-core.js` returns 404 and the entire frontend crashes — no WebSocket, no status panel, no tests. The symlink avoids duplicating the 778-line bundle into temp directories.
 - **Dependencies**: steps 4, 5
 
 #### 9. Write the citizen test suite
@@ -262,8 +300,8 @@ Currently zero console logs in the frontend for citizen lifecycle events. Only `
 - **Action**: Write the following test cases using Playwright's `test` and `expect`:
 
   **Test 1: "citizens appear in status panel after heartbeat"**
-  - Start test server with test world
-  - Open page at `baseUrl?world=test-repo/test-team`
+  - Start test server with test world (`startTestServer(publicDir)`)
+  - Open page at `baseUrl?world=test-repo/test-team&debug=true`
   - Wait for `[nightshift:ws:connected]` console log
   - Send 3 heartbeats (producer=idle, planner=working, coder=thinking)
   - Assert: `#status-panel` contains 3 `.agent-card` elements
@@ -310,7 +348,7 @@ Currently zero console logs in the frontend for citizen lifecycle events. Only `
   - Assert: no console errors occurred
   - Assert: canvas element exists inside `#canvas-container`
 
-  Each test should use `test.beforeAll` / `test.afterAll` to start/stop the server, and `test.beforeEach` to navigate to a fresh page.
+  Each test should use `test.beforeAll` / `test.afterAll` to start/stop the server (with `createTestWorld` and `cleanup`), and `test.beforeEach` to navigate to a fresh page at `baseUrl + '?world=test-repo/test-team&debug=true'`.
 
 - **Why**: These tests cover all the requirements: spawn verification (tests 1-2), state change verification (tests 3-4), multi-agent independence (test 5), and basic canvas health (test 6). They use both console log capture (for canvas-side events) and DOM queries (for status panel assertions).
 - **Dependencies**: steps 1-3, 8
@@ -340,35 +378,52 @@ Run `bun run typecheck` to verify TypeScript compilation is clean after all chan
 
 ### Manual verification
 1. Run `bunx nightshift start --team dev` in a test repo
-2. Open the miniverse URL in browser
+2. Open the miniverse URL in browser, appending `?debug=true` to the URL
 3. Open browser DevTools console
 4. Verify `[nightshift:citizen:spawn]` logs appear for each agent
 5. Trigger agent activity and verify `[nightshift:citizen:state]` logs appear
+6. Remove `?debug=true` from URL and verify no console logs appear (production behavior)
 
 ## Assumptions
 
-1. **MiniverseServer supports port 0 or random ports** — The server's `start()` method auto-increments on EADDRINUSE, so even if port 0 isn't supported directly, using a high random port will work. The test helper should handle this.
+1. **Random high ports work reliably** — The test helper uses `14000 + Math.floor(Math.random() * 50000)` for port selection. The server's `start()` method auto-increments on EADDRINUSE, so collisions resolve naturally.
 
 2. **The miniverse-core.js bundled module loads in headless Chromium** — The module uses standard Canvas 2D API which is fully supported in headless Chromium. No WebGL or GPU features are required.
 
-3. **World config via publicDir** — The MiniverseServer serves world configs from a `publicDir`. Tests create a temporary directory with a test world. The server's `/api/worlds` and `/api/world` endpoints need to resolve the test world path. Verify this works by reading the HTTP handler in server.ts.
+3. **World config via publicDir with correct directory structure** — The server resolves `miniverse-core.js` at `path.join(publicDir, '..', 'core', 'miniverse-core.js')` (server.ts:660). The test helper creates a `rootDir/public/` as `publicDir` and a `rootDir/core/` sibling with a symlink to the actual bundle. The `/api/world` endpoint scans `publicDir` for repo/team directories containing `world.json`.
 
-4. **Console log format stability** — Tests depend on the `[nightshift:...]` log prefix format. This is intentional — these logs are part of the testing contract, not user-facing debug output.
+4. **Console log format stability** — Tests depend on the `[nightshift:...]` log prefix format, gated behind `?debug=true`. This is intentional — these logs are part of the testing contract. The `debug` URL parameter ensures they don't fire in normal usage.
 
 5. **WebSocket message timing** — There's a small delay between sending a heartbeat and the frontend receiving the WebSocket broadcast. Tests should use Playwright's `waitForFunction` or poll-based assertions with timeouts rather than fixed `sleep()` calls.
 
-6. **No sprite image loading required** — Tests may fail to load sprite sheet images (`.png` files) since the test world doesn't include them. The canvas will still render (with missing textures showing as blank), and the state update / console log flow is unaffected. If image load errors appear, they can be suppressed or ignored in tests.
+6. **Sprite image 404s are handled gracefully** — Tests will trigger 404s for sprite sheet images since the test world doesn't include them. Use Playwright's `page.route('**/*.png', route => route.fulfill({ body: Buffer.alloc(0), contentType: 'image/png' }))` in test setup to intercept and stub all PNG requests with empty responses. This prevents uncaught image load errors from breaking the WebSocket connection.
 
 ## Risks & Mitigations
 
 - **Risk**: Sprite/asset 404s cause the miniverse-core.js to throw uncaught errors, breaking the WebSocket connection
-  - **Mitigation**: Test 6 explicitly checks for console errors. If sprite loading causes failures, add minimal 1x1 pixel placeholder PNGs to the test world directory. The miniverse-core likely handles missing sprites gracefully (the existing frontend silently continues when assets are missing).
-
-- **Risk**: The `/api/world` endpoint in server.ts discovers worlds by scanning the nightshift data directory (`~/.nightshift/`), not the publicDir, making test worlds invisible
-  - **Mitigation**: Read the server's `handleHttp` method carefully during implementation. If the world discovery path differs from `publicDir`, the test helper may need to create the world config in the nightshift data directory structure, or the test may need to mock the discovery by pre-registering agents via heartbeat (which adds them to the store) and relying on the default world generation from `world-config.ts`.
+  - **Mitigation**: Use `page.route('**/*.png', ...)` in Playwright to intercept and stub all PNG requests. Test 6 also explicitly checks for console errors. If stubbing isn't enough, create minimal 1x1 pixel placeholder PNGs in the test world's `world_assets/` directory.
 
 - **Risk**: Tests are flaky due to WebSocket timing — heartbeat sent before frontend's WS connects
   - **Mitigation**: Always wait for the `[nightshift:ws:connected]` console log before sending any heartbeats. This is why step 2 adds that log.
 
 - **Risk**: Playwright installation bloats CI time and disk usage
   - **Mitigation**: Only install Chromium (not Firefox/WebKit). The `playwright install chromium` command downloads ~150MB. This is standard for projects with browser tests.
+
+- **Risk**: Symlink in test helper doesn't work on all platforms (e.g., Windows without developer mode)
+  - **Mitigation**: Nightshift currently only supports macOS/Linux (requires tmux). If cross-platform support is added later, replace `symlinkSync` with `copyFileSync` as a fallback.
+
+## Revision Notes
+
+Revised to address reviewer feedback from @ns-dev-reviewer:
+
+1. **CRITICAL — miniverse-core.js loading (fixed)**: Restructured `createTestWorld()` to create a `rootDir/public/` + `rootDir/core/` directory layout. The `core/` directory contains a symlink to the actual `lib/miniverse/core/miniverse-core.js`. This matches the server's resolution path at `server.ts:660`: `path.join(publicDir, '..', 'core', 'miniverse-core.js')`. The function now returns `{ publicDir, cleanup }` instead of a bare string.
+
+2. **WARNING — publicDir wiring (fixed)**: `startTestServer()` now accepts a `publicDir` parameter and passes it to `MiniverseServer({ port, publicDir })`. Tests call `startTestServer(publicDir)` with the value from `createTestWorld()`.
+
+3. **WARNING — console.log in production (fixed)**: All console.log instrumentation is now gated behind a `const DEBUG = new URLSearchParams(location.search).has('debug')` flag. Logs only fire when the URL includes `?debug=true`. Tests navigate to `baseUrl + '?world=...&debug=true'`. Normal users see no console output.
+
+4. **SUGGESTION — port 0 semantics (addressed)**: Replaced `port: 0` with `port: 14000 + Math.floor(Math.random() * 50000)` to avoid the wasteful increment-from-1 behavior.
+
+5. **SUGGESTION — sprite 404 handling (addressed)**: Added Playwright `page.route('**/*.png', ...)` stub approach to Assumption 6, replacing the vague "add placeholder PNGs" mitigation.
+
+6. **SUGGESTION — TDD traceability (addressed)**: Added "Tests covered by Phase 1 instrumentation" section at the top of Phase 1, linking each step to the specific tests in Phase 3 that depend on it.

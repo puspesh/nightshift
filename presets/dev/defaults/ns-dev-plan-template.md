@@ -27,6 +27,15 @@
 ## Implementation Steps
 
 ### Phase 1: <Phase Name>
+
+#### Tests First
+- **Test file**: `path/to/test/file`
+- **Test cases**:
+  - `test case 1`: expected behavior — assert [condition]
+  - `test case 2`: edge case — assert [condition]
+  - `test case 3`: error case — assert [condition]
+
+#### Implementation Steps
 1. **<Step Name>** (`path/to/file`)
    - Action: specific action to take
    - Why: reason for this step
@@ -36,12 +45,21 @@
    ...
 
 ### Phase 2: <Phase Name>
+
+#### Tests First
+- **Test file**: `path/to/test/file`
+- **Test cases**:
+  - ...
+
+#### Implementation Steps
 ...
 
 ## Testing Strategy
-- Unit tests: [files to test]
+- **Approach**: Test-Driven Development (TDD) — tests are written BEFORE implementation in each phase
+- Unit tests: [files to test, test file locations]
 - Integration tests: [flows to test]
 - E2E tests: [user journeys to verify]
+- **Test infrastructure**: [existing test helpers, fixtures, or patterns to reuse]
 
 ## Assumptions
 - [Assumption 1 -- decision made autonomously, reviewer should validate]

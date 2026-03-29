@@ -110,6 +110,10 @@ git checkout _ns/dev/reviewer
 3. **For plan reviews** (`dev:plan-review`):
    - The plan file is on this branch — read it directly
    - Read `.claude/nightshift/ns-dev-review-criteria.md` for design review criteria
+   - **TDD compliance check** — verify the plan includes:
+     - A "Tests First" subsection in each phase specifying test files, test cases, and assertions
+     - Steps ordered as: write tests → implement → verify
+     - Testable behavior defined for each phase (if a phase has no tests, flag it as WARNING)
    - Apply the Review Output Format
    - Post comment with verdict (see GitHub Protocol)
    - Set label: `dev:approved` (no CRITICAL findings) or `dev:plan-revising` (has CRITICAL findings). Warnings are noted for downstream agents to address.
@@ -119,6 +123,11 @@ git checkout _ns/dev/reviewer
    - Find the PR from the coder's comment for the diff view: `gh pr diff <pr-number>`
    - Read `.claude/nightshift/ns-dev-review-criteria.md` for the review checklist to use
    - Consult CLAUDE.md for project conventions
+   - **TDD compliance check** — verify the coder followed test-driven development:
+     - Tests exist for new/changed behavior (not just happy path — edge cases too)
+     - Tests are meaningful (not trivially passing or testing implementation details)
+     - Bug fixes include regression tests that would have caught the bug
+     - If no tests accompany new behavior, flag as WARNING
    - Follow the full Review Process below
    - Post comment with verdict
    - Set label: `dev:testing` (approved) or `dev:code-revising` (has issues)
@@ -243,6 +252,7 @@ When reviewing architectural decisions or new features, consider:
 2. **Is the API surface minimal?** Don't add endpoints/fields that aren't needed yet
 3. **Are types flowing end-to-end?** Schemas, inputs, database, responses should be consistent
 4. **Is it testable?** The design should support test isolation
+5. **Is it TDD-structured?** Each phase should specify tests before implementation steps
 
 ## Error Handling
 
@@ -261,9 +271,12 @@ If anything fails during a cycle (checkout conflict, typecheck/test failure you 
    rm -f ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-reviewer.lock
    git checkout _ns/dev/reviewer
    ```
-3. **Then remove `dev:wip` and set `dev:blocked`**:
+3. **Then remove `dev:wip` and set `dev:blocked`** (remove whichever label applies):
    ```bash
+   # For plan reviews:
    gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:plan-review" --add-label "dev:blocked"
+   # For code reviews:
+   gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:code-review" --add-label "dev:blocked"
    ```
 
 ## Guard Rails

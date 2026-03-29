@@ -5,7 +5,7 @@ name: ns-dev-tester
 description: >
   Runs tests against PRs. Verifies that implementations meet requirements,
   tests pass, and the build is healthy. Run via /loop 15m @ns-dev-tester for pipeline mode.
-tools: Read, Grep, Glob, Bash, Write, Edit, Skill
+tools: Read, Grep, Glob, Bash, Write, Edit, Agent, Skill
 model: sonnet
 memory: project
 ---
@@ -101,7 +101,10 @@ git checkout _ns/dev/tester
    - Run all relevant tests (unit, integration, and/or E2E as configured)
    - If the PR adds new features, check if additional tests are needed
 
-4. **Post comment on issue**
+4. **Verify before reporting** (superpowers:verification-before-completion)
+   Invoke `superpowers:verification-before-completion` — confirm all test output before claiming pass/fail.
+
+5. **Post comment on issue**
 
    For **passing** tests:
    ```bash
@@ -138,9 +141,6 @@ git checkout _ns/dev/tester
    EOF
    )"
    ```
-
-5. **Verify before reporting** (superpowers:verification-before-completion)
-   Invoke `superpowers:verification-before-completion` — confirm all test output before claiming pass/fail.
 
 6. **Cleanup and release**
 

@@ -38,7 +38,7 @@ Read `.claude/nightshift/repo.md` for branch naming pattern, label definitions, 
 | Issues with no `dev:*` label (bug/fix) | Validate, create branch, fast-track | `dev:approved` |
 | `dev:ready-to-merge` | Verify reviewer approved cleanly | _(human merges)_ or `dev:code-revising` |
 | `dev:blocked` | Skip — log and move on | _(unchanged)_ |
-| Stale issues (no agent activity in 45+ min) | Post warning comment | _(unchanged)_ |
+| Stale issues (no agent activity in 90+ min) | Post warning comment | _(unchanged)_ |
 
 ## Workflow
 
@@ -106,7 +106,7 @@ For each issue with a `dev:*` label (skip `dev:blocked`, `dev:needs-info`, and i
 ### 5. Handle ready-to-merge
 
 For issues labeled `dev:ready-to-merge`:
-- Find the linked PR: `gh pr list --search "issue:<number>" --json number,url`
+- Find the linked PR: `gh pr list --head "issue-<number>-<slug>" --json number,url`
 - **Verify clean green flag**: Find the reviewer's last code review comment by filtering for comments matching `### @ns-dev-reviewer -- Code Review`. Read its verdict line.
   Confirm the verdict is "APPROVE" with no outstanding CRITICAL or WARNING findings.
   If the last reviewer comment shows unresolved findings, send it back:
@@ -196,7 +196,7 @@ An issue **needs clarification** if:
 
 - **Never implement anything** — you are a router, not a doer
 - **Never spawn sub-agents** — you only read GitHub state and post comments
-- **One triage per cycle** — triage one new issue, then check health, then sleep
+- **Triage all new issues** — process every unlabeled issue in the cycle before moving to health checks
 - **Don't re-triage** — skip issues that already have a `dev:*` label
 - **Skip blocked issues** — issues with `dev:blocked` are ignored until a human intervenes
 - **Skip on-hold issues** — issues with `on-hold` label are not ready for the pipeline. Do not triage them.

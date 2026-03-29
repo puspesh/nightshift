@@ -148,13 +148,27 @@ git pull origin issue-<number>-<slug>
 ### 3. Implement phase by phase (superpowers:executing-plans + superpowers:test-driven-development)
 
 Invoke `superpowers:executing-plans` to execute from the written plan with review checkpoints.
-For each phase, use `superpowers:test-driven-development` — write tests first, then implementation:
+For each phase, use `superpowers:test-driven-development` — follow the strict RED → GREEN → REFACTOR cycle:
 
-1. Read all files that will be modified
-2. Write tests for the phase's expected behavior
-3. Implement the changes to make tests pass
-4. Run verification — read `.claude/nightshift/repo.md` for the verification command
-5. Commit with a descriptive message:
+**For each phase:**
+
+1. **Read** — read all files that will be modified and the plan's test specs for this phase
+2. **RED** — write tests first that describe the expected behavior. Run them — they MUST fail.
+   If tests pass before you write implementation code, your tests aren't testing the new behavior.
+   ```bash
+   # Run tests to confirm they fail (RED)
+   <test command from repo.md>
+   ```
+   If a test unexpectedly passes: investigate. Either the behavior already exists (skip that
+   test and note it in the PR), or your assertion isn't testing the right thing (fix the test).
+3. **GREEN** — write the minimum implementation to make the tests pass. No more, no less.
+   ```bash
+   # Run tests to confirm they pass (GREEN)
+   <test command from repo.md>
+   ```
+4. **REFACTOR** — clean up the implementation while keeping tests green. Remove duplication,
+   improve naming, simplify logic. Run tests again after refactoring.
+5. **Commit** — commit tests and implementation together with a descriptive message:
    ```bash
    git commit -m "<type>(issue-<number>): <phase description>"
    # <type> = `feat` or `fix` — see Issue Type Detection below
@@ -167,6 +181,9 @@ For each phase, use `superpowers:test-driven-development` — write tests first,
    ```
    Confirm which phases are done (from git log) and which remain (from the plan).
 7. If a step is unclear, make a reasonable decision and note it for the PR description
+
+**For fast-tracked bugs** (no plan file): still follow TDD. Write a regression test that
+reproduces the bug (RED), then fix the bug to make it pass (GREEN).
 
 **Large tasks**: If the plan has 4+ phases and you've already completed 3, commit, push, and
 end the cycle early. Leave the issue in its current status (`dev:approved`) — you'll pick
@@ -288,7 +305,7 @@ If anything fails during a cycle (checkout conflict, test failures you can't fix
 - **Verify before PR** — never create a PR with failing typecheck or tests
 - **Small commits** — one commit per plan phase, descriptive messages
 - **Don't merge** — only create PRs. Humans merge.
-- **Don't skip tests** — every new feature needs tests, every bug fix needs a regression test
+- **Tests first, always** — write tests BEFORE implementation. Every new feature needs tests, every bug fix needs a regression test. Never write implementation code without a failing test first.
 - **Always release the branch** — return to `_ns/dev/coder` at the end of every cycle, success or failure
 - **Skip blocked issues** — ignore issues labeled `dev:blocked`
 - **Skip on-hold issues** — ignore issues labeled `on-hold`

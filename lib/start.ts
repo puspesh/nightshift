@@ -104,9 +104,20 @@ async function setupVisualization(
     const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
     const teamWorldDir = join(miniverseDir, repoName, team);
 
-    const worldConfig = generateWorldConfig(agents, team, citizenOverrides);
-
+    // Read base world data for spawn position computation
     const baseWorldDir = join(__dirname, '..', 'worlds', 'nightshift');
+    let baseWorld: { floor: string[][]; gridCols: number; gridRows: number; props: Array<{ x: number; y: number; w: number; h: number }> } | undefined;
+    const srcBaseWorldPath = join(baseWorldDir, 'base-world.json');
+    if (existsSync(srcBaseWorldPath)) {
+      try {
+        baseWorld = JSON.parse(readFileSync(srcBaseWorldPath, 'utf-8'));
+      } catch { /* fallback to no positions */ }
+    }
+
+    // Generate dynamic world config (with spawn positions if base world available)
+    const worldConfig = generateWorldConfig(agents, team, citizenOverrides, baseWorld);
+
+    // Copy base world assets to team world dir
     mkdirSync(teamWorldDir, { recursive: true });
     if (existsSync(baseWorldDir)) {
       execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });

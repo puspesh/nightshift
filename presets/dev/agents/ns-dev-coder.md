@@ -173,23 +173,11 @@ EOF
 )"
 ```
 
-### 6. Post comment on issue
+### 6. Release, transition labels, and post comment
 
-```bash
-gh issue comment <number> --body "$(cat <<'EOF'
-### @ns-dev-coder -- Implementation complete
-**Status**: done
-**PR**: #<pr-number>
-**Branch**: `issue-<number>-<slug>`
-**Summary**: <what was implemented>
-**Next**: Ready for @ns-dev-reviewer code review (label: `dev:code-review`)
-EOF
-)"
-```
+**CRITICAL: The pipeline is BROKEN if you skip this step. Creating the PR is NOT enough — the label transition is what signals the next agent. Your job is NOT done until the label is transitioned.**
 
-### 7. Cleanup and release
-
-**Order matters** — release the branch BEFORE transitioning labels, so the next agent can check it out.
+Release the branch BEFORE transitioning labels, so the next agent can check it out.
 
 ```bash
 REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
@@ -200,12 +188,23 @@ rm -f ~/.nightshift/${REPO_NAME}/dev/locks/ns-dev-coder.lock
 # 2. Release the feature branch (frees it for the next agent's worktree)
 git checkout _ns/dev/coder
 
-# 3. NOW signal the next agent (dev:wip removal + status transition)
+# 3. TRANSITION LABELS — this is the most important command in the entire workflow
 gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:approved" --add-label "dev:code-review"
 # OR for revisions:
 gh issue edit <number> --remove-label "dev:wip" --remove-label "dev:code-revising" --add-label "dev:code-review"
 
-# 4. Set idle status
+# 4. Post completion comment (informational — label transition above is what matters)
+gh issue comment <number> --body "$(cat <<'EOF'
+### @ns-dev-coder -- Implementation complete
+**Status**: done
+**PR**: #<pr-number>
+**Branch**: `issue-<number>-<slug>`
+**Summary**: <what was implemented>
+**Next**: Ready for @ns-dev-reviewer code review (label: `dev:code-review`)
+EOF
+)"
+
+# 5. Set idle status
 echo "idle|$(date +%s)|" > ~/.nightshift/${REPO_NAME}/dev/status/coder
 ```
 

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import type { AgentEntry, CitizenOverrides, WorldConfig, WorkstationAnchor, CitizenConfig, WorldProp } from './types.js';
 import { resolveCitizenProps } from './citizen-config.js';
+import { buildWalkableSet, assignSpawnPositions } from './spawn.js';
 
 const CANVAS_WIDTH = 512;
 const CANVAS_HEIGHT = 384;
@@ -23,7 +24,14 @@ const CHAIR_H = 1.9;
  * Workstations are placed in a grid layout that adapts to agent count.
  * Each agent gets a desk + chair prop pair.
  */
-export function generateWorldConfig(agents: AgentEntry[], team: string, overrides?: CitizenOverrides): WorldConfig {
+export interface BaseWorld {
+  floor: string[][];
+  gridCols: number;
+  gridRows: number;
+  props: Array<{ x: number; y: number; w: number; h: number }>;
+}
+
+export function generateWorldConfig(agents: AgentEntry[], team: string, overrides?: CitizenOverrides, baseWorld?: BaseWorld): WorldConfig {
   // Layout desks in the office zone (after kitchen area)
   // Kitchen occupies cols 0-4, so desks start at col 5
   const deskXStart = 5;
@@ -99,6 +107,16 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
       color: resolved.color,
       position: { x: deskX + 1.5, y: deskY + 2 },
     });
+  }
+
+  // Assign spawn positions if base world data is available
+  if (baseWorld) {
+    const walkableSet = buildWalkableSet(baseWorld.floor, baseWorld.props);
+    const positions = assignSpawnPositions(agents.length, walkableSet, baseWorld.gridCols, baseWorld.gridRows);
+    for (let i = 0; i < citizens.length; i++) {
+      const [x, y] = positions[i];
+      citizens[i].position = { x, y };
+    }
   }
 
   return {

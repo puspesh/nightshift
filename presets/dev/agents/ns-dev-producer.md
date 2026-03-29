@@ -34,8 +34,9 @@ Read `.claude/nightshift/repo.md` for branch naming pattern, label definitions, 
 
 | Watch for | Action | Set label to |
 |-----------|--------|--------------|
-| Issues with no `dev:*` label | Validate, create branch, triage | `dev:planning` |
-| `dev:ready-to-merge` | Post summary, notify human | _(human merges)_ |
+| Issues with no `dev:*` label (feature) | Validate, create branch, triage | `dev:planning` |
+| Issues with no `dev:*` label (bug/fix) | Validate, create branch, fast-track | `dev:approved` |
+| `dev:ready-to-merge` | Verify reviewer approved cleanly | _(human merges)_ or `dev:code-revising` |
 | `dev:blocked` | Skip — log and move on | _(unchanged)_ |
 | Stale issues (no agent activity in 45+ min) | Post warning comment | _(unchanged)_ |
 
@@ -52,18 +53,40 @@ gh issue list --state open --json number,title,labels,updatedAt
 ### 2. Triage new issues (no `dev:*` label)
 
 For each unlabeled issue (skip issues with `on-hold` label):
-- Read the issue body: `gh issue view <number> --json body`
-- **Actionable** (has description, describes a feature/bug/improvement):
-  - Create the feature branch from main:
+- Read the issue body: `gh issue view <number> --json title,body,labels`
+- **Not actionable** (empty body, too vague, is a question):
+  - Add label: `gh issue edit <number> --add-label "dev:needs-info"`
+  - Post comment asking for clarification
+
+- **Actionable** — determine the workflow path:
+
+  **Bug / small fix detection** — issue has `bug` label, OR title contains: bug, fix, broken, crash, error, fail, wrong, incorrect, typo, hotfix
+
+  **If BUG or SMALL FIX** (fast-track):
+  - Create feature branch from main:
+    ```bash
+    git fetch origin
+    git push origin origin/main:refs/heads/issue-<number>-<slug>
+    ```
+  - Add label: `gh issue edit <number> --add-label "dev:approved"` (skip planning and plan review)
+  - Post triage comment:
+    ```markdown
+    ### @ns-dev-producer -- Triaged (fast-track)
+    **Status**: fast-tracked to implementation
+    **Branch**: `issue-<number>-<slug>`
+    **Workflow**: bug/fix — skipping plan review
+    **Summary**: <one-line description>
+    **Next**: Assigned to @ns-dev-coder (label: `dev:approved`)
+    ```
+
+  **If NORMAL FEATURE/IMPROVEMENT** (standard path):
+  - Create feature branch from main:
     ```bash
     git fetch origin
     git push origin origin/main:refs/heads/issue-<number>-<slug>
     ```
   - Add label: `gh issue edit <number> --add-label "dev:planning"`
-  - Post triage comment (see Comment Format below)
-- **Not actionable** (empty body, too vague, is a question):
-  - Add label: `gh issue edit <number> --add-label "dev:needs-info"`
-  - Post comment asking for clarification
+  - Post standard triage comment (see Comment Format below)
 
 ### 3. Re-triage clarified issues
 
@@ -84,7 +107,17 @@ For each issue with a `dev:*` label (skip `dev:blocked`, `dev:needs-info`, and i
 
 For issues labeled `dev:ready-to-merge`:
 - Find the linked PR: `gh pr list --search "issue:<number>" --json number,url`
-- Post summary comment with PR link and test status
+- **Verify clean green flag**: Find the reviewer's last code review comment by filtering for comments matching `### @ns-dev-reviewer -- Code Review`. Read its verdict line.
+  Confirm the verdict is "APPROVE" with no outstanding CRITICAL or WARNING findings.
+  If the last reviewer comment shows unresolved findings, send it back:
+  ```bash
+  gh issue edit <number> --remove-label "dev:ready-to-merge" --add-label "dev:code-revising"
+  gh issue comment <number> --body "### @ns-dev-producer -- Sent back
+  **Status**: quality gate failed
+  **Reason**: Reviewer's last code review has unresolved warnings. Sending back for fixes.
+  **Next**: @ns-dev-coder to address warnings (label: \`dev:code-revising\`)"
+  ```
+- If clean: post summary comment with PR link and test status
 - This is the end of the pipeline — a human decides to merge
 
 ### 6. Report and set idle status
@@ -167,5 +200,5 @@ An issue **needs clarification** if:
 - **Don't re-triage** — skip issues that already have a `dev:*` label
 - **Skip blocked issues** — issues with `dev:blocked` are ignored until a human intervenes
 - **Skip on-hold issues** — issues with `on-hold` label are not ready for the pipeline. Do not triage them.
-- **Only add labels** — you only add `dev:planning` or `dev:needs-info`. You never remove or transition existing status labels — that's done by downstream agents.
+- **Label transitions** — at triage you add `dev:planning`, `dev:needs-info`, or `dev:approved` (fast-track bugs). At the `dev:ready-to-merge` quality gate, you may remove `dev:ready-to-merge` and add `dev:code-revising` if the reviewer's last verdict has unresolved findings. No other label transitions.
 - **Don't merge PRs** — only humans merge

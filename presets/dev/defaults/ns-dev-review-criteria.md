@@ -31,8 +31,15 @@
 
 ## Approval Thresholds
 
+### Plan Reviews
 - **Approve**: No CRITICAL findings
-- **Revise**: Any CRITICAL finding, or 3+ WARNINGs in the same area (indicates a systemic issue)
+- **Revise**: Any CRITICAL finding, or 3+ WARNINGs in the same area
+
+### Code Reviews
+- **Approve**: No CRITICAL findings AND no unresolved WARNINGs
+- **Revise**: Any CRITICAL finding, OR any unresolved WARNING
+- A WARNING is "resolved" if the coder has addressed it in a revision (check git log for evidence)
+- SUGGESTIONs do not block approval
 
 ## Design Review Criteria
 

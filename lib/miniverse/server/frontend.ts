@@ -295,9 +295,10 @@ async function startWorld(worldKey) {
   const spawnLocations = {};
   const citizenDefs = worldData.citizens || [];
   for (const def of citizenDefs) {
-    if (Array.isArray(def.position) && def.position.length === 2) {
-      const locName = '_spawn_' + def.position[0] + '_' + def.position[1];
-      spawnLocations[locName] = { x: def.position[0], y: def.position[1] };
+    const pos = def.position;
+    if (pos && typeof pos === 'object' && !Array.isArray(pos) && typeof pos.x === 'number' && typeof pos.y === 'number') {
+      const locName = '_spawn_' + pos.x + '_' + pos.y;
+      spawnLocations[locName] = { x: pos.x, y: pos.y };
     }
   }
 
@@ -314,8 +315,8 @@ async function startWorld(worldKey) {
   // Citizens from world data
   const citizens = citizenDefs.map(def => {
     let pos = def.position;
-    if (Array.isArray(pos) && pos.length === 2) {
-      pos = '_spawn_' + pos[0] + '_' + pos[1];
+    if (pos && typeof pos === 'object' && !Array.isArray(pos) && typeof pos.x === 'number' && typeof pos.y === 'number') {
+      pos = '_spawn_' + pos.x + '_' + pos.y;
     }
     return {
       agentId: def.agentId || def.id,

@@ -18,6 +18,17 @@ export function getTeamDir(repoName: string, team: string): string {
 }
 
 /**
+ * Get the status directory for a team (creates it if missing).
+ * Status files are written by agents as `working|<ts>|` / `idle|<ts>|`
+ * and read by ns-status.sh for tmux pane borders.
+ */
+export function getStatusDir(repoName: string, team: string): string {
+  const dir = join(getTeamDir(repoName, team), 'status');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
  * Create git worktrees for the given roles within a team.
  */
 export function createWorktrees(repoName: string, team: string, roles: string[], mainBranch: string): void {
@@ -70,8 +81,23 @@ export function createWorktrees(repoName: string, team: string, roles: string[],
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (err) {
+      const raw = (err as Error).message;
+      // Git emits `fatal: 'branch' is already used by worktree at '<path>'`
+      // when the branch is checked out elsewhere. This usually means either
+      // (a) another nightshift init already ran for this repo, or (b) stale
+      // git state (worktree dir deleted without `git worktree prune`).
+      const collision = raw.match(/is already used by worktree at '([^']+)'/);
+      if (collision) {
+        throw new Error(
+          `Branch ${branchName} is already checked out at ${collision[1]}.\n` +
+          `  This typically means nightshift is already initialized for this repo,\n` +
+          `  or a previous worktree wasn't cleaned up. Try:\n` +
+          `    npx nightshift teardown --team ${team} --force  # to start clean\n` +
+          `    git worktree prune                              # to drop stale entries`
+        );
+      }
       throw new Error(
-        `Failed to create worktree for ${role} at ${worktreePath}: ${(err as Error).message}`
+        `Failed to create worktree for ${role} at ${worktreePath}: ${raw}`
       );
     }
   }
@@ -116,21 +142,6 @@ export function removeWorktrees(repoName: string, team: string): void {
       // Branch may not exist
     }
   }
-}
-
-/**
- * Discover the number of coder roles for a team.
- */
-export function discoverCoderCount(repoName: string, team: string): number {
-  const worktreesDir = join(getTeamDir(repoName, team), 'worktrees');
-
-  if (!existsSync(worktreesDir)) {
-    return 0;
-  }
-
-  return readdirSync(worktreesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith('coder-'))
-    .length;
 }
 
 /**

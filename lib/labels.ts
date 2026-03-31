@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import type { TeamConfig } from './team-config.js';
+import { getLabelsFromConfig } from './team-config.js';
 
 export interface Label {
   status: string;
@@ -9,23 +9,14 @@ export interface Label {
 }
 
 /**
- * Load label definitions from a preset directory's labels.json.
- */
-export function loadLabels(presetDir: string): Label[] {
-  const labelsPath = join(presetDir, 'labels.json');
-  const data = JSON.parse(readFileSync(labelsPath, 'utf-8'));
-  return data.labels;
-}
-
-/**
- * Create team-scoped labels (<team>:<status>) on the GitHub repository.
+ * Create team-scoped labels from a TeamConfig (team.yaml).
  * Idempotent — existing labels are left unchanged.
  */
-export function createLabels(team: string, presetDir: string): number {
-  const labels = loadLabels(presetDir);
+export function createLabelsFromConfig(config: TeamConfig): number {
+  const labels = getLabelsFromConfig(config);
   let created = 0;
   for (const label of labels) {
-    const name = `${team}:${label.status}`;
+    const name = `${config.name}:${label.status}`;
     try {
       execSync(
         `gh label create "${name}" --color "${label.color}" --description "${label.description}"`,

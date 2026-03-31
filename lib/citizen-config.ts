@@ -34,7 +34,7 @@ export function loadCitizenConfig(repoRoot: string, team: string): CitizenOverri
  * Resolve display name and color for a role.
  * Resolution order:
  *   1. Exact role match in overrides (e.g. "coder-1")
- *   2. Base role "coder" wildcard for coder-N roles
+ *   2. Base role wildcard for scalable <role>-N patterns (e.g. "coder" matches "coder-1")
  *   3. Built-in defaults
  */
 export function resolveCitizenProps(
@@ -50,13 +50,17 @@ export function resolveCitizenProps(
     };
   }
 
-  // Try "coder" wildcard for coder-N roles
-  if (role.startsWith('coder-') && overrides['coder']) {
-    const wildcard = overrides['coder'];
-    return {
-      displayName: wildcard.displayName ?? role,
-      color: wildcard.color ?? DEFAULT_CODER_COLOR,
-    };
+  // Try base role wildcard for <role>-N patterns (any scalable agent)
+  const baseMatch = role.match(/^(.+)-\d+$/);
+  if (baseMatch) {
+    const baseRole = baseMatch[1];
+    const wildcard = overrides[baseRole];
+    if (wildcard) {
+      return {
+        displayName: wildcard.displayName ?? role,
+        color: wildcard.color ?? getDefaultColor(baseRole),
+      };
+    }
   }
 
   // Built-in defaults
@@ -67,10 +71,10 @@ export function resolveCitizenProps(
 }
 
 function getDefaultColor(role: string): string {
-  if (role.startsWith('coder-') || role === 'coder') {
-    return DEFAULT_CODER_COLOR;
-  }
-  return DEFAULT_ROLE_COLORS[role] ?? DEFAULT_CODER_COLOR;
+  // Check for scalable agent instance pattern (<role>-N)
+  const baseMatch = role.match(/^(.+)-\d+$/);
+  const baseRole = baseMatch ? baseMatch[1] : role;
+  return DEFAULT_ROLE_COLORS[baseRole] ?? DEFAULT_CODER_COLOR;
 }
 
 /**

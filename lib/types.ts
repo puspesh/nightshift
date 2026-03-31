@@ -52,15 +52,6 @@ export interface StartOptions {
   headless?: boolean;
 }
 
-export interface AgentModelConfig {
-  model?: string;
-  thinkingBudget?: string;
-  reasoningEffort?: string;
-}
-
-export type AgentConfigs = Record<string, AgentModelConfig>;
-
-
 export interface HookConfig {
   hooks: Record<string, HookEntry[]>;
 }

@@ -297,7 +297,9 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   const vizUrl = await setupVisualization(team, agents, repoRoot, repoName, citizenOverrides, vizPort);
 
   const statusDir = getStatusDir(repoName, team);
-  const logDir = join(getTeamDir(repoName, team), 'logs');
+  const teamDir = getTeamDir(repoName, team);
+  const logDir = join(teamDir, 'logs');
+  const costsFile = join(teamDir, 'costs.jsonl');
   mkdirSync(logDir, { recursive: true });
 
   for (const agent of agents) {
@@ -310,6 +312,7 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
     const child = spawn('bash', [
       AGENT_LOOP_SCRIPT, agent.cwd,
       String(LOOP_INTERVAL), runner, statusFile, PIPELINE_PROMPT,
+      costsFile, agent.agent,
     ], {
       detached: true,
       stdio: ['ignore', logFd, logFd],

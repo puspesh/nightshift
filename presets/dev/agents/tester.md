@@ -73,6 +73,20 @@ git checkout {{home_branch}}
    - Run all relevant tests (unit, integration, and/or E2E as configured)
    - If the PR adds new features, check if additional tests are needed
 
+   **UI / E2E screenshot requirement** — when running Playwright, Cypress, or any browser-based tests:
+   - Take screenshots of key UI states exercised by the tests (landing page, form submissions, modals, error states, etc.)
+   - For new features: capture before/after or the main user flow (multiple screenshots are encouraged)
+   - For bug fixes: capture the fixed behavior
+   - Save screenshots to a temp directory: `/tmp/ns-screenshots-<issue-number>/`
+   - Upload each screenshot and collect the URLs for the issue comment in step 5:
+     ```bash
+     # Upload screenshots to the issue (repeat per file)
+     for img in /tmp/ns-screenshots-<number>/*.png; do
+       gh issue comment <number> --body "![screenshot](${img})" < /dev/null
+     done
+     ```
+     Note: `gh` supports attaching images — if direct upload isn't available, use `gh api` to upload as an issue comment attachment or embed via a gist.
+
 4. **Verify before reporting** (superpowers:verification-before-completion)
    Invoke `superpowers:verification-before-completion` — confirm all test output before claiming pass/fail.
 
@@ -87,6 +101,9 @@ git checkout {{home_branch}}
    **Results**:
    - <suite 1>: pass
    - <suite 2>: pass
+
+   **Screenshots** (if UI/E2E tests were run):
+   <!-- attach screenshots showing tested UI states -->
 
    **Next**: Ready to merge (label: `{{team_name}}:ready-to-merge`)
    EOF
@@ -109,9 +126,22 @@ git checkout {{home_branch}}
    - **Error**: <exact error message>
    - **Likely cause**: <your diagnosis>
 
+   **Screenshots** (if UI/E2E tests were run):
+   <!-- attach screenshots showing the failure state / current UI -->
+
    **Next**: Sent back to @ns-{{team_name}}-coder for fixes (label: `{{team_name}}:code-revising`)
    EOF
    )"
+   ```
+
+   **Posting screenshots**: After the text comment, upload each screenshot as a separate comment so GitHub renders them inline:
+   ```bash
+   if [ -d /tmp/ns-screenshots-<number> ] && ls /tmp/ns-screenshots-<number>/*.png 1>/dev/null 2>&1; then
+     for img in /tmp/ns-screenshots-<number>/*.png; do
+       gh issue comment <number> --body "![$(basename "$img")](${img})"
+     done
+     rm -rf /tmp/ns-screenshots-<number>
+   fi
    ```
 
 6. **Cleanup and release**

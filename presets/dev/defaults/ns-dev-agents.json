@@ -1,0 +1,18 @@
+{
+  "_comment": "Per-agent model and reasoning configuration. Edit anytime; takes effect on next 'nightshift start'.",
+  "producer": {
+    "model": "sonnet"
+  },
+  "planner": {
+    "model": "opus"
+  },
+  "reviewer": {
+    "model": "opus"
+  },
+  "coder": {
+    "model": "opus"
+  },
+  "tester": {
+    "model": "sonnet"
+  }
+}

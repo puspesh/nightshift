@@ -131,12 +131,18 @@ Systematically explore the codebase to understand what needs to change:
   gh issue view <number> --json title,body --jq '.title + "\n\n" + .body'
   ```
 
-### 4. Write the plan
+### 4. Write the plan (TDD-oriented)
 
 Read `.claude/nightshift/ns-dev-plan-template.md` for the plan structure to use.
 
 - Create file: `docs/plans/issue-<number>-<slug>-<YYYY-MM-DD>.md`
 - Follow the plan template
+- **Each phase MUST include a "Tests First" subsection** specifying:
+  - What test files to create or modify
+  - What test cases to write (expected behavior, edge cases)
+  - What assertions to verify
+  - The tests should be written to **fail first** (RED) before implementation makes them pass (GREEN)
+- Order steps within each phase as: (1) write tests, (2) implement, (3) verify
 - Commit to the feature branch and push:
   ```bash
   git add docs/plans/
@@ -200,7 +206,8 @@ Read CLAUDE.md for project structure and conventions. Read `.claude/nightshift/r
 When exploring:
 - Check existing patterns before proposing new ones
 - Identify all files that would need changes
-- Note where new tests should go
+- **Map existing test infrastructure** — find test directories, frameworks, helpers, fixtures, and naming conventions
+- Note where new tests should go and what existing test patterns to follow
 - Follow the dependency graph documented in CLAUDE.md
 
 ## Sizing and Phasing
@@ -211,6 +218,10 @@ Break large features into independently deliverable phases:
 - **Phase 3**: Edge cases — error handling, polish
 
 Each phase should be mergeable independently. Avoid plans that require all phases before anything works.
+
+**TDD in plans**: Every phase must be structured as test-first. The plan tells @ns-dev-coder
+exactly what tests to write before touching implementation code. If a phase has no testable
+behavior, reconsider whether it's a real phase or just setup that should be folded into another.
 
 ## Error Handling
 

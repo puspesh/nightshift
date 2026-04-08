@@ -165,7 +165,7 @@ export function getHeadlessPidDir(repoName: string, team: string): string {
   return join(getTeamDir(repoName, team), 'pids');
 }
 
-function writeAgentPid(repoName: string, team: string, role: string, pid: number): void {
+export function writeAgentPid(repoName: string, team: string, role: string, pid: number): void {
   const dir = getHeadlessPidDir(repoName, team);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, `${role}.pid`), String(pid));
@@ -253,7 +253,6 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   console.log(chalk.dim(`  Runner: ${runner}`));
   if (vizUrl) {
     console.log(chalk.dim(`  Visualization: ${vizUrl}`));
-    try { execSync(`open "${vizUrl}"`, { stdio: 'pipe' }); } catch { /* */ }
   }
   console.log('');
   console.log(chalk.bold('  Agents:'));

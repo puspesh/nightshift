@@ -1,9 +1,9 @@
-import { describe, it } from 'node:test';
+import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { getSessionName, buildAgentList, parseRunner } from '../lib/start.js';
+import { getSessionName, buildAgentList, parseRunner, getHeadlessPidDir, writeAgentPid, stopHeadlessAgents } from '../lib/start.js';
 
 describe('getSessionName', () => {
   it('returns nightshift-<repo>-<team>', () => {
@@ -101,5 +101,89 @@ claude --dangerously-skip-permissions --model sonnet
     writeFileSync(join(dir, 'repo.md'), '# Repo\n\n## Commands\n');
     assert.equal(parseRunner(join(tmp, 'b')), 'claude --dangerously-skip-permissions');
     rmSync(join(tmp, 'b'), { recursive: true, force: true });
+  });
+});
+
+describe('headless PID management', () => {
+  it('getHeadlessPidDir returns expected path', () => {
+    const dir = getHeadlessPidDir('myapp', 'dev');
+    assert.ok(dir.includes('.nightshift/myapp/dev/pids'));
+  });
+
+  it('stopHeadlessAgents returns 0 when no PID directory exists', () => {
+    const stopped = stopHeadlessAgents('nonexistent-repo-xyz', 'dev');
+    assert.equal(stopped, 0);
+  });
+
+  it('writeAgentPid creates PID file with correct content', () => {
+    // Use a unique repo name to avoid collisions with real data
+    const repoName = `test-pid-write-${Date.now()}`;
+    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    try {
+      writeAgentPid(repoName, 'dev', 'producer', 99999);
+      const content = readFileSync(join(pidDir, 'producer.pid'), 'utf-8');
+      assert.equal(content, '99999');
+    } finally {
+      rmSync(pidDir, { recursive: true, force: true });
+    }
+  });
+
+  it('writeAgentPid creates pid directory if missing', () => {
+    const repoName = `test-pid-mkdir-${Date.now()}`;
+    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    try {
+      assert.ok(!existsSync(pidDir));
+      writeAgentPid(repoName, 'dev', 'planner', 12345);
+      assert.ok(existsSync(pidDir));
+      assert.ok(existsSync(join(pidDir, 'planner.pid')));
+    } finally {
+      rmSync(pidDir, { recursive: true, force: true });
+    }
+  });
+
+  it('stopHeadlessAgents cleans up PID files for dead processes', () => {
+    const repoName = `test-pid-stop-${Date.now()}`;
+    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    try {
+      // Write a PID that doesn't correspond to a running process
+      writeAgentPid(repoName, 'dev', 'reviewer', 2147483647);
+      assert.ok(existsSync(join(pidDir, 'reviewer.pid')));
+      const stopped = stopHeadlessAgents(repoName, 'dev');
+      // Process doesn't exist, so stopped count is 0 but file should be cleaned up
+      assert.equal(stopped, 0);
+      assert.ok(!existsSync(join(pidDir, 'reviewer.pid')));
+    } finally {
+      rmSync(pidDir, { recursive: true, force: true });
+    }
+  });
+
+  it('stopHeadlessAgents ignores non-.pid files', () => {
+    const repoName = `test-pid-ignore-${Date.now()}`;
+    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    try {
+      mkdirSync(pidDir, { recursive: true });
+      writeFileSync(join(pidDir, 'notes.txt'), 'not a pid');
+      const stopped = stopHeadlessAgents(repoName, 'dev');
+      assert.equal(stopped, 0);
+      // Non-pid file should still exist
+      assert.ok(existsSync(join(pidDir, 'notes.txt')));
+    } finally {
+      rmSync(pidDir, { recursive: true, force: true });
+    }
+  });
+
+  it('stopHeadlessAgents handles invalid PID content gracefully', () => {
+    const repoName = `test-pid-invalid-${Date.now()}`;
+    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    try {
+      mkdirSync(pidDir, { recursive: true });
+      writeFileSync(join(pidDir, 'broken.pid'), 'not-a-number');
+      const stopped = stopHeadlessAgents(repoName, 'dev');
+      assert.equal(stopped, 0);
+      // File should still be cleaned up
+      assert.ok(!existsSync(join(pidDir, 'broken.pid')));
+    } finally {
+      rmSync(pidDir, { recursive: true, force: true });
+    }
   });
 });

@@ -13,6 +13,5 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["lib/**/*.ts", "bin/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["lib/agentville/core/**", "tests/e2e/**"]
+  "include": ["lib/**/*.ts", "bin/**/*.ts", "tests/**/*.ts"]
 }

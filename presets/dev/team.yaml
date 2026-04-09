@@ -27,9 +27,6 @@ stages:
   - name: needs-info
     color: "d93f0b"
     meta: true
-  - name: rebase-needed
-    color: "c2e0c6"
-    meta: true
 
 agents:
   producer:

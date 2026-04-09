@@ -6,13 +6,13 @@ import type { AgentEntry, HookConfig, HookEntry } from './types.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const HOOK_EVENTS = ['SessionStart', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop', 'SessionEnd'] as const;
+const HOOK_EVENTS = ['SessionStart', 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
 const HOOK_URL_PATTERN = '/api/hooks/claude-code';
 const HEARTBEAT_SCRIPT = join(__dirname, '..', 'bin', 'ns-heartbeat.sh');
 
 /**
  * Check if a hook entry is a nightshift visualization hook.
- * Identified by URL containing the agentville claude-code hook endpoint.
+ * Identified by URL containing the miniverse claude-code hook endpoint.
  */
 function isNightshiftHook(hook: Record<string, unknown>): boolean {
   if (Array.isArray(hook.hooks)) {
@@ -26,7 +26,7 @@ function isNightshiftHook(hook: Record<string, unknown>): boolean {
 
 /**
  * Generate a Claude Code hook configuration for a single agent.
- * All hooks point to the agentville-native /api/hooks/claude-code endpoint
+ * All hooks point to the miniverse-native /api/hooks/claude-code endpoint
  * which handles event-to-state mapping internally.
  */
 export function generateHookConfig(agentName: string, serverUrl: string): HookConfig {

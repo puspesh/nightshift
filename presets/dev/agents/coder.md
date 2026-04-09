@@ -11,7 +11,6 @@ and branch names are configured automatically.
 |-----------|--------|--------------|
 | `{{team_name}}:approved` | Implement from plan, raise PR | `{{team_name}}:code-review` |
 | `{{team_name}}:code-revising` | Address reviewer feedback on PR | `{{team_name}}:code-review` |
-| `{{team_name}}:rebase-needed` | Rebase branch onto main (lowest priority — see Handling Rebase) | _(interrupt label, not a stage)_ |
 
 ## Worktree & Branch Protocol
 
@@ -57,24 +56,14 @@ gh issue list --state open --label "{{team_name}}:code-revising" --json number,t
   --jq '[.[] | select(any(.labels[]; .name == "{{team_name}}:wip" or .name == "on-hold") | not)] | sort_by(.createdAt) | .[0]'
 ```
 
-Pick the oldest issue across both queries. **If NEITHER query returns a result**, check for rebase work (lowest priority):
-```bash
-# Check for rebase work ONLY when no implementation or revision work exists
-gh issue list --state open --label "{{team_name}}:rebase-needed" --json number,title,createdAt,labels \
-  --jq '[.[] | select(any(.labels[]; .name == "{{team_name}}:wip" or .name == "on-hold") | not)] | sort_by(.createdAt) | .[0]'
-```
-
-**If ALL THREE queries return no result, output "No work found. Sleeping." and STOP immediately. Do not write code, explore the codebase, or take any other action. End the cycle here.**
+Pick the oldest issue across both queries. **If NEITHER query returns a result, output "No work found. Sleeping." and STOP immediately. Do not write code, explore the codebase, or take any other action. End the cycle here.**
 
 **Claim the issue** — do this immediately, before any other work:
 ```bash
 REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 gh issue edit <number> --add-label "{{team_name}}:wip"
 echo '{"issue": <number>, "agent": "{{agent_name}}", "started": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
-mkdir -p ~/.nightshift/${REPO_NAME}/{{team_name}}/last-issue && echo <number> > ~/.nightshift/${REPO_NAME}/{{team_name}}/last-issue/{{agent_name}}
 ```
-
-**If the claimed issue has `{{team_name}}:rebase-needed`, go to the "Handling Rebase" section instead of step 2.**
 
 ### 2. Checkout branch and read the plan
 
@@ -272,82 +261,11 @@ If anything fails during a cycle (checkout conflict, test failures you can't fix
    rm -f ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
    git checkout {{home_branch}}
    ```
-4. **Then remove `{{team_name}}:wip` (and any claim labels) and set `{{team_name}}:blocked`**:
+4. **Then remove `{{team_name}}:wip` and set `{{team_name}}:blocked`**:
    ```bash
-   gh issue edit <number> --remove-label "{{team_name}}:wip" --remove-label "{{team_name}}:approved" --remove-label "{{team_name}}:rebase-needed" --add-label "{{team_name}}:blocked"
+   gh issue edit <number> --remove-label "{{team_name}}:wip" --remove-label "{{team_name}}:approved" --add-label "{{team_name}}:blocked"
    ```
 5. Continue checking for other issues — don't stop the loop
-
-## Handling Rebase
-
-When you pick up an issue with `{{team_name}}:rebase-needed` (from step 1 fallback):
-
-### R1. Checkout the feature branch
-
-The issue was already claimed with `{{team_name}}:wip` and a lock file in step 1. Just checkout:
-
-```bash
-git fetch origin
-git checkout issue-<number>-<slug>
-git pull origin issue-<number>-<slug>
-```
-
-### R2. Rebase onto main
-
-```bash
-git rebase origin/{{main_branch}}
-```
-
-If conflicts occur, resolve them and `git rebase --continue`. Track conflict severity:
-- **Trivial**: lockfiles, import reordering, whitespace
-- **Major**: logic changes, overlapping hunks in the same function, new reconciliation code
-
-### R3. Push and verify
-
-```bash
-git push origin issue-<number>-<slug> --force-with-lease
-```
-
-Run the verification command from `.claude/nightshift/repo.md` to confirm the rebase didn't break anything.
-
-### R4. Release and transition
-
-```bash
-REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
-rm -f ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
-git checkout {{home_branch}}
-```
-
-**If trivial or no conflicts** — remove the interrupt label only, issue stays at its current stage:
-```bash
-gh issue edit <number> --remove-label "{{team_name}}:rebase-needed" --remove-label "{{team_name}}:wip"
-gh issue comment <number> --body "### @{{agent_name}} -- Rebase complete
-**Status**: rebased onto main
-**Conflicts**: none / trivial
-**Next**: Returning to current pipeline stage"
-```
-
-**If major conflicts** — remove the interrupt label AND the current stage label, then set `{{team_name}}:code-review`:
-```bash
-gh issue edit <number> --remove-label "{{team_name}}:rebase-needed" --remove-label "{{team_name}}:wip" --remove-label "{{team_name}}:<current-stage>" --add-label "{{team_name}}:code-review"
-gh issue comment <number> --body "### @{{agent_name}} -- Rebase complete (major conflicts)
-**Status**: rebased onto main (major conflicts)
-**Conflicts**: <summary of what was resolved>
-**Next**: Flagging for re-review by @ns-{{team_name}}-reviewer (label: \`{{team_name}}:code-review\`)"
-```
-
-**If rebase fails** (unresolvable conflicts, force-push rejected, verification fails) — abort and block:
-```bash
-git rebase --abort 2>/dev/null
-REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
-rm -f ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
-git checkout {{home_branch}}
-gh issue edit <number> --remove-label "{{team_name}}:rebase-needed" --remove-label "{{team_name}}:wip" --add-label "{{team_name}}:blocked"
-gh issue comment <number> --body "### @{{agent_name}} -- Rebase failed
-**Status**: blocked
-**Error**: <what went wrong>
-**Next**: Needs human intervention (label: \`{{team_name}}:blocked\`)"
-```
 
 ## Guard Rails
 

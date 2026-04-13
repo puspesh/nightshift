@@ -13,17 +13,13 @@
   "bin": {
     "nightshift": "./dist/bin/nightshift.js"
   },
-  "bugs": {
-    "url": "https://github.com/nightshift-agents/nightshift/issues"
-  },
-  "homepage": "https://github.com/nightshift-agents/nightshift#readme",
   "files": [
     "bin/ns-status.sh",
     "dist/",
     "presets/",
     "defaults/",
     "examples/",
-    "docs/*.md",
+    "docs/",
     "worlds/",
     "README.md",
     "LICENSE",

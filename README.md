@@ -9,7 +9,6 @@
 </pre>
 <p>Coordinating AI agents for your development pipeline.</p>
 <p>
-  <a href="https://github.com/nightshift-agents/nightshift/actions/workflows/ci.yml"><img src="https://github.com/nightshift-agents/nightshift/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.npmjs.com/package/nightshift"><img src="https://img.shields.io/npm/v/nightshift" alt="npm version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node.js >= 18">
@@ -19,33 +18,9 @@
 </p>
 </div>
 
-Set up a team of AI agents in any repository that autonomously triage issues,
+Set up a team of agents in any repository that autonomously triage issues,
 write plans, review code, implement features, and run tests -- all
 orchestrated through GitHub labels.
-
-## Why nightshift?
-
-- **Autonomous overnight triage** -- wake up to issues triaged, branches created, and plans written
-- **End-to-end issue-to-PR pipeline** -- from new issue to merged pull request without human intervention
-- **Git worktree isolation** -- each agent works in its own worktree, no branch conflicts
-- **GitHub label state machine** -- the entire pipeline state is visible in your issue tracker
-- **Built-in visualization** -- a pixel-art office world shows agent activity in real time
-
-## What it is NOT
-
-- **Not a hosted service** -- runs locally on your machine using your Claude Code subscription
-- **Not a Claude Code replacement** -- it orchestrates Claude Code sessions, not replaces them
-- **Not a CI system** -- it creates PRs; your existing CI validates them
-- **Not a general-purpose agent framework** -- purpose-built for the issue-to-PR development workflow
-- **Not a chatbot** -- agents work autonomously on a loop, not in conversation
-
-## Who is this for?
-
-- Maintainers of small-to-medium repos who want unattended overnight development work
-- Teams experimenting with agentic pull requests and AI-assisted code review
-- Solo developers who want to wake up to triaged issues and draft PRs
-
-<!-- TODO: Add asciinema recording and miniverse screenshot -->
 
 ## Quick Start
 
@@ -100,7 +75,7 @@ You can also start agents individually in separate terminals:
 
 ### Headless Mode
 
-Run agents without tmux -- each agent runs as a background process:
+Run agents without tmux — each agent runs as a background process:
 
 ```bash
 npx nightshift start --team dev --headless
@@ -133,7 +108,7 @@ npx nightshift init --team dev --coders 2
 
 ### Teams
 
-nightshift organizes agents into **teams**. Each team is an independent pipeline
+Nightshift organizes agents into **teams**. Each team is an independent pipeline
 with its own set of agents, worktrees, and label namespace. You can run multiple
 teams in parallel (e.g., `dev` and `infra`) without interference.
 
@@ -193,16 +168,6 @@ dev:ready-to-merge --> human merges
 3. **Project context** (`CLAUDE.md`) -- your project's structure, conventions,
    and documentation. Already in your repo.
 
-## Set up with Claude Code
-
-Already have Claude Code? Paste this repo and get started:
-
-> I just cloned nightshift. Help me run `npx nightshift init --team dev` in my
-> project repo, configure it for my stack, and start the agents.
-
-Claude Code can help you customize the pipeline extensions, write your `repo.md`,
-and troubleshoot any setup issues.
-
 ## Commands
 
 ```bash
@@ -248,9 +213,6 @@ Customize it to change flags, model, or permissions for all agents.
 
 ## Documentation
 
-- [Quickstart](docs/quickstart.md) -- full walkthrough from zero to first merged PR
-- [FAQ](docs/faq.md) -- answers to common questions
-- [Compatibility](docs/compatibility.md) -- supported versions and platforms
 - [Customization Guide](docs/customization.md) -- how to configure for your stack
 - [Architecture](docs/architecture.md) -- deep dive on the state machine and concurrency
 - [Adding Agents](docs/adding-agents.md) -- how to extend the pipeline
@@ -265,14 +227,6 @@ See the `examples/` directory for ready-to-use extension sets:
 - **Go service** (go test, golangci-lint, testcontainers)
 
 Copy any example's files into your `.claude/nightshift/` directory as a starting point.
-
-## Roadmap
-
-- Windows support (WSL) and broader platform testing
-- Additional team presets beyond `dev`
-- Codex integration for adversarial code review
-- Dashboard and reporting for pipeline metrics
-- Plugin system for custom agent roles
 
 ## Contributing
 

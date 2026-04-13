@@ -15,8 +15,15 @@ import {
   copyRepoMd,
   removeRepoMd,
   getPresetDefaultsDir,
+  copyScaffoldFiles,
 } from '../lib/copy.js';
-import { readdirSync } from 'node:fs';
+import { readdirSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PRESETS_DIR = join(__dirname, '..', '..', 'presets');
 
 let tmp: string;
 
@@ -163,5 +170,106 @@ describe('removeRepoMd', () => {
   it('returns false when repo.md does not exist', () => {
     const removed = removeRepoMd(tmp);
     assert.equal(removed, false);
+  });
+});
+
+describe('content preset file existence', () => {
+  it('defaults dir exists and has files', () => {
+    const defaultsDir = join(PRESETS_DIR, 'content', 'defaults');
+    assert.ok(existsSync(defaultsDir), 'content defaults dir should exist');
+    const files = readdirSync(defaultsDir);
+    assert.ok(files.includes('ns-content-style-guide.md'), 'should have style guide');
+    assert.ok(files.includes('ns-content-platforms.md'), 'should have platforms guide');
+    assert.ok(files.includes('ns-content-citizens.json'), 'should have citizens JSON');
+  });
+
+  it('scaffold dir exists with expected structure', () => {
+    const scaffoldDir = join(PRESETS_DIR, 'content', 'scaffold');
+    assert.ok(existsSync(scaffoldDir), 'content scaffold dir should exist');
+    assert.ok(existsSync(join(scaffoldDir, 'config', 'topics.yaml')), 'should have config/topics.yaml');
+    assert.ok(existsSync(join(scaffoldDir, 'config', 'platforms.yaml')), 'should have config/platforms.yaml');
+    assert.ok(existsSync(join(scaffoldDir, 'knowledge', 'style-guide.md')), 'should have knowledge/style-guide.md');
+    assert.ok(existsSync(join(scaffoldDir, 'knowledge', 'references', '.gitkeep')), 'should have references/.gitkeep');
+    assert.ok(existsSync(join(scaffoldDir, 'knowledge', 'past-posts', '.gitkeep')), 'should have past-posts/.gitkeep');
+    assert.ok(existsSync(join(scaffoldDir, 'content-calendar.md')), 'should have content-calendar.md');
+    assert.ok(existsSync(join(scaffoldDir, 'drafts', '.gitkeep')), 'should have drafts/.gitkeep');
+    assert.ok(existsSync(join(scaffoldDir, 'CLAUDE.md')), 'should have CLAUDE.md');
+  });
+});
+
+describe('copyScaffoldFiles', () => {
+  it('copies directory tree to repo root', () => {
+    // Create a mock preset with scaffold dir
+    const presetDir = join(tmp, 'mock-preset');
+    const scaffoldDir = join(presetDir, 'scaffold');
+    mkdirSync(join(scaffoldDir, 'config'), { recursive: true });
+    writeFileSync(join(scaffoldDir, 'config', 'topics.yaml'), 'topics: []');
+    writeFileSync(join(scaffoldDir, 'README.md'), '# Content Repo');
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(repoRoot, { recursive: true });
+
+    const { copied, skipped } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 2);
+    assert.equal(skipped.length, 0);
+    assert.ok(existsSync(join(repoRoot, 'config', 'topics.yaml')));
+    assert.ok(existsSync(join(repoRoot, 'README.md')));
+    assert.equal(readFileSync(join(repoRoot, 'config', 'topics.yaml'), 'utf-8'), 'topics: []');
+  });
+
+  it('skips existing files', () => {
+    const presetDir = join(tmp, 'mock-preset');
+    const scaffoldDir = join(presetDir, 'scaffold');
+    mkdirSync(join(scaffoldDir, 'config'), { recursive: true });
+    writeFileSync(join(scaffoldDir, 'config', 'topics.yaml'), 'default content');
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(join(repoRoot, 'config'), { recursive: true });
+    writeFileSync(join(repoRoot, 'config', 'topics.yaml'), 'custom content');
+
+    const { copied, skipped } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 0);
+    assert.equal(skipped.length, 1);
+    assert.ok(skipped[0].includes('topics.yaml'));
+    assert.equal(readFileSync(join(repoRoot, 'config', 'topics.yaml'), 'utf-8'), 'custom content');
+  });
+
+  it('creates nested directories', () => {
+    const presetDir = join(tmp, 'mock-preset');
+    const scaffoldDir = join(presetDir, 'scaffold');
+    mkdirSync(join(scaffoldDir, 'knowledge', 'references'), { recursive: true });
+    writeFileSync(join(scaffoldDir, 'knowledge', 'references', '.gitkeep'), '');
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(repoRoot, { recursive: true });
+
+    const { copied } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 1);
+    assert.ok(existsSync(join(repoRoot, 'knowledge', 'references', '.gitkeep')));
+  });
+
+  it('returns empty result when no scaffold dir', () => {
+    const presetDir = join(tmp, 'mock-preset');
+    mkdirSync(presetDir, { recursive: true });
+    // No scaffold/ directory
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(repoRoot, { recursive: true });
+
+    const { copied, skipped } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 0);
+    assert.equal(skipped.length, 0);
+  });
+
+  it('handles empty scaffold dir', () => {
+    const presetDir = join(tmp, 'mock-preset');
+    mkdirSync(join(presetDir, 'scaffold'), { recursive: true });
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(repoRoot, { recursive: true });
+
+    const { copied, skipped } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 0);
+    assert.equal(skipped.length, 0);
   });
 });

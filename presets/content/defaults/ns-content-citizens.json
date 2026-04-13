@@ -1,0 +1,6 @@
+{
+  "producer":   { "displayName": "producer",   "color": "#0066cc" },
+  "researcher": { "displayName": "researcher", "color": "#00cccc" },
+  "writer":     { "displayName": "writer",     "color": "#00cc00" },
+  "reviewer":   { "displayName": "reviewer",   "color": "#cc00cc" }
+}

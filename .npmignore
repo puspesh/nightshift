@@ -6,7 +6,3 @@ tsconfig*.json
 lib/
 bin/
 tests/
-plans/
-docs/plans/
-.github/
-.claude/

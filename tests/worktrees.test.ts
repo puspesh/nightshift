@@ -39,7 +39,7 @@ describe('createWorktrees + removeWorktrees', () => {
 
     // Create a bare repo to act as "origin"
     const bareRepo = join(tmp, 'origin.git');
-    execSync(`git init --bare "${bareRepo}"`, { stdio: 'pipe' });
+    execSync(`git init --bare -b main "${bareRepo}"`, { stdio: 'pipe' });
 
     // Clone it to get a working repo with a remote
     clonedRepo = join(tmp, 'repo');

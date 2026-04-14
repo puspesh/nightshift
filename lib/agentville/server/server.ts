@@ -655,8 +655,8 @@ export class AgentvilleServer {
       return;
     }
 
-    // Serve agentville-core.js bundle (with backward-compat alias for miniverse-core.js)
-    if (req.method === 'GET' && (url.pathname === '/agentville-core.js' || url.pathname === '/miniverse-core.js')) {
+    // Serve agentville-core.js bundle
+    if (req.method === 'GET' && url.pathname === '/agentville-core.js') {
       const corePath = path.join(this.publicDir ?? '.', '..', 'core', 'agentville-core.js');
       if (existsSync(corePath)) {
         res.writeHead(200, { 'Content-Type': 'application/javascript' });

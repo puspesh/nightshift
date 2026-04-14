@@ -1179,6 +1179,11 @@ export class AgentvilleServer {
       try {
         const body = await readBody(req);
         const data = JSON.parse(body);
+        if (typeof data.x !== 'number' || typeof data.y !== 'number') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'x and y must be numbers' }));
+          return;
+        }
         const result = placeItem(this.gameState, data.itemId, data.roomId, data.x, data.y);
         if (result.success) {
           this.triggerSave();
@@ -1213,7 +1218,7 @@ export class AgentvilleServer {
         if (result.success) {
           this.triggerSave();
           this.broadcastWs({
-            type: 'item:placed',
+            type: 'item:unplaced',
             payload: { itemId: data.itemId, item: result.item ?? null },
             timestamp: Date.now(),
           });
@@ -1276,6 +1281,11 @@ export class AgentvilleServer {
       try {
         const body = await readBody(req);
         const data = JSON.parse(body);
+        if (typeof data.agentKey !== 'string' || data.agentKey === '__proto__' || data.agentKey === 'constructor' || data.agentKey === 'prototype') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Invalid agent key' }));
+          return;
+        }
         const result = setAgentCosmetic(this.gameState, data.agentKey, data.cosmeticId);
         if (result.success) {
           this.triggerSave();

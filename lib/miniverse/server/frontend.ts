@@ -33,6 +33,7 @@ h1 {
 }
 
 #canvas-container {
+  position: relative;
   border: 1px solid #30363d;
   border-radius: 8px;
   overflow: hidden;
@@ -128,6 +129,41 @@ h1 {
   font-size: 12px;
 }
 #team-empty { color: #484f58; font-size: 12px; }
+
+#hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(13, 17, 23, 0.85);
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.hud-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.hud-coins .hud-icon { color: #f0c040; }
+.hud-coins .hud-value { color: #f0c040; }
+
+.hud-energy .hud-icon { color: #3fb950; }
+.hud-energy .hud-value { color: #3fb950; }
 </style>
 </head>
 <body>
@@ -139,7 +175,18 @@ h1 {
   <span id="team-empty" style="display:none">No worlds available</span>
 </div>
 
-<div id="canvas-container"></div>
+<div id="canvas-container">
+  <div id="hud">
+    <div class="hud-item hud-coins">
+      <span class="hud-icon">&#x1FA99;</span>
+      <span class="hud-value" id="hud-coins">1,250</span>
+    </div>
+    <div class="hud-item hud-energy">
+      <span class="hud-icon">&#x26A1;</span>
+      <span class="hud-value" id="hud-energy">850</span>
+    </div>
+  </div>
+</div>
 <div id="status-panel"></div>
 <div id="connection-status">Connecting...</div>
 

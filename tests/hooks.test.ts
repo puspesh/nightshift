@@ -9,7 +9,7 @@ describe('generateHookConfig', () => {
   it('generates command hooks using ns-heartbeat.sh script', () => {
     const config = generateHookConfig('ns-dev-coder-1', 'http://localhost:4321');
     const events = Object.keys(config.hooks);
-    assert.equal(events.length, 8);
+    assert.equal(events.length, 9);
     assert.ok(events.includes('SessionStart'));
     assert.ok(events.includes('PreToolUse'));
     assert.ok(events.includes('PostToolUse'));
@@ -18,6 +18,7 @@ describe('generateHookConfig', () => {
     assert.ok(events.includes('Stop'));
     assert.ok(events.includes('SubagentStart'));
     assert.ok(events.includes('SubagentStop'));
+    assert.ok(events.includes('SessionEnd'));
 
     for (const event of events) {
       const entries = config.hooks[event];

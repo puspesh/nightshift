@@ -13,6 +13,14 @@ AGENT="${2:?}"
 WORK_TYPE="${3:?}"
 DESCRIPTION="${4:-}"
 
+# Escape a string for safe JSON interpolation
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+WORK_TYPE=$(json_escape "$WORK_TYPE")
+DESCRIPTION=$(json_escape "$DESCRIPTION")
+
 DATA="{\"workType\":\"${WORK_TYPE}\"}"
 if [ -n "$DESCRIPTION" ]; then
   DATA="{\"workType\":\"${WORK_TYPE}\",\"description\":\"${DESCRIPTION}\"}"

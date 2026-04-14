@@ -18,15 +18,24 @@ if [ ! -t 0 ]; then
   STDIN_DATA=$(cat)
 fi
 
-# Extract fields from stdin JSON (best-effort with basic tools)
-extract_json_field() {
-  echo "$STDIN_DATA" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/'
+# Escape a string for safe JSON interpolation (handles " and \)
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-TOOL_NAME=$(extract_json_field "tool_name")
-PROMPT=$(extract_json_field "prompt")
-SUBAGENT_ID=$(extract_json_field "subagent_id")
-SUBAGENT_TASK=$(extract_json_field "subagent_task")
+# Extract fields from stdin JSON (best-effort with basic tools, falls back to jq if available)
+extract_json_field() {
+  if command -v jq >/dev/null 2>&1; then
+    echo "$STDIN_DATA" | jq -r ".$1 // empty" 2>/dev/null
+  else
+    echo "$STDIN_DATA" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/'
+  fi
+}
+
+TOOL_NAME=$(json_escape "$(extract_json_field "tool_name")")
+PROMPT=$(json_escape "$(extract_json_field "prompt")")
+SUBAGENT_ID=$(json_escape "$(extract_json_field "subagent_id")")
+SUBAGENT_TASK=$(json_escape "$(extract_json_field "subagent_task")")
 
 # Map Claude Code hook events to Agentville event types
 case "$EVENT" in
@@ -38,7 +47,7 @@ case "$EVENT" in
     TYPE="agent:heartbeat"
     TASK="${PROMPT:-Processing request}"
     # Truncate task to 60 chars
-    TASK=$(echo "$TASK" | cut -c1-60)
+    TASK=$(printf '%.60s' "$TASK")
     DATA="{\"state\":\"working\",\"task\":\"${TASK}\"}"
     ;;
   PreToolUse)

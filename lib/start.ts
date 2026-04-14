@@ -106,7 +106,7 @@ async function setupVisualization(
     const teamWorldDir = join(miniverseDir, repoName, team);
 
     // Read base world data for spawn position computation
-    const baseWorldDir = join(__dirname, '..', 'worlds', 'nightshift');
+    const baseWorldDir = join(__dirname, '..', 'worlds', 'agentville');
     let baseWorld: { floor: string[][]; gridCols: number; gridRows: number; props: Array<{ x: number; y: number; w: number; h: number }> } | undefined;
     const srcBaseWorldPath = join(baseWorldDir, 'base-world.json');
     if (existsSync(srcBaseWorldPath)) {

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { bootstrapWorld } from './persistence.js';
 import type { AgentvilleWorld } from './schema.js';
@@ -44,6 +44,37 @@ export function migrateFromMiniverse(miniverseDir: string): AgentvilleWorld | nu
 
   console.log(`Migrated world from ${chosen.path}`);
   return world;
+}
+
+/**
+ * Clean up old miniverse PID and port files from ~/.nightshift/.
+ * If the old miniverse process is still running, kill it first.
+ */
+export function cleanupOldPidFiles(nightshiftDir: string): void {
+  const pidFile = join(nightshiftDir, 'miniverse.pid');
+  const portFile = join(nightshiftDir, 'miniverse.port');
+
+  if (existsSync(pidFile)) {
+    try {
+      const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+      if (!isNaN(pid)) {
+        try {
+          process.kill(pid, 0); // Check if alive
+          process.kill(pid);    // Kill it
+          console.log(`Stopped old miniverse process (PID ${pid})`);
+        } catch {
+          // Process already dead
+        }
+      }
+    } catch {
+      // Can't read PID file
+    }
+    try { unlinkSync(pidFile); } catch { /* ignore */ }
+  }
+
+  if (existsSync(portFile)) {
+    try { unlinkSync(portFile); } catch { /* ignore */ }
+  }
 }
 
 interface WorldFileEntry {

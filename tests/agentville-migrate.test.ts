@@ -1,9 +1,9 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, utimesSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, utimesSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { migrateFromMiniverse } from '../lib/agentville/migrate.js';
+import { migrateFromMiniverse, cleanupOldPidFiles } from '../lib/agentville/migrate.js';
 
 let tmp: string;
 
@@ -81,5 +81,20 @@ describe('migrateFromMiniverse', () => {
     assert.equal(result!.inventory[1].catalogId, 'desk_basic');
     assert.equal(result!.inventory[0].placed, true);
     assert.equal(result!.inventory[1].placed, true);
+  });
+});
+
+describe('cleanupOldPidFiles', () => {
+  it('removes miniverse.pid and miniverse.port files', () => {
+    writeFileSync(join(tmp, 'miniverse.pid'), '99999999');
+    writeFileSync(join(tmp, 'miniverse.port'), '4321');
+    cleanupOldPidFiles(tmp);
+    assert.equal(existsSync(join(tmp, 'miniverse.pid')), false);
+    assert.equal(existsSync(join(tmp, 'miniverse.port')), false);
+  });
+
+  it('does nothing when files do not exist', () => {
+    // Should not throw
+    cleanupOldPidFiles(tmp);
   });
 });

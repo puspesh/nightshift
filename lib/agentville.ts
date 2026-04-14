@@ -102,12 +102,14 @@ export function startAgentville(
     return { pid: running.pid, url: `http://localhost:${existingPort}` };
   }
 
-  const pidFile = join(homedir(), '.nightshift', 'agentville.pid');
-  const portFile = join(homedir(), '.nightshift', 'agentville.port');
+  // Write PID/port to ~/.agentville/ (canonical path)
+  const agentvilleHome = join(homedir(), '.agentville');
+  const pidFile = join(agentvilleHome, 'agentville.pid');
+  const portFile = join(agentvilleHome, 'agentville.port');
   const logFile = getLogFilePath();
 
   // Ensure parent directory exists
-  mkdirSync(join(homedir(), '.nightshift'), { recursive: true });
+  mkdirSync(agentvilleHome, { recursive: true });
 
   // Use the vendored agentville server CLI
   const agentvilleCli = join(__dirname, 'agentville', 'server', 'cli.js');

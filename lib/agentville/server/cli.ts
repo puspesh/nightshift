@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { AgentvilleServer } from './server.js';
 import { loadWorld, saveWorld, bootstrapWorld } from '../persistence.js';
-import { migrateFromMiniverse } from '../migrate.js';
+import { migrateFromMiniverse, cleanupOldPidFiles } from '../migrate.js';
 import { evaluateStreak } from '../streak.js';
 import type { AgentvilleWorld } from '../schema.js';
 
@@ -55,6 +55,8 @@ if (!gameState && existsSync(miniverseDir)) {
     saveWorld(agentvilleDir, gameState);
     console.log('  Migrated world state from ~/.nightshift/miniverse/');
   }
+  // Clean up old miniverse PID/port files
+  cleanupOldPidFiles(join(homedir(), '.nightshift'));
 }
 
 // Bootstrap if nothing found anywhere

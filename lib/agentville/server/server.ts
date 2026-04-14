@@ -806,6 +806,18 @@ export class AgentvilleServer {
       return;
     }
 
+    // Game state endpoint — returns the AgentvilleWorld persistence data
+    if (req.method === 'GET' && url.pathname === '/api/game-state') {
+      if (this.gameState) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(this.gameState));
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No game state available' }));
+      }
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/heartbeat') {
       try {
         const body = await readBody(req);

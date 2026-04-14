@@ -6,6 +6,7 @@ import path from 'node:path';
 import { AgentStore } from './store.js';
 import { EventLog, type WorldEvent } from './events.js';
 import { getFrontendHtml } from './frontend.js';
+import type { AgentvilleWorld } from '../schema.js';
 
 export interface AgentvilleServerConfig {
   port?: number;
@@ -30,6 +31,8 @@ export class AgentvilleServer {
   /** Webhook callbacks: agent ID → callback URL */
   private webhooks: Map<string, string> = new Map();
   private publicDir: string | null;
+  private gameState: AgentvilleWorld | null = null;
+  private mutationCallbacks: Array<() => void> = [];
 
   constructor(config: AgentvilleServerConfig = {}) {
     this.port = config.port ?? 4321;
@@ -97,6 +100,24 @@ export class AgentvilleServer {
 
   getPort(): number {
     return this.port;
+  }
+
+  setGameState(state: AgentvilleWorld): void {
+    this.gameState = state;
+  }
+
+  getGameState(): AgentvilleWorld | null {
+    return this.gameState;
+  }
+
+  onMutation(callback: () => void): void {
+    this.mutationCallbacks.push(callback);
+  }
+
+  private triggerSave(): void {
+    for (const cb of this.mutationCallbacks) {
+      cb();
+    }
   }
 
   private broadcast() {

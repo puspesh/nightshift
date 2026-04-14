@@ -1,5 +1,12 @@
 #!/usr/bin/env node
+import { existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { AgentvilleServer } from './server.js';
+import { loadWorld, saveWorld, bootstrapWorld } from '../persistence.js';
+import { migrateFromMiniverse } from '../migrate.js';
+import { evaluateStreak } from '../streak.js';
+import type { AgentvilleWorld } from '../schema.js';
 
 const args = process.argv.slice(2);
 
@@ -33,7 +40,48 @@ const publicIdx = args.indexOf('--public');
 const publicDir = publicIdx >= 0 ? args[publicIdx + 1] : undefined;
 const noBrowser = args.includes('--no-browser');
 
+// --- Persistence: load or bootstrap game state ---
+const agentvilleDir = join(homedir(), '.agentville');
+const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
+
+mkdirSync(agentvilleDir, { recursive: true });
+
+let gameState: AgentvilleWorld | null = loadWorld(agentvilleDir);
+
+// Migration fallback: if no world in ~/.agentville/, try migrating from ~/.nightshift/miniverse/
+if (!gameState && existsSync(miniverseDir)) {
+  gameState = migrateFromMiniverse(miniverseDir);
+  if (gameState) {
+    saveWorld(agentvilleDir, gameState);
+    console.log('  Migrated world state from ~/.nightshift/miniverse/');
+  }
+}
+
+// Bootstrap if nothing found anywhere
+if (!gameState) {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  gameState = bootstrapWorld(timezone);
+  saveWorld(agentvilleDir, gameState);
+  console.log('  Bootstrapped new Agentville world');
+}
+
+// Evaluate streak
+const streakResult = evaluateStreak(gameState.stats);
+gameState.stats.streakDays = streakResult.streakDays;
+gameState.stats.lastActiveDate = streakResult.lastActiveDate;
+saveWorld(agentvilleDir, gameState);
+
+// --- Create and configure server ---
 const server = new AgentvilleServer({ port, publicDir });
+server.setGameState(gameState);
+
+// Wire mutation callback to persist on changes
+server.onMutation(() => {
+  const state = server.getGameState();
+  if (state) {
+    saveWorld(agentvilleDir, state);
+  }
+});
 
 server.start().then(async (actualPort) => {
   console.log('');
@@ -69,14 +117,22 @@ server.start().then(async (actualPort) => {
   process.exit(1);
 });
 
-// Graceful shutdown
+// Graceful shutdown — save game state before exit
 process.on('SIGINT', () => {
   console.log('\nShutting down Agentville...');
+  const state = server.getGameState();
+  if (state) {
+    saveWorld(agentvilleDir, state);
+  }
   server.stop();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
+  const state = server.getGameState();
+  if (state) {
+    saveWorld(agentvilleDir, state);
+  }
   server.stop();
   process.exit(0);
 });

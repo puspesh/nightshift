@@ -12,7 +12,8 @@
     "measure": "bash scripts/measure-build.sh"
   },
   "bin": {
-    "nightshift": "./dist/bin/nightshift.js"
+    "nightshift": "./dist/bin/nightshift.js",
+    "agentville": "./dist/bin/agentville.js"
   },
   "files": [
     "bin/ns-status.sh",

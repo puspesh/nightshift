@@ -615,8 +615,12 @@ export class AgentvilleServer {
     }
   }
 
-  /** Scan publicDir for a world matching an optional team filter. Returns "repo/team" or null. */
+  /** Scan publicDir for a world matching an optional team filter. Returns "repo/team" or null.
+   *  When gameState is available, returns 'agentville' as a fixed identifier. */
   private findWorldId(teamFilter?: string): string | null {
+    if (this.gameState) return 'agentville';
+
+    // Legacy file-based fallback
     const publicDir = this.publicDir ?? './public';
     if (!existsSync(publicDir)) return null;
     const safeTeam = teamFilter?.replace(/[^a-zA-Z0-9_-]/g, '');
@@ -713,8 +717,15 @@ export class AgentvilleServer {
       return;
     }
 
-    // List available repo/team worlds (two-level scan)
+    // List available worlds — single entry when gameState is set, legacy scan otherwise
     if (req.method === 'GET' && url.pathname === '/api/worlds') {
+      if (this.gameState) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ worlds: ['agentville'] }));
+        return;
+      }
+
+      // Legacy file-based fallback: two-level scan
       const publicDir = this.publicDir ?? '.';
       const repos: { repo: string; teams: { id: string; agents: number }[] }[] = [];
       try {

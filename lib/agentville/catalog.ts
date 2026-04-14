@@ -95,9 +95,9 @@ export interface DropTableEntry {
 }
 
 const DROP_TABLE: DropTableEntry[] = [
-  { weight: 50, type: 'coins', coins: { min: 5, max: 25 } },
-  { weight: 25, type: 'coins', coins: { min: 25, max: 75 } },
-  { weight: 10, type: 'coins', coins: { min: 75, max: 200 } },
+  { weight: 50, type: 'coins', coins: { min: 10, max: 50 } },
+  { weight: 25, type: 'coins', coins: { min: 50, max: 200 } },
+  { weight: 10, type: 'coins', coins: { min: 200, max: 500 } },
   { weight: 5, type: 'item', catalogId: 'deco_plant' },
   { weight: 5, type: 'item', catalogId: 'deco_poster' },
   { weight: 3, type: 'item', catalogId: 'deco_lamp' },

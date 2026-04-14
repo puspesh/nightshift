@@ -201,7 +201,7 @@ export class AgentvilleServer {
           this.broadcastWs({
             type: 'coins:earned',
             payload: {
-              agent: agentKey,
+              agentKey,
               coins: result.coinsAwarded,
               total: this.gameState.coins,
               multiplier: result.multiplier,

@@ -64,6 +64,18 @@ export function awardCoins(
   if (drop?.type === 'coins') {
     world.coins += drop.amount;
     world.stats.totalCoinsEarned += drop.amount;
+  } else if (drop?.type === 'item') {
+    const itemId = `drop_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const catalogItem = getCatalogItem(drop.catalogId);
+    if (catalogItem) {
+      world.inventory.push({
+        id: itemId,
+        catalogId: drop.catalogId,
+        type: catalogItem.type,
+        placed: false,
+        placedAt: null,
+      });
+    }
   }
 
   return { coinsAwarded: coins, multiplier, drop: drop ?? undefined };

@@ -1,5 +1,5 @@
 /**
- * Miniverse Agent Protocol — shared types for passive and interactive modes.
+ * Agentville Agent Protocol — shared types for passive and interactive modes.
  *
  * Passive:      agent → status → world renders
  * Interactive:  agent → status + actions → world renders + broadcasts state

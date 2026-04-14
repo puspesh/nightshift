@@ -12,7 +12,7 @@ import { SpeechBubbleSystem } from './effects/SpeechBubble';
 import { Signal } from './signal/Signal';
 import type { SignalConfig, AgentStatus } from './signal/Signal';
 
-export interface MiniverseConfig {
+export interface AgentvilleConfig {
   container: HTMLElement;
   world: string;
   scene: string;
@@ -31,9 +31,9 @@ export interface MiniverseConfig {
   autoSpawn?: boolean;
 }
 
-type MiniverseEvent = 'citizen:click' | 'object:click' | 'intercom';
+type AgentvilleEvent = 'citizen:click' | 'object:click' | 'intercom';
 
-export class Miniverse {
+export class Agentville {
   private renderer: Renderer;
   private scene: Scene;
   private citizens: Citizen[] = [];
@@ -42,8 +42,8 @@ export class Miniverse {
   private particles: ParticleSystem;
   private speechBubbles: SpeechBubbleSystem;
   private signal: Signal;
-  private config: MiniverseConfig;
-  private eventHandlers: Map<MiniverseEvent, Set<(data: unknown) => void>> = new Map();
+  private config: AgentvilleConfig;
+  private eventHandlers: Map<AgentvilleEvent, Set<(data: unknown) => void>> = new Map();
 
   private particleTimers: Map<string, number> = new Map();
   private typedLocations: TypedLocation[] = [];
@@ -52,7 +52,7 @@ export class Miniverse {
   private spawningAgents: Set<string> = new Set();
   private autoSpawnIndex = 0;
 
-  constructor(config: MiniverseConfig) {
+  constructor(config: AgentvilleConfig) {
     this.config = config;
     const scale = config.scale ?? 2;
     const width = config.width ?? 512;
@@ -248,7 +248,7 @@ export class Miniverse {
             );
             if (reachable) {
               citizen.setTilePosition(nx, ny);
-              console.log(`[miniverse] Unstuck "${citizen.agentId}" from (${tile.x},${tile.y}) to (${nx},${ny})`);
+              console.log(`[agentville] Unstuck "${citizen.agentId}" from (${tile.x},${tile.y}) to (${nx},${ny})`);
               found = true;
               break;
             }
@@ -273,18 +273,18 @@ export class Miniverse {
     this.renderer.addLayer(layer);
   }
 
-  on(event: MiniverseEvent, handler: (data: unknown) => void) {
+  on(event: AgentvilleEvent, handler: (data: unknown) => void) {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
     this.eventHandlers.get(event)!.add(handler);
   }
 
-  off(event: MiniverseEvent, handler: (data: unknown) => void) {
+  off(event: AgentvilleEvent, handler: (data: unknown) => void) {
     this.eventHandlers.get(event)?.delete(handler);
   }
 
-  private emit(event: MiniverseEvent, data: unknown) {
+  private emit(event: AgentvilleEvent, data: unknown) {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       for (const handler of handlers) {
@@ -557,7 +557,7 @@ export class Miniverse {
         // Always allow: going to work, going offline, or citizen is standing still
         // Debounce: everything else (don't interrupt a walk mid-path)
         const shouldTransition =
-          elapsed >= Miniverse.TRANSITION_DEBOUNCE_MS
+          elapsed >= Agentville.TRANSITION_DEBOUNCE_MS
           || agent.state === 'working'
           || agent.state === 'offline'
           || prevState === 'offline'
@@ -825,3 +825,9 @@ export type {
   CitizenSnapshot, LocationSnapshot, PropSnapshot,
   ServerMessage, ClientMessage,
 } from './protocol';
+
+// Backward-compatible re-exports
+/** @deprecated Use Agentville */
+export { Agentville as Miniverse };
+/** @deprecated Use AgentvilleConfig */
+export type { AgentvilleConfig as MiniverseConfig };

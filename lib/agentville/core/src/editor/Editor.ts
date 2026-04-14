@@ -4,7 +4,7 @@
  * Delegates to PropSystem for props data/rendering.
  */
 
-import type { Miniverse } from '../index';
+import type { Agentville } from '../index';
 import {
   PropSystem,
   ANCHOR_COLORS,
@@ -39,7 +39,7 @@ export type SaveSceneFn = (scene: SceneSnapshot) => Promise<void>;
 export interface EditorConfig {
   canvas: HTMLCanvasElement;
   props: PropSystem;
-  miniverse: Miniverse;
+  miniverse: Agentville;
   worldId?: string;
   onSave?: SaveSceneFn;
   /** Base URL for generation API (default: http://localhost:4321) */
@@ -56,7 +56,7 @@ export class Editor {
   private scale: number;
   private tileSize: number;
   private props: PropSystem;
-  private mv: Miniverse;
+  private mv: Agentville;
   private worldId: string;
   private saveFn: SaveSceneFn | null;
   private apiBase: string;

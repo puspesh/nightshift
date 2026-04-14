@@ -129,7 +129,7 @@ async function setupVisualization(
     const merged = mergeWorldConfig(baseWorldPath, worldConfig);
     writeFileSync(join(teamWorldDir, 'world.json'), JSON.stringify(merged, null, 2) + '\n');
 
-    const coreDir = join(__dirname, 'miniverse', 'core');
+    const coreDir = join(__dirname, 'agentville', 'core');
     mkdirSync(join(miniverseDir, '..', 'core'), { recursive: true });
     if (existsSync(join(coreDir, 'miniverse-core.js'))) {
       execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });

@@ -46,7 +46,7 @@ export function startServer(
   mkdirSync(join(homedir(), '.nightshift'), { recursive: true });
 
   // Use the vendored miniverse server CLI
-  const miniverse = join(__dirname, 'miniverse', 'server', 'cli.js');
+  const miniverse = join(__dirname, 'agentville', 'server', 'cli.js');
   if (!existsSync(miniverse)) {
     return null;
   }

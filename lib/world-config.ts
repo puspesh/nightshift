@@ -68,7 +68,6 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
 
     const stationId = `ws-${team}-${agent.role}`;
     const deskId = `desk-${team}-${agent.role}`;
-    const chairId = `chair-${team}-${agent.role}`;
 
     workstations.push({ id: stationId, x: pixelX, y: pixelY });
 
@@ -81,10 +80,11 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
       w: DESK_W,
       h: DESK_H,
       layer: 'below',
-      anchors: [{ name: deskId, ox: 1, oy: 2, type: 'work' }],
+      anchors: [{ name: deskId, ox: 1, oy: 1.5, type: 'work' }],
     });
 
     // Chair prop (placed at desk + 1 tile offset)
+    // No anchors — keeps chair tiles blocked by pathfinding (prevents walk-through)
     props.push({
       id: 'desk_chair_dark',
       x: deskX + 1,
@@ -92,7 +92,6 @@ export function generateWorldConfig(agents: AgentEntry[], team: string, override
       w: CHAIR_W,
       h: CHAIR_H,
       layer: 'above',
-      anchors: [{ name: chairId, ox: 0, oy: 0.8, type: 'work' }],
     });
 
     const resolved = resolveCitizenProps(agent.role, overrides ?? {});

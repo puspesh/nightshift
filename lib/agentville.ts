@@ -10,31 +10,31 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Get the path to the global miniverse PID file.
+ * Get the path to the global agentville PID file.
  */
 export function getPidFilePath(): string {
-  return join(homedir(), '.nightshift', 'miniverse.pid');
+  return join(homedir(), '.nightshift', 'agentville.pid');
 }
 
 /**
- * Get the path to the global miniverse port file.
+ * Get the path to the global agentville port file.
  */
 export function getPortFilePath(): string {
-  return join(homedir(), '.nightshift', 'miniverse.port');
+  return join(homedir(), '.nightshift', 'agentville.port');
 }
 
 /**
- * Get the path to the global miniverse log file.
+ * Get the path to the global agentville log file.
  */
 export function getLogFilePath(): string {
-  return join(homedir(), '.nightshift', 'miniverse.log');
+  return join(homedir(), '.nightshift', 'agentville.log');
 }
 
 /**
- * Start the miniverse server as a detached child process.
+ * Start the agentville server as a detached child process.
  * Returns the URL of the running server, or null if it failed to start.
  */
-export function startServer(
+export function startAgentville(
   port: number,
   publicDir: string,
 ): { pid: number; url: string } | null {
@@ -45,9 +45,9 @@ export function startServer(
   // Ensure parent directory exists
   mkdirSync(join(homedir(), '.nightshift'), { recursive: true });
 
-  // Use the vendored miniverse server CLI
-  const miniverse = join(__dirname, 'agentville', 'server', 'cli.js');
-  if (!existsSync(miniverse)) {
+  // Use the vendored agentville server CLI
+  const agentvilleCli = join(__dirname, 'agentville', 'server', 'cli.js');
+  if (!existsSync(agentvilleCli)) {
     return null;
   }
 
@@ -55,7 +55,7 @@ export function startServer(
   const logFd = openSync(logFile, 'a');
 
   // Start as detached process using node
-  const child = spawn(process.execPath, [miniverse, '--port', String(port), '--public', publicDir, '--no-browser'], {
+  const child = spawn(process.execPath, [agentvilleCli, '--port', String(port), '--public', publicDir, '--no-browser'], {
     detached: true,
     stdio: ['ignore', logFd, logFd],
     env: { ...process.env },
@@ -76,10 +76,10 @@ export function startServer(
 }
 
 /**
- * Wait for the miniverse server to become healthy.
+ * Wait for the agentville server to become healthy.
  * Polls GET / (the static frontend) until it responds (max timeout).
  */
-export async function waitForServer(url: string, timeoutMs: number = 10000): Promise<boolean> {
+export async function waitForAgentville(url: string, timeoutMs: number = 10000): Promise<boolean> {
   const start = Date.now();
   const interval = 500;
 
@@ -96,10 +96,10 @@ export async function waitForServer(url: string, timeoutMs: number = 10000): Pro
 }
 
 /**
- * Register all agents with the miniverse server via heartbeat API.
+ * Register all agents with the agentville server via heartbeat API.
  * Includes retry logic for reliability.
  */
-export async function registerAgents(url: string, agents: AgentEntry[], team: string, overrides?: CitizenOverrides): Promise<void> {
+export async function registerAgentvilleAgents(url: string, agents: AgentEntry[], team: string, overrides?: CitizenOverrides): Promise<void> {
   for (let i = 0; i < agents.length; i++) {
     const agent = agents[i];
     const agentId = `ns-${team}-${agent.role}`;
@@ -133,15 +133,15 @@ export async function registerAgents(url: string, agents: AgentEntry[], team: st
     }
 
     if (!success) {
-      console.warn(`Warning: Failed to register agent ${agentId} with miniverse server`);
+      console.warn(`Warning: Failed to register agent ${agentId} with agentville server`);
     }
   }
 }
 
 /**
- * Stop the global miniverse server by reading the PID file and killing the process.
+ * Stop the global agentville server by reading the PID file and killing the process.
  */
-export function stopServer(): void {
+export function stopAgentville(): void {
   const pidFile = getPidFilePath();
   const portFile = getPortFilePath();
 
@@ -166,9 +166,9 @@ export function stopServer(): void {
 }
 
 /**
- * Check if the global miniverse server is running.
+ * Check if the global agentville server is running.
  */
-export function isServerRunning(): boolean {
+export function isAgentvilleRunning(): boolean {
   const pidFile = getPidFilePath();
   if (!existsSync(pidFile)) return false;
 

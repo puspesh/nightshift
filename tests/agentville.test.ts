@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateWorldConfig } from '../lib/world-config.js';
-import { getPidFilePath, getPortFilePath, isServerRunning } from '../lib/visualize.js';
+import { getPidFilePath, getPortFilePath, isAgentvilleRunning } from '../lib/agentville.js';
 import type { AgentEntry } from '../lib/types.js';
 
 function makeAgents(coderCount: number): AgentEntry[] {
@@ -171,15 +171,15 @@ describe('generateWorldConfig', () => {
 describe('PID file helpers', () => {
   it('getPidFilePath returns global path', () => {
     const p = getPidFilePath();
-    assert.ok(p.includes('.nightshift/miniverse.pid'));
+    assert.ok(p.includes('.nightshift/agentville.pid'));
   });
 
   it('getPortFilePath returns global path', () => {
     const p = getPortFilePath();
-    assert.ok(p.includes('.nightshift/miniverse.port'));
+    assert.ok(p.includes('.nightshift/agentville.port'));
   });
 
-  it('isServerRunning returns false when no PID file', { skip: isServerRunning() ? 'server is currently running' : undefined }, () => {
-    assert.equal(isServerRunning(), false);
+  it('isAgentvilleRunning returns false when no PID file', { skip: isAgentvilleRunning() ? 'server is currently running' : undefined }, () => {
+    assert.equal(isAgentvilleRunning(), false);
   });
 });

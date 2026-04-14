@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 import { getTeamDir, discoverCoderCount } from './worktrees.js';
 import { detectRepoRoot, detectRepoName } from './detect.js';
-import { startServer, waitForServer, registerAgents, stopServer } from './visualize.js';
+import { startAgentville, waitForAgentville, registerAgentvilleAgents, stopAgentville } from './agentville.js';
 import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
 import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
@@ -135,19 +135,19 @@ async function setupVisualization(
       execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
-    stopServer();
-    const result = startServer(vizPort, miniverseDir);
+    stopAgentville();
+    const result = startAgentville(vizPort, miniverseDir);
     if (!result) {
       console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
       throw new Error('Server start failed');
     }
-    const healthy = await waitForServer(result.url, 10000);
+    const healthy = await waitForAgentville(result.url, 10000);
     if (!healthy) {
       console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
       throw new Error('Server health check failed');
     }
 
-    await registerAgents(result.url, agents, team, citizenOverrides);
+    await registerAgentvilleAgents(result.url, agents, team, citizenOverrides);
     vizUrl = result.url;
 
     const allRoles = agents.map(a => a.role);
@@ -423,11 +423,11 @@ export function stopSession(team: string): void {
     const sessions = execSync('tmux list-sessions -F "#{session_name}"', { encoding: 'utf-8' });
     const otherSessions = sessions.split('\n').map(s => s.trim()).filter(s => s.startsWith(sessionPrefix) && s !== session);
     if (otherSessions.length === 0) {
-      stopServer();
+      stopAgentville();
     }
   } catch {
     // No tmux server running — safe to stop
-    stopServer();
+    stopAgentville();
   }
 
   try {

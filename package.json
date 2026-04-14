@@ -4,7 +4,7 @@
   "description": "Coordinating AI agents for your development pipeline. Set up 5 agents (producer, planner, reviewer, coder, tester) in any repository.",
   "type": "module",
   "scripts": {
-    "build": "vite build --config lib/agentville/core/vite.config.ts && tsc -p tsconfig.build.json && mkdir -p dist/lib/agentville/core && cp lib/agentville/core/dist/agentville-core.js dist/lib/agentville/core/ && cp -r lib/miniverse/core dist/lib/miniverse/ && cp -r presets dist/ && cp -r worlds dist/ && cp -r defaults dist/ && cp -r bin dist/",
+    "build": "vite build --config lib/agentville/core/vite.config.ts && tsc -p tsconfig.build.json && mkdir -p dist/lib/agentville/core && cp lib/agentville/core/dist/agentville-core.js dist/lib/agentville/core/ && cp lib/agentville/core/agentville-core.d.ts dist/lib/agentville/core/ && cp -r lib/miniverse/core dist/lib/miniverse/ && cp -r presets dist/ && cp -r worlds dist/ && cp -r defaults dist/ && cp -r bin dist/",
     "build:core": "vite build --config lib/agentville/core/vite.config.ts",
     "pretest": "tsc",
     "test": "node --test 'dist/tests/*.test.js'",

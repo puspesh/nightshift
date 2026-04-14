@@ -7,14 +7,14 @@ import { AgentStore } from './store.js';
 import { EventLog, type WorldEvent } from './events.js';
 import { getFrontendHtml } from './frontend.js';
 
-export interface MiniverseServerConfig {
+export interface AgentvilleServerConfig {
   port?: number;
   offlineTimeout?: number;
   /** Directory for generated assets (e.g. './public') */
   publicDir?: string;
 }
 
-export class MiniverseServer {
+export class AgentvilleServer {
   private store: AgentStore;
   private events: EventLog;
   private httpServer: ReturnType<typeof createServer>;
@@ -31,7 +31,7 @@ export class MiniverseServer {
   private webhooks: Map<string, string> = new Map();
   private publicDir: string | null;
 
-  constructor(config: MiniverseServerConfig = {}) {
+  constructor(config: AgentvilleServerConfig = {}) {
     this.port = config.port ?? 4321;
     this.publicDir = config.publicDir ?? null;
     this.store = new AgentStore(config.offlineTimeout ?? 30000);
@@ -759,7 +759,7 @@ export class MiniverseServer {
       const world = worldId ? this.readWorld(worldId) : null;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
-        miniverse: true,
+        agentville: true,
         version: '0.2.8',
         agents: { online, total: agents.length },
         world: worldId ?? null,

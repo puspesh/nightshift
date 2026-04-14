@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { MiniverseServer } from './server.js';
+import { AgentvilleServer } from './server.js';
 
 const args = process.argv.slice(2);
 
@@ -33,7 +33,7 @@ const publicIdx = args.indexOf('--public');
 const publicDir = publicIdx >= 0 ? args[publicIdx + 1] : undefined;
 const noBrowser = args.includes('--no-browser');
 
-const server = new MiniverseServer({ port, publicDir });
+const server = new AgentvilleServer({ port, publicDir });
 
 server.start().then(async (actualPort) => {
   console.log('');
@@ -41,14 +41,14 @@ server.start().then(async (actualPort) => {
 
   if (noBrowser) {
     // Quiet mode — running alongside Vite via concurrently
-    console.log(`  Miniverse server ready on port ${actualPort}`);
+    console.log(`  Agentville server ready on port ${actualPort}`);
     console.log('');
   } else {
     // Standalone mode — show the full banner
     const line = `  Server:  ${url}`;
     const pad = 38 - line.length;
     console.log('  ╔══════════════════════════════════════╗');
-    console.log('  ║           M I N I V E R S E          ║');
+    console.log('  ║          A G E N T V I L L E         ║');
     console.log('  ╠══════════════════════════════════════╣');
     console.log(`  ║${line}${' '.repeat(pad)}║`);
     console.log('  ╚══════════════════════════════════════╝');
@@ -65,13 +65,13 @@ server.start().then(async (actualPort) => {
     exec(cmd, () => {});
   }
 }).catch((err) => {
-  console.error('Failed to start Miniverse server:', err);
+  console.error('Failed to start Agentville server:', err);
   process.exit(1);
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\nShutting down Miniverse...');
+  console.log('\nShutting down Agentville...');
   server.stop();
   process.exit(0);
 });

@@ -1,6 +1,6 @@
 /**
  * Nightshift visualization frontend.
- * Serves the pixel-art world + status panel using @miniverse/core.
+ * Serves the pixel-art world + status panel using agentville core engine.
  */
 export function getFrontendHtml(): string {
   return `<!DOCTYPE html>
@@ -289,7 +289,7 @@ function evictOldest() {
   }
 }
 
-// --- Load world and start miniverse ---
+// --- Load world and start agentville ---
 // worldKey is "repo/team" (e.g. "nightshift/dev")
 async function startWorld(worldKey) {
   // Already cached — just show it

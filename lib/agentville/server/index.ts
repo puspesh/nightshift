@@ -1,5 +1,5 @@
-export { MiniverseServer } from './server.js';
-export type { MiniverseServerConfig } from './server.js';
+export { AgentvilleServer } from './server.js';
+export type { AgentvilleServerConfig } from './server.js';
 export { AgentStore } from './store.js';
 export type { AgentState } from './store.js';
 export { EventLog } from './events.js';

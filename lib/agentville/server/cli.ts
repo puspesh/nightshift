@@ -3,7 +3,7 @@ import { AgentvilleServer } from './server.js';
 
 const args = process.argv.slice(2);
 
-// Handle `miniverse report <state>` subcommand for use in hooks
+// Handle `agentville report <state>` subcommand for use in hooks
 if (args[0] === 'report') {
   const state = args[1] ?? 'idle';
   const taskIdx = args.indexOf('--task');

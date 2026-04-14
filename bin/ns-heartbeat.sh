@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Best-effort heartbeat to the nightshift miniverse server.
+# Best-effort heartbeat to the nightshift agentville server.
 # Always exits 0 — the visualization server may not be running and that's fine.
 #
 # Usage: ns-heartbeat.sh <server_url> <agent> <event>

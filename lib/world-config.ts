@@ -20,7 +20,7 @@ const CHAIR_W = 1.1;
 const CHAIR_H = 1.9;
 
 /**
- * Generate a miniverse world configuration from a list of agents.
+ * Generate an agentville world configuration from a list of agents.
  * Workstations are placed in a grid layout that adapts to agent count.
  * Each agent gets a desk + chair prop pair.
  */

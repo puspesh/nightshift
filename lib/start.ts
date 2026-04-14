@@ -102,8 +102,8 @@ async function setupVisualization(
 ): Promise<string | null> {
   let vizUrl: string | null = null;
   try {
-    const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
-    const teamWorldDir = join(miniverseDir, repoName, team);
+    const vizDataDir = join(homedir(), '.nightshift', 'miniverse');
+    const teamWorldDir = join(vizDataDir, repoName, team);
 
     // Read base world data for spawn position computation
     const baseWorldDir = join(__dirname, '..', 'worlds', 'agentville');
@@ -122,7 +122,7 @@ async function setupVisualization(
     mkdirSync(teamWorldDir, { recursive: true });
     if (existsSync(baseWorldDir)) {
       execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
-      execSync(`cp -R "${baseWorldDir}/universal_assets" "${miniverseDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp -R "${baseWorldDir}/universal_assets" "${vizDataDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
     const baseWorldPath = join(teamWorldDir, 'base-world.json');
@@ -130,13 +130,13 @@ async function setupVisualization(
     writeFileSync(join(teamWorldDir, 'world.json'), JSON.stringify(merged, null, 2) + '\n');
 
     const coreDir = join(__dirname, 'agentville', 'core');
-    mkdirSync(join(miniverseDir, '..', 'core'), { recursive: true });
+    mkdirSync(join(vizDataDir, '..', 'core'), { recursive: true });
     if (existsSync(join(coreDir, 'agentville-core.js'))) {
-      execSync(`cp "${coreDir}/agentville-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp "${coreDir}/agentville-core.js" "${join(vizDataDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
     stopAgentville();
-    const result = startAgentville(vizPort, miniverseDir);
+    const result = startAgentville(vizPort, vizDataDir);
     if (!result) {
       console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
       throw new Error('Server start failed');

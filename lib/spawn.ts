@@ -1,5 +1,5 @@
 /**
- * Spawn position computation for miniverse citizens.
+ * Spawn position computation for agentville citizens.
  * Analyzes floor grid and prop layout to find valid walkable tiles.
  */
 

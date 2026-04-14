@@ -11,16 +11,28 @@ const __dirname = dirname(__filename);
 
 /**
  * Get the path to the global agentville PID file.
+ * Checks ~/.agentville/ first, falls back to ~/.nightshift/.
  */
 export function getPidFilePath(): string {
-  return join(homedir(), '.nightshift', 'agentville.pid');
+  const newPath = join(homedir(), '.agentville', 'agentville.pid');
+  if (existsSync(newPath)) return newPath;
+  const oldPath = join(homedir(), '.nightshift', 'agentville.pid');
+  if (existsSync(oldPath)) return oldPath;
+  // Default to new path for writes
+  return newPath;
 }
 
 /**
  * Get the path to the global agentville port file.
+ * Checks ~/.agentville/ first, falls back to ~/.nightshift/.
  */
 export function getPortFilePath(): string {
-  return join(homedir(), '.nightshift', 'agentville.port');
+  const newPath = join(homedir(), '.agentville', 'agentville.port');
+  if (existsSync(newPath)) return newPath;
+  const oldPath = join(homedir(), '.nightshift', 'agentville.port');
+  if (existsSync(oldPath)) return oldPath;
+  // Default to new path for writes
+  return newPath;
 }
 
 /**
@@ -31,15 +43,67 @@ export function getLogFilePath(): string {
 }
 
 /**
+ * Check if a process with the given PID is running.
+ */
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if agentville is already running at either PID path.
+ * Returns the PID if running, null otherwise.
+ */
+function findRunningInstance(): { pid: number; pidFile: string } | null {
+  const paths = [
+    join(homedir(), '.agentville', 'agentville.pid'),
+    join(homedir(), '.nightshift', 'agentville.pid'),
+  ];
+
+  for (const pidFile of paths) {
+    if (!existsSync(pidFile)) continue;
+    try {
+      const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+      if (!isNaN(pid) && isProcessAlive(pid)) {
+        return { pid, pidFile };
+      }
+    } catch {
+      // Stale PID file
+    }
+  }
+  return null;
+}
+
+/**
  * Start the agentville server as a detached child process.
  * Returns the URL of the running server, or null if it failed to start.
+ * Checks if already running at either PID path before starting.
  */
 export function startAgentville(
   port: number,
   publicDir: string,
 ): { pid: number; url: string } | null {
-  const pidFile = getPidFilePath();
-  const portFile = getPortFilePath();
+  // Check if already running at either location
+  const running = findRunningInstance();
+  if (running) {
+    // Already running — return the existing instance info
+    // Try to read the port from corresponding port file
+    const portFile = running.pidFile.replace('.pid', '.port');
+    let existingPort = port;
+    if (existsSync(portFile)) {
+      try {
+        existingPort = parseInt(readFileSync(portFile, 'utf-8').trim(), 10) || port;
+      } catch { /* use default */ }
+    }
+    return { pid: running.pid, url: `http://localhost:${existingPort}` };
+  }
+
+  const pidFile = join(homedir(), '.nightshift', 'agentville.pid');
+  const portFile = join(homedir(), '.nightshift', 'agentville.port');
   const logFile = getLogFilePath();
 
   // Ensure parent directory exists
@@ -140,45 +204,41 @@ export async function registerAgentvilleAgents(url: string, agents: AgentEntry[]
 
 /**
  * Stop the global agentville server by reading the PID file and killing the process.
+ * Checks both ~/.agentville/ and ~/.nightshift/ locations.
  */
 export function stopAgentville(): void {
-  const pidFile = getPidFilePath();
-  const portFile = getPortFilePath();
+  const pidPaths = [
+    join(homedir(), '.agentville', 'agentville.pid'),
+    join(homedir(), '.nightshift', 'agentville.pid'),
+  ];
 
-  if (!existsSync(pidFile)) return;
+  for (const pidFile of pidPaths) {
+    if (!existsSync(pidFile)) continue;
+    const portFile = pidFile.replace('.pid', '.port');
 
-  try {
-    const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
-    if (!isNaN(pid)) {
-      process.kill(pid);
+    try {
+      const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+      if (!isNaN(pid)) {
+        process.kill(pid);
+      }
+    } catch {
+      // Process may already be dead
     }
-  } catch {
-    // Process may already be dead
-  }
 
-  // Clean up PID and port files
-  try {
-    unlinkSync(pidFile);
-    if (existsSync(portFile)) unlinkSync(portFile);
-  } catch {
-    // Ignore cleanup errors
+    // Clean up PID and port files
+    try {
+      unlinkSync(pidFile);
+      if (existsSync(portFile)) unlinkSync(portFile);
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 }
 
 /**
  * Check if the global agentville server is running.
+ * Checks both ~/.agentville/ and ~/.nightshift/ locations.
  */
 export function isAgentvilleRunning(): boolean {
-  const pidFile = getPidFilePath();
-  if (!existsSync(pidFile)) return false;
-
-  try {
-    const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
-    if (isNaN(pid)) return false;
-    // Sending signal 0 checks if process exists without killing it
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+  return findRunningInstance() !== null;
 }

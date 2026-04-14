@@ -964,7 +964,7 @@ export class AgentvilleServer {
       // Handle base64 reference image
       let refImage: string | undefined;
       if (data.image) {
-        const tmpPath = path.join(tmpdir(), `miniverse_ref_${Date.now()}.png`);
+        const tmpPath = path.join(tmpdir(), `agentville_ref_${Date.now()}.png`);
         writeFileSync(tmpPath, Buffer.from(data.image, 'base64'));
         refImage = tmpPath;
       }

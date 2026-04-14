@@ -334,6 +334,7 @@ export class AgentvilleServer {
         }
         world.floor[y][x] = tile;
         this.writeWorld(worldId, world);
+        this.triggerSave();
         this.events.push(agentId, { type: 'paint_tile', x, y, tile, world: worldId });
         this.queueInbox(agentId, 'system', JSON.stringify({ ok: true, action: 'paint_tile', x, y, tile }));
         return;
@@ -352,6 +353,7 @@ export class AgentvilleServer {
         world.props = world.props.filter((p: any) => p.id !== id);
         world.props.push({ id, x, y, w: w ?? 1, h: h ?? 1, layer: layer ?? 'below' });
         this.writeWorld(worldId, world);
+        this.triggerSave();
         this.events.push(agentId, { type: 'place_prop', id, x, y, world: worldId });
         this.queueInbox(agentId, 'system', JSON.stringify({ ok: true, action: 'place_prop', id, x, y }));
         return;
@@ -365,6 +367,7 @@ export class AgentvilleServer {
         const before = (world.props ?? []).length;
         world.props = (world.props ?? []).filter((p: any) => p.id !== propId);
         this.writeWorld(worldId, world);
+        this.triggerSave();
         this.events.push(agentId, { type: 'remove_prop', id: propId, world: worldId });
         this.queueInbox(agentId, 'system', JSON.stringify({ ok: true, action: 'remove_prop', id: propId, removed: before !== world.props.length }));
         return;

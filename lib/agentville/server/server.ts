@@ -655,9 +655,9 @@ export class AgentvilleServer {
       return;
     }
 
-    // Serve miniverse-core.js bundle
-    if (req.method === 'GET' && url.pathname === '/miniverse-core.js') {
-      const corePath = path.join(this.publicDir ?? '.', '..', 'core', 'miniverse-core.js');
+    // Serve agentville-core.js bundle (with backward-compat alias for miniverse-core.js)
+    if (req.method === 'GET' && (url.pathname === '/agentville-core.js' || url.pathname === '/miniverse-core.js')) {
+      const corePath = path.join(this.publicDir ?? '.', '..', 'core', 'agentville-core.js');
       if (existsSync(corePath)) {
         res.writeHead(200, { 'Content-Type': 'application/javascript' });
         res.end(readFileSync(corePath));

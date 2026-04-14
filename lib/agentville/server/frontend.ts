@@ -197,7 +197,7 @@ h1 {
 </div>
 
 <script type="module">
-import { Miniverse, PropSystem, createStandardSpriteConfig } from '/miniverse-core.js';
+import { Agentville, PropSystem, createStandardSpriteConfig } from '/agentville-core.js';
 
 const STATE_LABELS = {
   working: 'Working', idle: 'Idle', thinking: 'Thinking',
@@ -384,7 +384,7 @@ async function startWorld(worldKey) {
   worldContainer.style.display = 'none';
   container.appendChild(worldContainer);
 
-  const mv = new Miniverse({
+  const mv = new Agentville({
     container: worldContainer,
     world: 'nightshift',
     scene: 'main',

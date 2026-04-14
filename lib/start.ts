@@ -131,8 +131,8 @@ async function setupVisualization(
 
     const coreDir = join(__dirname, 'agentville', 'core');
     mkdirSync(join(miniverseDir, '..', 'core'), { recursive: true });
-    if (existsSync(join(coreDir, 'miniverse-core.js'))) {
-      execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
+    if (existsSync(join(coreDir, 'agentville-core.js'))) {
+      execSync(`cp "${coreDir}/agentville-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
     stopAgentville();

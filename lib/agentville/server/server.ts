@@ -9,6 +9,8 @@ import { getFrontendHtml } from './frontend.js';
 import type { AgentvilleWorld } from '../schema.js';
 import type { AgentvilleEvent } from '../event-types.js';
 import { validateEvent } from '../event-types.js';
+import { awardCoins } from '../economy.js';
+import { DEFAULT_COSMETICS } from '../catalog.js';
 
 export interface AgentvilleServerConfig {
   port?: number;
@@ -154,12 +156,60 @@ export class AgentvilleServer {
         const color = data.color as string | undefined;
         const energy = typeof data.energy === 'number' ? data.energy : undefined;
         this.store.heartbeat({ agent: agentKey, name, state, task, color, energy });
+
+        // Register agent and assign desk if game state is active
+        if (this.gameState) {
+          if (!this.gameState.agents[agentKey]) {
+            const agentCount = Object.keys(this.gameState.agents).length;
+            const cosmetic = DEFAULT_COSMETICS[agentCount % DEFAULT_COSMETICS.length];
+            this.gameState.agents[agentKey] = {
+              source: event.source,
+              name,
+              cosmetic,
+              accessories: [],
+              desk: null,
+            };
+          }
+
+          const agent = this.gameState.agents[agentKey];
+          if (!agent.desk) {
+            const assignedDesks = new Set(
+              Object.values(this.gameState.agents)
+                .map((a) => a.desk)
+                .filter(Boolean),
+            );
+            const freeDesk = this.gameState.inventory.find(
+              (item) => item.type === 'desk' && item.placed && !assignedDesks.has(item.id),
+            );
+            if (freeDesk) {
+              agent.desk = freeDesk.id;
+              this.triggerSave();
+            }
+          }
+        }
+
         this.broadcastWs({ type: 'state:update', payload: { agent: agentKey, state, task }, timestamp: Date.now() });
         break;
       }
 
       case 'work:completed': {
-        // Stub for Phase 4 economy engine
+        if (this.gameState) {
+          const workType = (data.workType as string) ?? '';
+          const activeAgentCount = this.store.getAll().filter((a) => a.state === 'working' || a.state === 'thinking').length;
+          const result = awardCoins(this.gameState, agentKey, workType, activeAgentCount);
+          this.triggerSave();
+          this.broadcastWs({
+            type: 'coins:earned',
+            payload: {
+              agent: agentKey,
+              coins: result.coinsAwarded,
+              total: this.gameState.coins,
+              multiplier: result.multiplier,
+              drop: result.drop ?? null,
+            },
+            timestamp: Date.now(),
+          });
+        }
         this.broadcastWs({ type: 'work:completed', payload: { agent: agentKey, ...data }, timestamp: Date.now() });
         break;
       }

@@ -10,7 +10,8 @@ import type { AgentvilleWorld } from '../schema.js';
 import type { AgentvilleEvent } from '../event-types.js';
 import { validateEvent } from '../event-types.js';
 import { awardCoins } from '../economy.js';
-import { DEFAULT_COSMETICS } from '../catalog.js';
+import { DEFAULT_COSMETICS, getCatalogByType } from '../catalog.js';
+import { purchaseItem, placeItem, unplaceItem, setAgentCosmetic } from '../shop.js';
 
 export interface AgentvilleServerConfig {
   port?: number;
@@ -1115,6 +1116,184 @@ export class AgentvilleServer {
       const events = since ? this.events.since(parseInt(since, 10)) : this.events.recent(50);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ events, lastEventId: this.events.lastId() }));
+      return;
+    }
+
+    // --- Shop & Catalog API ---
+
+    if (req.method === 'GET' && url.pathname === '/api/catalog') {
+      const types = ['desk', 'facility', 'decoration', 'cosmetic', 'consumable', 'expansion'] as const;
+      const catalog: Record<string, unknown[]> = {};
+      for (const type of types) {
+        catalog[type] = getCatalogByType(type);
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ catalog }));
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/api/catalog/')) {
+      const type = url.pathname.slice('/api/catalog/'.length);
+      const items = getCatalogByType(type);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ items }));
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/shop/buy') {
+      if (!this.gameState) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No game state available' }));
+        return;
+      }
+      try {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const result = purchaseItem(this.gameState, data.catalogId);
+        if (result.success) {
+          this.triggerSave();
+          this.broadcastWs({
+            type: 'item:purchased',
+            payload: { catalogId: data.catalogId, item: result.item ?? null, coins: this.gameState.coins },
+            timestamp: Date.now(),
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        }
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/shop/place') {
+      if (!this.gameState) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No game state available' }));
+        return;
+      }
+      try {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const result = placeItem(this.gameState, data.itemId, data.roomId, data.x, data.y);
+        if (result.success) {
+          this.triggerSave();
+          this.broadcastWs({
+            type: 'item:placed',
+            payload: { itemId: data.itemId, roomId: data.roomId, x: data.x, y: data.y, item: result.item ?? null },
+            timestamp: Date.now(),
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        }
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/shop/unplace') {
+      if (!this.gameState) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No game state available' }));
+        return;
+      }
+      try {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const result = unplaceItem(this.gameState, data.itemId);
+        if (result.success) {
+          this.triggerSave();
+          this.broadcastWs({
+            type: 'item:placed',
+            payload: { itemId: data.itemId, item: result.item ?? null },
+            timestamp: Date.now(),
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        }
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/shop/use') {
+      if (!this.gameState) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No game state available' }));
+        return;
+      }
+      try {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const item = this.gameState.inventory.find(i => i.id === data.itemId);
+        if (!item) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Item not in inventory' }));
+          return;
+        }
+        if (item.type !== 'consumable') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Item is not a consumable' }));
+          return;
+        }
+        // Remove from inventory (consumed)
+        this.gameState.inventory = this.gameState.inventory.filter(i => i.id !== data.itemId);
+        this.triggerSave();
+        this.broadcastWs({
+          type: 'effect:activated',
+          payload: { itemId: data.itemId, catalogId: item.catalogId },
+          timestamp: Date.now(),
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, catalogId: item.catalogId }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/agent/cosmetic') {
+      if (!this.gameState) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No game state available' }));
+        return;
+      }
+      try {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const result = setAgentCosmetic(this.gameState, data.agentKey, data.cosmeticId);
+        if (result.success) {
+          this.triggerSave();
+          this.broadcastWs({
+            type: 'state:update',
+            payload: { agent: data.agentKey, cosmetic: data.cosmeticId },
+            timestamp: Date.now(),
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        }
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+      }
       return;
     }
 

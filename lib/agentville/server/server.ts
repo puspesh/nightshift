@@ -7,6 +7,8 @@ import { AgentStore } from './store.js';
 import { EventLog, type WorldEvent } from './events.js';
 import { getFrontendHtml } from './frontend.js';
 import type { AgentvilleWorld } from '../schema.js';
+import type { AgentvilleEvent } from '../event-types.js';
+import { validateEvent } from '../event-types.js';
 
 export interface AgentvilleServerConfig {
   port?: number;
@@ -125,6 +127,79 @@ export class AgentvilleServer {
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(msg);
+      }
+    }
+  }
+
+  /** Send a targeted event notification to all connected WebSocket clients. */
+  private broadcastWs(message: { type: string; payload: Record<string, unknown>; timestamp: number }): void {
+    const msg = JSON.stringify(message);
+    for (const ws of this.clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
+  }
+
+  // --- Unified Event API handler ---
+
+  private handleEvent(event: AgentvilleEvent): void {
+    // Internal agent key: {source}/{agent}
+    const agentKey = `${event.source}/${event.agent}`;
+    const data = event.data ?? {};
+
+    switch (event.type) {
+      case 'agent:heartbeat': {
+        const name = (data.name as string) ?? event.agent;
+        const state = (data.state as string) ?? undefined;
+        const task = data.task !== undefined ? (data.task as string | null) : undefined;
+        const color = data.color as string | undefined;
+        const energy = typeof data.energy === 'number' ? data.energy : undefined;
+        this.store.heartbeat({ agent: agentKey, name, state, task, color, energy });
+        this.broadcastWs({ type: 'state:update', payload: { agent: agentKey, state, task }, timestamp: Date.now() });
+        break;
+      }
+
+      case 'work:completed': {
+        // Stub for Phase 4 economy engine
+        this.broadcastWs({ type: 'work:completed', payload: { agent: agentKey, ...data }, timestamp: Date.now() });
+        break;
+      }
+
+      case 'agent:spawned': {
+        const childKey = `${event.source}/${data.child ?? event.agent + '-sub'}`;
+        const childName = (data.task as string) ? `Agent (${truncate(data.task as string, 20)})` : `Sub-agent of ${event.agent}`;
+        this.store.heartbeat({ agent: childKey, name: childName, state: 'working', task: (data.task as string) ?? 'Running' });
+        this.broadcastWs({ type: 'agent:registered', payload: { agent: childKey, parent: agentKey }, timestamp: Date.now() });
+        break;
+      }
+
+      case 'agent:spawn-ended': {
+        const childKey = `${event.source}/${data.child ?? event.agent + '-sub'}`;
+        this.store.heartbeat({ agent: childKey, state: 'offline', task: null });
+        this.broadcastWs({ type: 'state:update', payload: { agent: childKey, state: 'offline' }, timestamp: Date.now() });
+        break;
+      }
+
+      case 'agent:idle': {
+        const reason = data.reason as string | undefined;
+        const idleState = reason === 'session_ended' ? 'offline' : 'idle';
+        this.store.heartbeat({
+          agent: agentKey,
+          state: idleState,
+          task: null,
+          metadata: reason ? { idleReason: reason } : undefined,
+        });
+        this.broadcastWs({ type: 'state:update', payload: { agent: agentKey, state: idleState, reason }, timestamp: Date.now() });
+        break;
+      }
+
+      case 'agent:error': {
+        this.store.heartbeat({
+          agent: agentKey,
+          state: 'error',
+          task: (data.error as string) ?? 'Error',
+        });
+        this.broadcastWs({ type: 'state:update', payload: { agent: agentKey, state: 'error', error: data.error }, timestamp: Date.now() });
+        break;
       }
     }
   }
@@ -821,6 +896,28 @@ export class AgentvilleServer {
       return;
     }
 
+    // --- Unified Event API ---
+    if (req.method === 'POST' && url.pathname === '/api/events') {
+      try {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const event = validateEvent(data);
+        if (!event) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid event envelope' }));
+          return;
+        }
+        this.handleEvent(event);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+      }
+      return;
+    }
+
+    // @deprecated — Use POST /api/events with type: 'agent:heartbeat' instead
     if (req.method === 'POST' && url.pathname === '/api/heartbeat') {
       try {
         const body = await readBody(req);
@@ -901,6 +998,7 @@ export class AgentvilleServer {
     }
 
     // --- Claude Code hooks endpoint ---
+    // @deprecated — Use POST /api/events instead
 
     if (req.method === 'POST' && url.pathname.startsWith('/api/hooks/claude-code')) {
       try {

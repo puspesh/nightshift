@@ -15,7 +15,7 @@ export class AgentStore {
   private listeners: Set<(agents: AgentState[]) => void> = new Set();
   private sweepInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(offlineTimeout = 120000) {
+  constructor(offlineTimeout = 300000) {
     this.offlineTimeout = offlineTimeout;
   }
 
@@ -91,6 +91,9 @@ export class AgentStore {
     let changed = false;
 
     for (const [id, agent] of this.agents) {
+      // Agents that explicitly ended their session stay offline — no sleeping transition
+      if (agent.metadata?.idleReason === 'session_ended') continue;
+
       const elapsed = now - agent.lastSeen;
       if (agent.state !== 'offline' && agent.state !== 'sleeping' && elapsed > this.offlineTimeout) {
         // Graceful: sleep first, then offline

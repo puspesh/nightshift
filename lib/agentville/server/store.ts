@@ -12,15 +12,17 @@ export interface AgentState {
 export class AgentStore {
   private agents: Map<string, AgentState> = new Map();
   private offlineTimeout: number;
+  private sweepMs: number;
   private listeners: Set<(agents: AgentState[]) => void> = new Set();
   private sweepInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(offlineTimeout = 300000) {
+  constructor(offlineTimeout = 300000, sweepMs = 5000) {
     this.offlineTimeout = offlineTimeout;
+    this.sweepMs = sweepMs;
   }
 
   start() {
-    this.sweepInterval = setInterval(() => this.sweep(), 5000);
+    this.sweepInterval = setInterval(() => this.sweep(), this.sweepMs);
   }
 
   stop() {

@@ -1,0 +1,82 @@
+name: dev
+description: Software development team
+
+stages:
+  - name: planning
+    color: "1d76db"
+  - name: plan-review
+    color: "5319e7"
+  - name: plan-revising
+    color: "fbca04"
+  - name: approved
+    color: "0e8a16"
+  - name: code-review
+    color: "5319e7"
+  - name: code-revising
+    color: "fbca04"
+  - name: testing
+    color: "1d76db"
+  - name: ready-to-merge
+    color: "0e8a16"
+  - name: wip
+    color: "ededed"
+    meta: true
+  - name: blocked
+    color: "d93f0b"
+    meta: true
+  - name: needs-info
+    color: "d93f0b"
+    meta: true
+
+agents:
+  producer:
+    description: Triages new issues, monitors team health
+    watches: [unlabeled, ready-to-merge]
+    transitions:
+      triage-feature: planning
+      triage-bug: approved
+      validate-fail: code-revising
+    tools: [Read, Bash, Grep, Glob]
+    model: sonnet
+    worktree: false
+
+  planner:
+    description: Explores codebase, writes implementation plans
+    watches: [planning, plan-revising]
+    transitions:
+      success: plan-review
+      error: blocked
+    tools: [Read, Grep, Glob, Bash, Write, Edit, Agent, Skill]
+    model: opus
+
+  reviewer:
+    description: Reviews plans and code for quality
+    watches: [plan-review, code-review]
+    transitions:
+      plan-approve: approved
+      plan-reject: plan-revising
+      code-approve: testing
+      code-reject: code-revising
+    tools: [Read, Grep, Glob, Bash, Agent, Write, Edit, Skill]
+    model: opus
+
+  coder:
+    description: Implements from approved plans, raises PRs
+    watches: [approved, code-revising]
+    transitions:
+      success: code-review
+      error: blocked
+    tools: [Read, Grep, Glob, Bash, Write, Edit, Agent, Skill]
+    model: opus
+    scalable: true
+    instances: 2
+    max_instances: 4
+
+  tester:
+    description: Runs tests, reports results
+    watches: [testing]
+    transitions:
+      pass: ready-to-merge
+      fail: code-revising
+    tools: [Read, Grep, Glob, Bash, Write, Edit, Agent, Skill]
+    model: sonnet

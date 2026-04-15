@@ -1,149 +1,145 @@
 # Adding Agents
 
-nightshift ships with 5 agents, but you can add more for specialized tasks.
+nightshift ships with 5 agents in the `dev` team, but you can add more for
+specialized tasks.
 
-## How to Add a 6th Agent
+## How to Add an Agent
 
-### 1. Create the agent profile
+### 1. Define the agent in team.yaml
 
-Create `~/.claude/agents/ns-<team>-<name>.md` with this structure:
+Add the agent to your team's `team.yaml` (either in a built-in preset or a
+custom team under `.claude/nightshift/teams/<team>/team.yaml`):
+
+```yaml
+agents:
+  # ... existing agents ...
+  docs:
+    description: Writes documentation after code is merged
+    watches: [ready-to-merge]
+    transitions:
+      document: docs-review
+    tools: [Read, Grep, Glob, Bash, Write, Edit]
+    model: sonnet
+    worktree: true
+```
+
+### 2. Add any new stages
+
+If the agent needs new pipeline stages, add them to the `stages` section:
+
+```yaml
+stages:
+  # ... existing stages ...
+  - name: docs-review
+    color: "5319e7"
+```
+
+### 3. Create a behavior template
+
+Create a `.md` template in your team's preset directory (e.g.,
+`presets/<team>/agents/docs.md` or `.claude/nightshift/teams/<team>/agents/docs.md`):
 
 ```markdown
-# This file is managed by nightshift. Customize via .claude/nightshift/*.md
-
----
-name: ns-<team>-<name>
-description: >
-  What this agent does. Run via /loop 15m @ns-dev-<name>.
-tools: Read, Grep, Glob, Bash, Write, Edit
-model: sonnet
-memory: project
----
-
-<PIPELINE-AGENT>
-STOP. Do NOT check for skills, brainstorm, or explore. You are a pipeline agent.
-
-Your FIRST action must be this bash command:
-\```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel))
-cat ~/.nightshift/${REPO_NAME}/locks/ns-<team>-<name>.lock 2>/dev/null
-\```
-
-Then follow the Workflow section step by step.
-</PIPELINE-AGENT>
-
-You are **@ns-dev-<name>** — <role description>.
-
-## Pipeline Role
-
-| Watch for | Action | Set label to |
-|-----------|--------|--------------|
-| `status:<input>` | <what it does> | `status:<output>` |
-
-## Worktree & Branch Protocol
-...
-
-## Workflow
-...
-
-## Guard Rails
-...
-```
-
-### 2. Add new pipeline states (if needed)
-
-If your agent needs new labels:
-
-1. Add them to `.claude/nightshift/config.md`
-2. Create them on GitHub: `gh label create "<team>:<name>" --color "<hex>"`
-3. Update upstream agents to transition to your new state
-4. Update downstream agents to watch for your output state
-
-### 3. Create a worktree
-
-```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel))
-MAIN_BRANCH=main  # or master
-
-git branch _ns/dev/<name> origin/${MAIN_BRANCH}
-git worktree add ~/.nightshift/${REPO_NAME}/worktrees/<name> _ns/dev/<name>
-```
-
-### 4. Start the agent
-
-```bash
-/loop 15m @ns-dev-<name>
-```
-
-## Example: Documentation Writer
-
-A `ns-<team>-docs` agent that writes documentation after code is merged:
-
-```markdown
-## Pipeline Role
-
-| Watch for | Action | Set label to |
-|-----------|--------|--------------|
-| `dev:ready-to-merge` | Write/update docs for the changes | `status:docs-review` |
+You are **@{{agent_name}}** -- the documentation agent for nightshift team **{{team_name}}**.
 
 ## Workflow
 
-1. Check lock, find issues with `dev:ready-to-merge`
+1. Find issues with `{{team_name}}:ready-to-merge`
 2. Read the PR diff and plan file
 3. Update relevant documentation (README, API docs, guides)
 4. Commit docs changes to the feature branch
 5. Post comment with what was documented
-6. Set label to `status:docs-review`
+6. Transition the issue to `docs-review`
+```
+
+The template uses `{{mustache}}` variables that are filled in during generation.
+Available variables: `agent_name`, `team_name`, `repo_name`, `main_branch`,
+`team_dir`, `role`, `instance_number`.
+
+### 4. Regenerate and start
+
+```bash
+# Regenerate agent profiles
+npx nightshift reinit --team <team>
+
+# Create worktrees for the new agent
+npx nightshift init --team <team>
+
+# Start all agents
+npx nightshift start --team <team>
+```
+
+## Behavior Overrides
+
+To customize an agent's behavior without forking the preset:
+
+1. Create `.claude/nightshift/agents/<role>.md` (e.g., `coder.md`, `producer.md`)
+2. This file replaces the built-in template for that agent
+3. Run `npx nightshift reinit --team <team>` to regenerate
+
+Overrides are preserved across `--reset` operations.
+
+## Custom Teams
+
+For teams with entirely different agent configurations:
+
+```bash
+# Create a custom team directory
+mkdir -p .claude/nightshift/teams/ops
+
+# Add team.yaml and agent templates
+# team.yaml defines stages, agents, and their configs
+# agents/ directory contains behavior templates
+
+# Initialize with --from for the first setup
+npx nightshift init --team ops --from .claude/nightshift/teams/ops
+```
+
+See `presets/dev/` for the reference team structure.
+
+## Multi-Coder Setup
+
+The coder agent is scalable by default. To run more coders:
+
+```bash
+# Start with 3 coders instead of the default 2
+npx nightshift init --team dev --coders 3
+npx nightshift start --team dev
+```
+
+The `max_instances` field in `team.yaml` controls the upper limit (default: 4).
+
+## Example: Documentation Writer
+
+A `docs` agent that writes documentation after code is merged:
+
+```yaml
+# In team.yaml
+agents:
+  docs:
+    description: Writes documentation after code is merged
+    watches: [ready-to-merge]
+    transitions:
+      document: docs-review
+    tools: [Read, Grep, Glob, Bash, Write, Edit]
+    model: sonnet
+    worktree: true
 ```
 
 ## Example: Security Scanner
 
-A `nightshift-security` agent that runs security checks:
+A `security` agent that runs in parallel with the reviewer:
 
-```markdown
-## Pipeline Role
-
-| Watch for | Action | Set label to |
-|-----------|--------|--------------|
-| `dev:code-review` | Run security scans | _(posts findings as comment)_ |
+```yaml
+agents:
+  security:
+    description: Runs security scans on code under review
+    watches: [code-review]
+    transitions: {}
+    tools: [Read, Grep, Glob, Bash]
+    model: sonnet
+    worktree: true
 ```
 
-This agent runs in parallel with the reviewer, posting security findings
-as a separate comment on the issue.
-
-## How to Fork an Existing Agent
-
-If you need to deeply customize an agent's behavior:
-
-1. Copy the agent profile: `cp ~/.claude/agents/ns-dev-coder.md ~/.claude/agents/ns-dev-coder-custom.md`
-2. Update the frontmatter `name` field
-3. Make your changes to the workflow
-4. Use the new name: `/loop 15m @ns-dev-coder-custom`
-
-## Multi-Coder Setup
-
-For larger teams, run multiple coders:
-
-1. Copy the coder profile:
-   ```bash
-   cp ~/.claude/agents/ns-dev-coder.md ~/.claude/agents/ns-dev-coder-1.md
-   cp ~/.claude/agents/ns-dev-coder.md ~/.claude/agents/ns-dev-coder-2.md
-   ```
-
-2. Update the `name` field in each copy
-
-3. Create worktrees for each:
-   ```bash
-   git branch _ns/dev/coder-1 origin/main
-   git branch _ns/dev/coder-2 origin/main
-   git worktree add ~/.nightshift/${REPO_NAME}/worktrees/coder-1 _ns/dev/coder-1
-   git worktree add ~/.nightshift/${REPO_NAME}/worktrees/coder-2 _ns/dev/coder-2
-   ```
-
-4. Start both:
-   ```bash
-   /loop 15m @ns-dev-coder-1
-   /loop 15m @ns-dev-coder-2
-   ```
-
-They'll pick up different issues (the `wip` label prevents conflicts).
+This agent watches the same label as the reviewer but posts findings as
+comments rather than transitioning labels.

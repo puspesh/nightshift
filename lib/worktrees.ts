@@ -119,21 +119,6 @@ export function removeWorktrees(repoName: string, team: string): void {
 }
 
 /**
- * Discover the number of coder roles for a team.
- */
-export function discoverCoderCount(repoName: string, team: string): number {
-  const worktreesDir = join(getTeamDir(repoName, team), 'worktrees');
-
-  if (!existsSync(worktreesDir)) {
-    return 0;
-  }
-
-  return readdirSync(worktreesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith('coder-'))
-    .length;
-}
-
-/**
  * Discover all teams for a repository.
  */
 export function discoverTeams(repoName: string): string[] {

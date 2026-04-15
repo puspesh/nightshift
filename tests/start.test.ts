@@ -2,8 +2,16 @@ import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { getSessionName, buildAgentList, parseRunner, getHeadlessPidDir, writeAgentPid, stopHeadlessAgents } from '../lib/start.js';
+import { tmpdir, homedir } from 'node:os';
+import { getSessionName, buildAgentListFromConfig, loadTeamConfig, parseRunner, getHeadlessPidDir, writeAgentPid, stopHeadlessAgents } from '../lib/start.js';
+import { resolveAgentConfig } from '../lib/agent-config.js';
+import { parseTeamConfig, parseTeamConfigFromString } from '../lib/team-config.js';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PRESETS_DIR = join(__dirname, '..', '..', 'presets');
 
 describe('getSessionName', () => {
   it('returns nightshift-<repo>-<team>', () => {
@@ -12,64 +20,6 @@ describe('getSessionName', () => {
 
   it('handles hyphenated names', () => {
     assert.equal(getSessionName('my-app', 'team-a'), 'nightshift-my-app-team-a');
-  });
-});
-
-describe('buildAgentList', () => {
-  it('returns 5 agents for 1 coder', () => {
-    const agents = buildAgentList('dev', 1, '/repo', 'myapp');
-    assert.equal(agents.length, 5);
-    assert.equal(agents[0].role, 'producer');
-    assert.equal(agents[1].role, 'planner');
-    assert.equal(agents[2].role, 'reviewer');
-    assert.equal(agents[3].role, 'coder-1');
-    assert.equal(agents[4].role, 'tester');
-  });
-
-  it('returns 7 agents for 3 coders', () => {
-    const agents = buildAgentList('dev', 3, '/repo', 'myapp');
-    assert.equal(agents.length, 7);
-    assert.equal(agents[3].role, 'coder-1');
-    assert.equal(agents[4].role, 'coder-2');
-    assert.equal(agents[5].role, 'coder-3');
-    assert.equal(agents[6].role, 'tester');
-  });
-
-  it('returns 8 agents for 4 coders', () => {
-    const agents = buildAgentList('dev', 4, '/repo', 'myapp');
-    assert.equal(agents.length, 8);
-  });
-
-  it('sets correct agent names', () => {
-    const agents = buildAgentList('dev', 1, '/repo', 'myapp');
-    assert.equal(agents[0].agent, 'ns-dev-producer');
-    assert.equal(agents[1].agent, 'ns-dev-planner');
-    assert.equal(agents[2].agent, 'ns-dev-reviewer');
-    assert.equal(agents[3].agent, 'ns-dev-coder-1');
-    assert.equal(agents[4].agent, 'ns-dev-tester');
-  });
-
-  it('producer runs from repoRoot', () => {
-    const agents = buildAgentList('dev', 1, '/my/repo', 'myapp');
-    assert.equal(agents[0].cwd, '/my/repo');
-  });
-
-  it('other agents run from worktree paths', () => {
-    const agents = buildAgentList('dev', 1, '/repo', 'myapp');
-    assert.ok(agents[1].cwd.includes('worktrees/planner'));
-    assert.ok(agents[2].cwd.includes('worktrees/reviewer'));
-    assert.ok(agents[3].cwd.includes('worktrees/coder-1'));
-    assert.ok(agents[4].cwd.includes('worktrees/tester'));
-  });
-
-  it('separates sidebar and coder agents correctly', () => {
-    const agents = buildAgentList('dev', 2, '/repo', 'myapp');
-    const sidebar = agents.filter(a => !a.role.startsWith('coder-'));
-    const coders = agents.filter(a => a.role.startsWith('coder-'));
-    assert.equal(sidebar.length, 4);
-    assert.equal(coders.length, 2);
-    // sidebar order: producer, planner, reviewer, tester
-    assert.deepEqual(sidebar.map(a => a.role), ['producer', 'planner', 'reviewer', 'tester']);
   });
 });
 
@@ -118,49 +68,53 @@ describe('headless PID management', () => {
   it('writeAgentPid creates PID file with correct content', () => {
     // Use a unique repo name to avoid collisions with real data
     const repoName = `test-pid-write-${Date.now()}`;
-    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    const repoDir = join(homedir(), '.nightshift', repoName);
     try {
       writeAgentPid(repoName, 'dev', 'producer', 99999);
+      const pidDir = getHeadlessPidDir(repoName, 'dev');
       const content = readFileSync(join(pidDir, 'producer.pid'), 'utf-8');
       assert.equal(content, '99999');
     } finally {
-      rmSync(pidDir, { recursive: true, force: true });
+      rmSync(repoDir, { recursive: true, force: true });
     }
   });
 
   it('writeAgentPid creates pid directory if missing', () => {
     const repoName = `test-pid-mkdir-${Date.now()}`;
-    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    const repoDir = join(homedir(), '.nightshift', repoName);
     try {
+      const pidDir = getHeadlessPidDir(repoName, 'dev');
       assert.ok(!existsSync(pidDir));
       writeAgentPid(repoName, 'dev', 'planner', 12345);
       assert.ok(existsSync(pidDir));
       assert.ok(existsSync(join(pidDir, 'planner.pid')));
     } finally {
-      rmSync(pidDir, { recursive: true, force: true });
+      rmSync(repoDir, { recursive: true, force: true });
     }
   });
 
   it('stopHeadlessAgents cleans up PID files for dead processes', () => {
     const repoName = `test-pid-stop-${Date.now()}`;
-    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    const repoDir = join(homedir(), '.nightshift', repoName);
     try {
       // Write a PID that doesn't correspond to a running process
       writeAgentPid(repoName, 'dev', 'reviewer', 2147483647);
+      const pidDir = getHeadlessPidDir(repoName, 'dev');
       assert.ok(existsSync(join(pidDir, 'reviewer.pid')));
       const stopped = stopHeadlessAgents(repoName, 'dev');
       // Process doesn't exist, so stopped count is 0 but file should be cleaned up
       assert.equal(stopped, 0);
       assert.ok(!existsSync(join(pidDir, 'reviewer.pid')));
     } finally {
-      rmSync(pidDir, { recursive: true, force: true });
+      rmSync(repoDir, { recursive: true, force: true });
     }
   });
 
   it('stopHeadlessAgents ignores non-.pid files', () => {
     const repoName = `test-pid-ignore-${Date.now()}`;
-    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    const repoDir = join(homedir(), '.nightshift', repoName);
     try {
+      const pidDir = getHeadlessPidDir(repoName, 'dev');
       mkdirSync(pidDir, { recursive: true });
       writeFileSync(join(pidDir, 'notes.txt'), 'not a pid');
       const stopped = stopHeadlessAgents(repoName, 'dev');
@@ -168,14 +122,15 @@ describe('headless PID management', () => {
       // Non-pid file should still exist
       assert.ok(existsSync(join(pidDir, 'notes.txt')));
     } finally {
-      rmSync(pidDir, { recursive: true, force: true });
+      rmSync(repoDir, { recursive: true, force: true });
     }
   });
 
   it('stopHeadlessAgents handles invalid PID content gracefully', () => {
     const repoName = `test-pid-invalid-${Date.now()}`;
-    const pidDir = getHeadlessPidDir(repoName, 'dev');
+    const repoDir = join(homedir(), '.nightshift', repoName);
     try {
+      const pidDir = getHeadlessPidDir(repoName, 'dev');
       mkdirSync(pidDir, { recursive: true });
       writeFileSync(join(pidDir, 'broken.pid'), 'not-a-number');
       const stopped = stopHeadlessAgents(repoName, 'dev');
@@ -183,7 +138,153 @@ describe('headless PID management', () => {
       // File should still be cleaned up
       assert.ok(!existsSync(join(pidDir, 'broken.pid')));
     } finally {
-      rmSync(pidDir, { recursive: true, force: true });
+      rmSync(repoDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('buildAgentListFromConfig', () => {
+  const config = parseTeamConfig(join(PRESETS_DIR, 'dev', 'team.yaml'));
+
+  it('returns correct number of agents (6 with 2 default coders)', () => {
+    const agents = buildAgentListFromConfig(config, '/repo', 'myapp');
+    assert.equal(agents.length, 6);
+  });
+
+  it('worktree: false agents get repoRoot as cwd', () => {
+    const agents = buildAgentListFromConfig(config, '/my/repo', 'myapp');
+    const producer = agents.find(a => a.role === 'producer');
+    assert.equal(producer?.cwd, '/my/repo');
+  });
+
+  it('worktree agents get worktree paths', () => {
+    const agents = buildAgentListFromConfig(config, '/repo', 'myapp');
+    const planner = agents.find(a => a.role === 'planner');
+    assert.ok(planner?.cwd.includes('worktrees/planner'));
+  });
+
+  it('scalable overrides increase agent count', () => {
+    const agents = buildAgentListFromConfig(config, '/repo', 'myapp', { coder: 3 });
+    assert.equal(agents.length, 7);
+    const coders = agents.filter(a => a.role.startsWith('coder-'));
+    assert.equal(coders.length, 3);
+  });
+
+  it('agent names follow ns-<team>-<role> pattern', () => {
+    const agents = buildAgentListFromConfig(config, '/repo', 'myapp');
+    for (const a of agents) {
+      assert.ok(a.agent.startsWith('ns-dev-'), `Expected ns-dev- prefix for ${a.agent}`);
+    }
+  });
+
+  it('coder instances have numbered worktree paths', () => {
+    const agents = buildAgentListFromConfig(config, '/repo', 'myapp');
+    const coder1 = agents.find(a => a.role === 'coder-1');
+    const coder2 = agents.find(a => a.role === 'coder-2');
+    assert.ok(coder1?.cwd.includes('worktrees/coder-1'));
+    assert.ok(coder2?.cwd.includes('worktrees/coder-2'));
+  });
+
+  it('splits agents into scalable and non-scalable groups', () => {
+    const agents = buildAgentListFromConfig(config, '/repo', 'myapp');
+    const scalableRoles = new Set(
+      Object.entries(config.agents)
+        .filter(([, def]) => def.scalable)
+        .map(([name]) => name)
+    );
+    const sidebar = agents.filter(a => {
+      const baseRole = a.role.replace(/-\d+$/, '');
+      return !scalableRoles.has(baseRole);
+    });
+    const mainColumn = agents.filter(a => {
+      const baseRole = a.role.replace(/-\d+$/, '');
+      return scalableRoles.has(baseRole);
+    });
+
+    // Dev team: producer, planner, reviewer, tester are non-scalable (sidebar)
+    assert.equal(sidebar.length, 4);
+    // Dev team: coder-1, coder-2 are scalable (main column)
+    assert.equal(mainColumn.length, 2);
+    // All agents accounted for
+    assert.equal(sidebar.length + mainColumn.length, agents.length);
+  });
+});
+
+describe('resolveAgentConfig with team.yaml agents', () => {
+  it('resolves model config directly from team.yaml agents', () => {
+    const config = parseTeamConfigFromString(`
+name: dev
+description: test
+stages:
+  - name: wip
+    color: "AAAAAA"
+    meta: true
+agents:
+  producer:
+    description: test
+    watches: [wip]
+    transitions: {}
+    tools: []
+    model: claude-sonnet-4-20250514
+    worktree: false
+    reasoning_effort: medium
+  coder:
+    description: test
+    watches: [wip]
+    transitions: {}
+    tools: []
+    model: claude-opus-4-20250514
+    scalable: true
+    instances: 1
+`);
+    const producer = resolveAgentConfig('producer', config.agents);
+    assert.equal(producer?.model, 'claude-sonnet-4-20250514');
+    assert.equal(producer?.reasoning_effort, 'medium');
+    const coder = resolveAgentConfig('coder', config.agents);
+    assert.equal(coder?.model, 'claude-opus-4-20250514');
+  });
+
+  it('resolves coder-1 to coder base role', () => {
+    const config = parseTeamConfigFromString(`
+name: dev
+description: test
+stages:
+  - name: wip
+    color: "AAAAAA"
+    meta: true
+agents:
+  coder:
+    description: test
+    watches: [wip]
+    transitions: {}
+    tools: []
+    model: claude-opus-4-20250514
+    scalable: true
+    instances: 1
+`);
+    const coder1 = resolveAgentConfig('coder-1', config.agents);
+    assert.equal(coder1?.model, 'claude-opus-4-20250514');
+  });
+});
+
+describe('loadTeamConfig', () => {
+  it('loads dev preset team.yaml', () => {
+    // loadTeamConfig checks .claude/nightshift/teams/<team>/team.yaml first,
+    // then falls back to presets/<team>/team.yaml
+    // For testing, just verify it can find the preset
+    const tmp = join(tmpdir(), `ns-load-config-${Date.now()}`);
+    mkdirSync(tmp, { recursive: true });
+    try {
+      const config = loadTeamConfig('dev', tmp);
+      assert.ok(config);
+      assert.equal(config!.name, 'dev');
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('returns null for nonexistent team', () => {
+    const config = loadTeamConfig('nonexistent-team-xyz', '/tmp');
+    assert.equal(config, null);
   });
 });

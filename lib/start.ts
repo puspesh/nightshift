@@ -79,6 +79,61 @@ export function loadTeamConfig(team: string, repoRoot: string): TeamConfig | nul
   return null;
 }
 
+/**
+ * Verify `init` has been run for this team by checking critical artifacts:
+ * agent profiles in ~/.claude/agents/ and worktrees for worktree agents.
+ *
+ * team.yaml can resolve from presets/ even when `init` has never run, so
+ * team.yaml existence alone is NOT a sufficient signal.
+ *
+ * Returns the list of missing artifact paths; empty if fully initialized.
+ */
+export function checkTeamInitialized(
+  teamConfig: TeamConfig,
+  repoName: string,
+): string[] {
+  const missing: string[] = [];
+  const expanded = expandAgentInstances(teamConfig);
+  const agentsDir = join(homedir(), '.claude', 'agents');
+  const teamDir = getTeamDir(repoName, teamConfig.name);
+
+  for (const entry of expanded) {
+    const profilePath = join(agentsDir, `${entry.agent}.md`);
+    if (!existsSync(profilePath)) {
+      missing.push(`agent profile: ~/.claude/agents/${entry.agent}.md`);
+    }
+    if (entry.definition.worktree !== false) {
+      const worktreePath = join(teamDir, 'worktrees', entry.role);
+      if (!existsSync(worktreePath)) {
+        missing.push(`worktree: ${worktreePath}`);
+      }
+    }
+  }
+
+  return missing;
+}
+
+/**
+ * Exit with a helpful error if the team isn't initialized.
+ * Called at the top of every `start` path.
+ */
+function requireInitialized(team: string, teamConfig: TeamConfig, repoName: string): void {
+  const missing = checkTeamInitialized(teamConfig, repoName);
+  if (missing.length === 0) return;
+
+  console.error(chalk.red(`Team "${team}" has not been initialized for this repo.`));
+  console.error(chalk.red('  Missing:'));
+  for (const m of missing.slice(0, 8)) {
+    console.error(chalk.red(`    - ${m}`));
+  }
+  if (missing.length > 8) {
+    console.error(chalk.red(`    …and ${missing.length - 8} more`));
+  }
+  console.error('');
+  console.error(chalk.yellow(`  Run: npx nightshift init --team ${team}`));
+  process.exit(1);
+}
+
 
 /**
  * Parse the runner command from .claude/nightshift/repo.md.
@@ -221,9 +276,11 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
 
   const teamConfig = loadTeamConfig(team, repoRoot);
   if (!teamConfig) {
-    console.error(chalk.red(`Team "${team}" is not initialized. Run: npx nightshift init --team ${team}`));
+    console.error(chalk.red(`Team "${team}" not found — no team.yaml in repo or presets.`));
+    console.error(chalk.yellow(`  Run: npx nightshift init --team ${team}`));
     process.exit(1);
   }
+  requireInitialized(team, teamConfig, repoName);
 
   const agents = buildAgentListFromConfig(teamConfig, repoRoot, repoName);
   const agentDefs = teamConfig.agents;
@@ -313,9 +370,11 @@ export async function startSession(team: string, options?: StartOptions): Promis
 
   const teamConfig = loadTeamConfig(team, repoRoot);
   if (!teamConfig) {
-    console.error(chalk.red(`Team "${team}" is not initialized. Run: npx nightshift init --team ${team}`));
+    console.error(chalk.red(`Team "${team}" not found — no team.yaml in repo or presets.`));
+    console.error(chalk.yellow(`  Run: npx nightshift init --team ${team}`));
     process.exit(1);
   }
+  requireInitialized(team, teamConfig, repoName);
 
   const agents = buildAgentListFromConfig(teamConfig, repoRoot, repoName);
   const agentDefs = teamConfig.agents;

@@ -39,10 +39,12 @@ export function generateAgentFile(options: GenerateOptions): string {
   // Render behavior template
   const renderedBehavior = renderTemplate(behaviorTemplate, allVars);
 
-  // Assemble the complete file
+  // Assemble the complete file. Frontmatter MUST be on line 1 — Claude Code
+  // silently ignores agent files where `---` isn't the first line, so the
+  // "managed by nightshift" note goes after the frontmatter as an HTML comment.
   const parts: string[] = [];
-  parts.push(generateHeader());
   parts.push(generateFrontmatter(agent, fullName));
+  parts.push(generateHeader());
   parts.push(generatePipelineAgentBlock(teamConfig, agentName, fullName, role));
   parts.push(renderedBehavior);
   parts.push(generateTeamProtocol(teamConfig, agentName, fullName, role));
@@ -50,12 +52,9 @@ export function generateAgentFile(options: GenerateOptions): string {
   return parts.join('\n');
 }
 
-/**
- * Generate the header comment.
- */
 function generateHeader(): string {
-  return `# This file is managed by nightshift. Do not edit directly.
-# To customize behavior, create an override at .claude/nightshift/agents/
+  return `<!-- This file is managed by nightshift. Do not edit directly.
+     To customize behavior, create an override at .claude/nightshift/agents/ -->
 `;
 }
 

@@ -18,6 +18,17 @@ export function getTeamDir(repoName: string, team: string): string {
 }
 
 /**
+ * Get the status directory for a team (creates it if missing).
+ * Status files are written by agents as `working|<ts>|` / `idle|<ts>|`
+ * and read by ns-status.sh for tmux pane borders.
+ */
+export function getStatusDir(repoName: string, team: string): string {
+  const dir = join(getTeamDir(repoName, team), 'status');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
  * Create git worktrees for the given roles within a team.
  */
 export function createWorktrees(repoName: string, team: string, roles: string[], mainBranch: string): void {

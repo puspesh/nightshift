@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
-import { getTeamDir } from './worktrees.js';
+import { getTeamDir, getStatusDir } from './worktrees.js';
 import { detectRepoRoot, detectRepoName, detectMainBranch } from './detect.js';
 import { parseTeamConfig, expandAgentInstances } from './team-config.js';
 import type { TeamConfig } from './team-config.js';
@@ -21,6 +21,12 @@ const __dirname = dirname(__filename);
 const STATUS_SCRIPT = join(__dirname, '..', 'bin', 'ns-status.sh');
 const DEFAULT_RUNNER = 'claude --dangerously-skip-permissions';
 const LOOP_INTERVAL = 900; // 15 minutes in seconds
+const PIPELINE_PROMPT = 'Start your pipeline cycle.';
+
+/** POSIX-safe single-quote for shell args. */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
 
 /**
  * Get the tmux session name for a repo + team.
@@ -233,21 +239,20 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
   const vizUrl = await setupVisualization(team, agents, repoRoot, repoName, citizenOverrides, vizPort);
 
-  const statusDir = join(getTeamDir(repoName, team), 'status');
+  const statusDir = getStatusDir(repoName, team);
   const logDir = join(getTeamDir(repoName, team), 'logs');
-  mkdirSync(statusDir, { recursive: true });
   mkdirSync(logDir, { recursive: true });
 
   for (const agent of agents) {
     const config = resolveAgentConfig(agent.role, agentDefs);
-    const runner = buildRunnerForAgent(baseRunner, config);
+    const runner = buildRunnerForAgent(baseRunner, config, agent.agent);
     const statusFile = join(statusDir, agent.role);
     const logFile = join(logDir, `${agent.role}.log`);
     const logFd = openSync(logFile, 'a');
 
     const child = spawn('bash', [
-      AGENT_LOOP_SCRIPT, agent.agent, agent.cwd,
-      String(LOOP_INTERVAL), runner, statusFile,
+      AGENT_LOOP_SCRIPT, agent.cwd,
+      String(LOOP_INTERVAL), runner, statusFile, PIPELINE_PROMPT,
     ], {
       detached: true,
       stdio: ['ignore', logFd, logFd],
@@ -352,12 +357,24 @@ export async function startSession(team: string, options?: StartOptions): Promis
     process.exit(1);
   }
 
-  // Create session — first pane uses the first available agent
-  tmux(`new-session -d -s "${session}" -c "${firstAgent.cwd}"`);
+  // Build per-pane shell command (bypasses user's interactive shell/.zshrc).
+  // Wrapped via `sh -c` so panes stay open for inspection when claude exits.
+  // Quoted with shellQuote so runner content from repo.md can't trigger shell
+  // expansion in the outer execSync layer.
+  const paneCommand = (p: AgentEntry): string => {
+    const config = resolveAgentConfig(p.role, agentDefs);
+    const runner = buildRunnerForAgent(baseRunner, config, p.agent);
+    // POSIX-portable: `read` waits for Enter (portable across bash/zsh/dash).
+    const body = `${runner}; echo; echo '[agent exited - press Enter to close]'; read _`;
+    return shellQuote(body);
+  };
+
+  // Create session — first pane launches claude directly (no interactive shell)
+  tmux(`new-session -d -s "${session}" -c "${firstAgent.cwd}" ${paneCommand(firstAgent)}`);
 
   if (sidebar.length > 0 && mainColumn.length > 0) {
     // Split into left (30%) and right (70%) columns
-    tmux(`split-window -h -t "${session}:0.0" -l 70% -c "${mainColumn[0].cwd}"`);
+    tmux(`split-window -h -t "${session}:0.0" -l 70% -c "${mainColumn[0].cwd}" ${paneCommand(mainColumn[0])}`);
   }
 
   // Split left column into N sidebar panes dynamically.
@@ -367,7 +384,7 @@ export async function startSession(team: string, options?: StartOptions): Promis
   for (let i = 1; i < sidebar.length; i++) {
     const remaining = sidebar.length - i;
     const pct = Math.floor(100 * remaining / (remaining + 1));
-    tmux(`split-window -v -t "${session}:0.${i - 1}" -l ${pct}% -c "${sidebar[i].cwd}"`);
+    tmux(`split-window -v -t "${session}:0.${i - 1}" -l ${pct}% -c "${sidebar[i].cwd}" ${paneCommand(sidebar[i])}`);
   }
 
   // Split right column into N main column panes (same renumbering logic)
@@ -376,16 +393,17 @@ export async function startSession(team: string, options?: StartOptions): Promis
     for (let i = 1; i < mainColumn.length; i++) {
       const remaining = mainColumn.length - i;
       const pct = Math.floor(100 * remaining / (remaining + 1));
-      tmux(`split-window -v -t "${session}:0.${rightBase + i - 1}" -l ${pct}% -c "${mainColumn[i].cwd}"`);
+      tmux(`split-window -v -t "${session}:0.${rightBase + i - 1}" -l ${pct}% -c "${mainColumn[i].cwd}" ${paneCommand(mainColumn[i])}`);
     }
   }
 
-  const statusDir = join(getTeamDir(repoName, team), 'status');
+  const statusDir = getStatusDir(repoName, team);
 
   tmux(`set-window-option -t "${session}" pane-border-status top`);
   tmux(`set-window-option -t "${session}" pane-border-format "#[#{@agent_color},bold] #{@agent_label} #[default] #(${STATUS_SCRIPT} #{@status_file} ${LOOP_INTERVAL})"`);
   tmux(`set-option -t "${session}" status-interval 10`);
 
+  const nowTs = Math.floor(Date.now() / 1000);
   const allPanes = [...sidebar, ...mainColumn];
   for (let i = 0; i < allPanes.length; i++) {
     const a = allPanes[i];
@@ -394,16 +412,13 @@ export async function startSession(team: string, options?: StartOptions): Promis
     const resolved = resolveCitizenProps(a.role, citizenOverrides);
     const color = hexToTmuxStyle(resolved.color);
     const statusFile = join(statusDir, a.role);
-    tmux(`set-option -p -t "${session}:0.${i}" @agent_label "${a.role}${modelSuffix}  ·  /loop 15m @${a.agent}"`);
+    // Pre-initialize status file with 'ready' state so pane border shows fresh
+    // status on session start (overwrites any stale state from a prior session).
+    // Agent will update to working/idle once it starts running cycles.
+    writeFileSync(statusFile, `ready|${nowTs}|`);
+    tmux(`set-option -p -t "${session}:0.${i}" @agent_label "${a.role}${modelSuffix}"`);
     tmux(`set-option -p -t "${session}:0.${i}" @agent_color "${color}"`);
     tmux(`set-option -p -t "${session}:0.${i}" @status_file "${statusFile}"`);
-  }
-
-  // Launch runner in each pane with per-agent config
-  for (let i = 0; i < allPanes.length; i++) {
-    const config = resolveAgentConfig(allPanes[i].role, agentDefs);
-    const runner = buildRunnerForAgent(baseRunner, config);
-    tmux(`send-keys -t "${session}:0.${i}" '${runner}' Enter`);
   }
 
   // Print info
@@ -430,7 +445,7 @@ export async function startSession(team: string, options?: StartOptions): Promis
     console.log(`    ${a.role.padEnd(10)} → @${a.agent}${model}`);
   }
   console.log('');
-  console.log(chalk.dim('  Type the /loop command shown in each pane title to start.'));
+  console.log(chalk.dim(`  In each pane, type: /loop 15m ${PIPELINE_PROMPT}`));
   console.log('');
   console.log(chalk.dim('  Tmux shortcuts:'));
   console.log(chalk.dim('    Ctrl+b, arrow  — navigate panes'));

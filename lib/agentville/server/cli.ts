@@ -42,20 +42,29 @@ const noBrowser = args.includes('--no-browser');
 
 // --- Persistence: load or bootstrap game state ---
 const agentvilleDir = join(homedir(), '.agentville');
-const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
+const nightshiftAgentvilleDir = join(homedir(), '.nightshift', 'agentville');
+const legacyMiniverseDir = join(homedir(), '.nightshift', 'miniverse');
 
 mkdirSync(agentvilleDir, { recursive: true });
 
 let gameState: AgentvilleWorld | null = loadWorld(agentvilleDir);
 
-// Migration fallback: if no world in ~/.agentville/, try migrating from ~/.nightshift/miniverse/
-if (!gameState && existsSync(miniverseDir)) {
-  gameState = migrateFromMiniverse(miniverseDir);
-  if (gameState) {
-    saveWorld(agentvilleDir, gameState);
-    console.log('  Migrated world state from ~/.nightshift/miniverse/');
+// Migration fallback: if no world in ~/.agentville/, try migrating from the nightshift
+// runtime data dirs (new and legacy names).
+if (!gameState) {
+  for (const [dir, label] of [
+    [nightshiftAgentvilleDir, '~/.nightshift/agentville/'],
+    [legacyMiniverseDir, '~/.nightshift/miniverse/'],
+  ] as const) {
+    if (!existsSync(dir)) continue;
+    gameState = migrateFromMiniverse(dir);
+    if (gameState) {
+      saveWorld(agentvilleDir, gameState);
+      console.log(`  Migrated world state from ${label}`);
+      break;
+    }
   }
-  // Clean up old miniverse PID/port files
+  // Clean up old miniverse PID/port files (harmless if absent)
   cleanupOldPidFiles(join(homedir(), '.nightshift'));
 }
 

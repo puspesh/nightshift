@@ -1231,17 +1231,8 @@ async function startLegacyWorld() {
   const gridRows = worldData.gridRows || 12;
   const tileSize = 32;
 
-  let basePath = '/worlds/';
-  try {
-    const worldsRes = await fetch('/api/worlds');
-    const worldsData = await worldsRes.json();
-    if (worldsData.repos && worldsData.repos.length > 0) {
-      const r = worldsData.repos[0];
-      if (r.teams && r.teams.length > 0) {
-        basePath = '/worlds/' + r.repo + '/' + r.teams[0].id;
-      }
-    }
-  } catch { /* use default */ }
+  // Single-world Agentville: assets live under /worlds/agentville/.
+  const basePath = '/worlds/agentville';
 
   const floor = worldData.floor || Array.from({ length: gridRows }, () => Array(gridCols).fill(''));
   const walkable = [];

@@ -846,35 +846,10 @@ export class AgentvilleServer {
       return;
     }
 
-    // List available worlds — single entry when gameState is set, legacy scan otherwise
+    // List available worlds — always a single Agentville world.
     if (req.method === 'GET' && url.pathname === '/api/worlds') {
-      if (this.gameState) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ worlds: ['agentville'] }));
-        return;
-      }
-
-      // Legacy file-based fallback: two-level scan
-      const publicDir = this.publicDir ?? '.';
-      const repos: { repo: string; teams: { id: string; agents: number }[] }[] = [];
-      try {
-        for (const repoEntry of readdirSync(publicDir, { withFileTypes: true })) {
-          if (!repoEntry.isDirectory()) continue;
-          const repoPath = path.join(publicDir, repoEntry.name);
-          const teams: { id: string; agents: number }[] = [];
-          for (const teamEntry of readdirSync(repoPath, { withFileTypes: true })) {
-            if (teamEntry.isDirectory() && existsSync(path.join(repoPath, teamEntry.name, 'world.json'))) {
-              const world = this.loadWorldData(repoEntry.name + '/' + teamEntry.name) as any;
-              teams.push({ id: teamEntry.name, agents: world?.citizens?.length ?? 0 });
-            }
-          }
-          if (teams.length > 0) {
-            repos.push({ repo: repoEntry.name, teams });
-          }
-        }
-      } catch { /* publicDir may not exist yet */ }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ repos }));
+      res.end(JSON.stringify({ worlds: ['agentville'] }));
       return;
     }
 

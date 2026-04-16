@@ -123,7 +123,7 @@ async function setupVisualization(
 ): Promise<string | null> {
   let vizUrl: string | null = null;
   try {
-    const vizDataDir = join(homedir(), '.nightshift', 'miniverse');
+    const vizDataDir = join(homedir(), '.nightshift', 'agentville');
     const teamWorldDir = join(vizDataDir, repoName, team);
 
     // Read base world data for spawn position computation
@@ -156,7 +156,8 @@ async function setupVisualization(
       execSync(`cp "${coreDir}/agentville-core.js" "${join(vizDataDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
-    stopAgentville();
+    // Singleton: startAgentville() piggybacks on an existing instance if one is running.
+    // Don't stopAgentville() here — that would wipe state from other teams/repos.
     const result = startAgentville(vizPort, vizDataDir);
     if (!result) {
       console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));

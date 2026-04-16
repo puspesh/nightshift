@@ -53,6 +53,35 @@ describe('detectRepoName', () => {
     const name = detectRepoName();
     assert.equal(name, basename(realpathSync(tmp)));
   });
+
+  it('returns the main repo name when called from inside a linked worktree', () => {
+    // Create a branch the worktree can check out.
+    execSync('git checkout -b feature-branch', { cwd: tmp, stdio: 'pipe' });
+    execSync('git checkout -', { cwd: tmp, stdio: 'pipe' });
+
+    // Create a worktree at a location whose basename differs from the repo name.
+    const worktreeDir = mkdtempSync(join(tmpdir(), 'nightshift-wt-'));
+    const worktreePath = join(worktreeDir, 'some-feature-name');
+    execSync(`git worktree add "${worktreePath}" feature-branch`, {
+      cwd: tmp,
+      stdio: 'pipe',
+    });
+
+    try {
+      process.chdir(worktreePath);
+      // Should return the MAIN repo's basename, not the worktree directory's basename.
+      const name = detectRepoName();
+      assert.equal(name, basename(realpathSync(tmp)));
+      assert.notEqual(name, 'some-feature-name');
+    } finally {
+      process.chdir(origCwd);
+      execSync(`git worktree remove "${worktreePath}" --force`, {
+        cwd: tmp,
+        stdio: 'pipe',
+      });
+      rmSync(worktreeDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('detectMainBranch', () => {

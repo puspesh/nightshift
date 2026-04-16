@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename, dirname, resolve } from 'node:path';
 
 export interface DetectedScripts {
   build: string | null;
@@ -26,11 +26,31 @@ export function detectRepoRoot(): string {
 }
 
 /**
- * Detect the repository name (basename of the repo root).
+ * Detect the repository name.
+ *
+ * Uses `git rev-parse --git-common-dir` so linked worktrees resolve to the
+ * main repo's name rather than the worktree directory's basename. Without
+ * this, running `nightshift init` from a worktree like
+ * `~/worktrees/nightshift/some-branch/` would mis-detect the repo as
+ * "some-branch" and create branch collisions inside the shared .git dir.
  */
 export function detectRepoName(): string {
-  const root = detectRepoRoot();
-  return root.split('/').pop() || 'unknown';
+  try {
+    const commonDirRaw = execSync('git rev-parse --git-common-dir', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    // `--git-common-dir` may return a relative path (e.g. ".git") when run
+    // from the main worktree, or an absolute path when run from a linked
+    // worktree. Resolve against cwd either way.
+    const commonDir = resolve(process.cwd(), commonDirRaw);
+    const repoRoot = dirname(commonDir);
+    return basename(repoRoot) || 'unknown';
+  } catch {
+    // Fallback: toplevel basename (buggy in linked worktrees, but better than throwing).
+    const root = detectRepoRoot();
+    return root.split('/').pop() || 'unknown';
+  }
 }
 
 /**

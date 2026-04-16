@@ -8,7 +8,6 @@ import {
   getTeamDir,
   createWorktrees,
   removeWorktrees,
-  discoverCoderCount,
   discoverTeams,
   getNightshiftDir,
 } from '../lib/worktrees.js';
@@ -39,7 +38,9 @@ describe('createWorktrees + removeWorktrees', () => {
 
     // Create a bare repo to act as "origin"
     const bareRepo = join(tmp, 'origin.git');
-    execSync(`git init --bare "${bareRepo}"`, { stdio: 'pipe' });
+    execSync(`git init --bare --initial-branch=main "${bareRepo}"`, {
+      stdio: 'pipe',
+    });
 
     // Clone it to get a working repo with a remote
     clonedRepo = join(tmp, 'repo');
@@ -144,32 +145,6 @@ describe('createWorktrees + removeWorktrees', () => {
         `worktree for ${role} should be removed`
       );
     }
-  });
-});
-
-describe('discoverCoderCount', () => {
-  const repoName = `nightshift-dc-test-${Date.now()}`;
-  const team = 'dev';
-
-  afterEach(() => {
-    const nightshiftDir = getNightshiftDir(repoName);
-    if (existsSync(nightshiftDir)) {
-      rmSync(nightshiftDir, { recursive: true, force: true });
-    }
-  });
-
-  it('returns 0 when no worktrees exist', () => {
-    assert.equal(discoverCoderCount(repoName, team), 0);
-  });
-
-  it('counts coder-* directories', () => {
-    const teamDir = getTeamDir(repoName, team);
-    const wtDir = join(teamDir, 'worktrees');
-    mkdirSync(join(wtDir, 'coder-1'), { recursive: true });
-    mkdirSync(join(wtDir, 'coder-2'), { recursive: true });
-    mkdirSync(join(wtDir, 'planner'), { recursive: true });
-
-    assert.equal(discoverCoderCount(repoName, team), 2);
   });
 });
 

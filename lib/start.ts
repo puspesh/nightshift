@@ -4,13 +4,16 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
-import { getTeamDir, discoverCoderCount } from './worktrees.js';
-import { detectRepoRoot, detectRepoName } from './detect.js';
+import { getTeamDir } from './worktrees.js';
+import { detectRepoRoot, detectRepoName, detectMainBranch } from './detect.js';
+import { parseTeamConfig, expandAgentInstances } from './team-config.js';
+import type { TeamConfig } from './team-config.js';
+import { getPresetDir } from './copy.js';
 import { startServer, waitForServer, registerAgents, stopServer } from './visualize.js';
 import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
 import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
-import { loadAgentConfig, resolveAgentConfig, buildRunnerForAgent } from './agent-config.js';
+import { resolveAgentConfig, buildRunnerForAgent } from './agent-config.js';
 import type { AgentEntry, StartOptions, CitizenOverrides } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,34 +33,46 @@ export function getSessionName(repoName: string, team: string): string {
 }
 
 /**
- * Build the ordered list of agents with their roles, agent names, and working directories.
- * Order: producer, planner, reviewer, coder-1..N, tester
- *
- * @param {string} team
- * @param {number} coderCount
- * @param {string} repoRoot
- * @param {string} repoName
- * @returns {{ role: string, agent: string, cwd: string }[]}
+ * Build agent list from team.yaml config.
+ * Uses worktree flag from agent definition to determine cwd.
  */
-export function buildAgentList(team: string, coderCount: number, repoRoot: string, repoName: string): AgentEntry[] {
-  const teamDir = join(homedir(), '.nightshift', repoName, team);
-  const agents: AgentEntry[] = [];
+export function buildAgentListFromConfig(
+  config: TeamConfig,
+  repoRoot: string,
+  repoName: string,
+  overrides?: Record<string, number>,
+): AgentEntry[] {
+  const teamDir = join(homedir(), '.nightshift', repoName, config.name);
+  const expanded = expandAgentInstances(config, overrides);
 
-  // Sidebar agents (left column)
-  agents.push({ role: 'producer', agent: `ns-${team}-producer`, cwd: repoRoot });
-  agents.push({ role: 'planner', agent: `ns-${team}-planner`, cwd: join(teamDir, 'worktrees', 'planner') });
-  agents.push({ role: 'reviewer', agent: `ns-${team}-reviewer`, cwd: join(teamDir, 'worktrees', 'reviewer') });
-
-  // Coders (right column)
-  for (let i = 1; i <= coderCount; i++) {
-    agents.push({ role: `coder-${i}`, agent: `ns-${team}-coder-${i}`, cwd: join(teamDir, 'worktrees', `coder-${i}`) });
-  }
-
-  // Tester (last sidebar agent)
-  agents.push({ role: 'tester', agent: `ns-${team}-tester`, cwd: join(teamDir, 'worktrees', 'tester') });
-
-  return agents;
+  return expanded.map(ea => ({
+    role: ea.role,
+    agent: ea.agent,
+    cwd: ea.definition.worktree === false
+      ? repoRoot
+      : join(teamDir, 'worktrees', ea.role),
+  }));
 }
+
+/**
+ * Try to load team.yaml for a team.
+ * Checks .claude/nightshift/teams/<team>/team.yaml first, then presets/<team>/team.yaml.
+ * Returns null if team.yaml doesn't exist.
+ */
+export function loadTeamConfig(team: string, repoRoot: string): TeamConfig | null {
+  // Check repo-local override first
+  const localPath = join(repoRoot, '.claude', 'nightshift', 'teams', team, 'team.yaml');
+  if (existsSync(localPath)) {
+    return parseTeamConfig(localPath);
+  }
+  // Fall back to preset
+  const presetPath = join(getPresetDir(team), 'team.yaml');
+  if (existsSync(presetPath)) {
+    return parseTeamConfig(presetPath);
+  }
+  return null;
+}
+
 
 /**
  * Parse the runner command from .claude/nightshift/repo.md.
@@ -150,8 +165,7 @@ async function setupVisualization(
     await registerAgents(result.url, agents, team, citizenOverrides);
     vizUrl = result.url;
 
-    const allRoles = agents.map(a => a.role);
-    installHooks(repoName, team, allRoles, result.url, repoRoot);
+    installHooks(repoName, team, agents, result.url);
   } catch (err) {
     if (!vizUrl) {
       console.warn(chalk.yellow(`  Warning: Visualization failed to start: ${(err as Error).message}`));
@@ -198,17 +212,18 @@ export function stopHeadlessAgents(repoName: string, team: string): number {
 async function startHeadlessSession(team: string, options?: StartOptions): Promise<void> {
   const repoRoot = detectRepoRoot();
   const repoName = detectRepoName();
-  const coderCount = discoverCoderCount(repoName, team);
 
-  if (coderCount === 0) {
+  const teamConfig = loadTeamConfig(team, repoRoot);
+  if (!teamConfig) {
     console.error(chalk.red(`Team "${team}" is not initialized. Run: npx nightshift init --team ${team}`));
     process.exit(1);
   }
 
-  const agents = buildAgentList(team, coderCount, repoRoot, repoName);
+  const agents = buildAgentListFromConfig(teamConfig, repoRoot, repoName);
+  const agentDefs = teamConfig.agents;
+
   const baseRunner = parseRunner(repoRoot);
   const citizenOverrides = loadCitizenConfig(repoRoot, team);
-  const agentConfigs = loadAgentConfig(repoRoot, team);
 
   // Stop any existing headless agents and tmux sessions (reviewer S3)
   stopHeadlessAgents(repoName, team);
@@ -224,7 +239,7 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   mkdirSync(logDir, { recursive: true });
 
   for (const agent of agents) {
-    const config = resolveAgentConfig(agent.role, agentConfigs);
+    const config = resolveAgentConfig(agent.role, agentDefs);
     const runner = buildRunnerForAgent(baseRunner, config);
     const statusFile = join(statusDir, agent.role);
     const logFile = join(logDir, `${agent.role}.log`);
@@ -261,8 +276,8 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   console.log('');
   console.log(chalk.bold('  Agents:'));
   for (const a of agents) {
-    const config = resolveAgentConfig(a.role, agentConfigs);
-    const model = config.model ? chalk.dim(` (${config.model})`) : '';
+    const def = resolveAgentConfig(a.role, agentDefs);
+    const model = def?.model ? chalk.dim(` (${def.model})`) : '';
     console.log(`    ${a.role.padEnd(10)} → @${a.agent}${model}`);
   }
   console.log('');
@@ -290,18 +305,19 @@ export async function startSession(team: string, options?: StartOptions): Promis
 
   const repoRoot = detectRepoRoot();
   const repoName = detectRepoName();
-  const coderCount = discoverCoderCount(repoName, team);
 
-  if (coderCount === 0) {
+  const teamConfig = loadTeamConfig(team, repoRoot);
+  if (!teamConfig) {
     console.error(chalk.red(`Team "${team}" is not initialized. Run: npx nightshift init --team ${team}`));
     process.exit(1);
   }
 
+  const agents = buildAgentListFromConfig(teamConfig, repoRoot, repoName);
+  const agentDefs = teamConfig.agents;
+
   const session = getSessionName(repoName, team);
-  const agents = buildAgentList(team, coderCount, repoRoot, repoName);
   const baseRunner = parseRunner(repoRoot);
   const citizenOverrides = loadCitizenConfig(repoRoot, team);
-  const agentConfigs = loadAgentConfig(repoRoot, team);
 
   // Stop any existing headless agents (reviewer S3)
   stopHeadlessAgents(repoName, team);
@@ -309,36 +325,59 @@ export async function startSession(team: string, options?: StartOptions): Promis
   const vizPort = options?.port ?? DEFAULT_VIZ_PORT;
   const vizUrl = await setupVisualization(team, agents, repoRoot, repoName, citizenOverrides, vizPort);
 
-  const sidebar = agents.filter(a => !a.role.startsWith('coder-'));
-  const coders = agents.filter(a => a.role.startsWith('coder-'));
+  // Split agents into sidebar (non-scalable) and main column (scalable)
+  const scalableRoles = new Set(
+    Object.entries(teamConfig.agents)
+      .filter(([, def]) => def.scalable)
+      .map(([name]) => name)
+  );
+  const sidebar = agents.filter(a => {
+    const baseRole = a.role.replace(/-\d+$/, '');
+    return !scalableRoles.has(baseRole);
+  });
+  const mainColumn = agents.filter(a => {
+    const baseRole = a.role.replace(/-\d+$/, '');
+    return scalableRoles.has(baseRole);
+  });
 
   // Kill existing session if any
   try {
     tmux(`kill-session -t "${session}"`);
   } catch { /* no existing session */ }
 
-  // Create session — first pane becomes top-left (producer)
-  tmux(`new-session -d -s "${session}" -c "${sidebar[0].cwd}"`);
+  // Determine the first agent for session creation
+  const firstAgent = sidebar[0] ?? mainColumn[0];
+  if (!firstAgent) {
+    console.error(chalk.red('No agents to start for this team.'));
+    process.exit(1);
+  }
 
-  // Split into left (30%) and right (70%) columns
-  tmux(`split-window -h -t "${session}:0.0" -l 70% -c "${coders[0].cwd}"`);
+  // Create session — first pane uses the first available agent
+  tmux(`new-session -d -s "${session}" -c "${firstAgent.cwd}"`);
 
-  // Split left column (pane 0) into 4 equal sidebar panes
-  // Strategy: split from the top, giving remaining space to the bottom
-  // After horizontal split: pane 0 = left, pane 1 = right
-  tmux(`split-window -v -t "${session}:0.0" -l 75% -c "${sidebar[1].cwd}"`);
-  // Now: 0=producer, 1=planner+reviewer+tester, 2=coders
-  tmux(`split-window -v -t "${session}:0.1" -l 67% -c "${sidebar[2].cwd}"`);
-  // Now: 0=producer, 1=planner, 2=reviewer+tester, 3=coders
-  tmux(`split-window -v -t "${session}:0.2" -l 50% -c "${sidebar[3].cwd}"`);
-  // Now: 0=producer, 1=planner, 2=reviewer, 3=tester, 4=coder-1
+  if (sidebar.length > 0 && mainColumn.length > 0) {
+    // Split into left (30%) and right (70%) columns
+    tmux(`split-window -h -t "${session}:0.0" -l 70% -c "${mainColumn[0].cwd}"`);
+  }
 
-  // Split right column (pane 4) into N equal coder panes
-  const rightBase = sidebar.length;
-  for (let i = 1; i < coders.length; i++) {
-    const remaining = coders.length - i;
+  // Split left column into N sidebar panes dynamically.
+  // After each split, tmux renumbers panes in visual order.
+  // Splitting pane X creates a new pane at X+1 (bottom portion).
+  // Next iteration targets X+1 (the larger bottom) to subdivide it further.
+  for (let i = 1; i < sidebar.length; i++) {
+    const remaining = sidebar.length - i;
     const pct = Math.floor(100 * remaining / (remaining + 1));
-    tmux(`split-window -v -t "${session}:0.${rightBase}" -l ${pct}% -c "${coders[i].cwd}"`);
+    tmux(`split-window -v -t "${session}:0.${i - 1}" -l ${pct}% -c "${sidebar[i].cwd}"`);
+  }
+
+  // Split right column into N main column panes (same renumbering logic)
+  if (mainColumn.length > 1) {
+    const rightBase = sidebar.length > 0 ? sidebar.length : 0;
+    for (let i = 1; i < mainColumn.length; i++) {
+      const remaining = mainColumn.length - i;
+      const pct = Math.floor(100 * remaining / (remaining + 1));
+      tmux(`split-window -v -t "${session}:0.${rightBase + i - 1}" -l ${pct}% -c "${mainColumn[i].cwd}"`);
+    }
   }
 
   const statusDir = join(getTeamDir(repoName, team), 'status');
@@ -347,11 +386,11 @@ export async function startSession(team: string, options?: StartOptions): Promis
   tmux(`set-window-option -t "${session}" pane-border-format "#[#{@agent_color},bold] #{@agent_label} #[default] #(${STATUS_SCRIPT} #{@status_file} ${LOOP_INTERVAL})"`);
   tmux(`set-option -t "${session}" status-interval 10`);
 
-  const allPanes = [...sidebar, ...coders];
+  const allPanes = [...sidebar, ...mainColumn];
   for (let i = 0; i < allPanes.length; i++) {
     const a = allPanes[i];
-    const agentConfig = resolveAgentConfig(a.role, agentConfigs);
-    const modelSuffix = agentConfig.model ? ` [${agentConfig.model}]` : '';
+    const agentDef = resolveAgentConfig(a.role, agentDefs);
+    const modelSuffix = agentDef?.model ? ` [${agentDef.model}]` : '';
     const resolved = resolveCitizenProps(a.role, citizenOverrides);
     const color = hexToTmuxStyle(resolved.color);
     const statusFile = join(statusDir, a.role);
@@ -362,7 +401,7 @@ export async function startSession(team: string, options?: StartOptions): Promis
 
   // Launch runner in each pane with per-agent config
   for (let i = 0; i < allPanes.length; i++) {
-    const config = resolveAgentConfig(allPanes[i].role, agentConfigs);
+    const config = resolveAgentConfig(allPanes[i].role, agentDefs);
     const runner = buildRunnerForAgent(baseRunner, config);
     tmux(`send-keys -t "${session}:0.${i}" '${runner}' Enter`);
   }
@@ -386,8 +425,8 @@ export async function startSession(team: string, options?: StartOptions): Promis
   console.log('');
   console.log(chalk.bold('  Agents:'));
   for (const a of agents) {
-    const config = resolveAgentConfig(a.role, agentConfigs);
-    const model = config.model ? chalk.dim(` (${config.model})`) : '';
+    const def = resolveAgentConfig(a.role, agentDefs);
+    const model = def?.model ? chalk.dim(` (${def.model})`) : '';
     console.log(`    ${a.role.padEnd(10)} → @${a.agent}${model}`);
   }
   console.log('');

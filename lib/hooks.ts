@@ -1,8 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import type { HookConfig, HookEntry } from './types.js';
+import type { AgentEntry, HookConfig, HookEntry } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -58,27 +57,16 @@ function getSettingsPath(dir: string): string {
  * Merges with existing settings (read-modify-write).
  */
 export function installHooks(
-  repoName: string,
-  team: string,
-  roles: string[],
+  _repoName: string,
+  _team: string,
+  agents: AgentEntry[],
   serverUrl: string,
-  repoRoot: string,
 ): void {
-  for (const role of roles) {
-    const agentName = `ns-${team}-${role}`;
+  for (const agent of agents) {
+    if (!existsSync(agent.cwd)) continue;
 
-    // Determine the worktree path
-    let dir: string;
-    if (role === 'producer') {
-      dir = repoRoot;
-    } else {
-      dir = join(homedir(), '.nightshift', repoName, team, 'worktrees', role);
-    }
-
-    if (!existsSync(dir)) continue;
-
-    const hookConfig = generateHookConfig(agentName, serverUrl);
-    const settingsPath = getSettingsPath(dir);
+    const hookConfig = generateHookConfig(agent.agent, serverUrl);
+    const settingsPath = getSettingsPath(agent.cwd);
 
     // Read existing settings
     let settings: Record<string, unknown> = {};
@@ -105,7 +93,7 @@ export function installHooks(
     settings.hooks = existingHooks;
 
     // Write settings
-    mkdirSync(join(dir, '.claude'), { recursive: true });
+    mkdirSync(join(agent.cwd, '.claude'), { recursive: true });
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
   }
 }
@@ -115,19 +103,13 @@ export function installHooks(
  * Leaves other hook entries untouched.
  */
 export function removeHooks(
-  repoName: string,
-  team: string,
-  roles: string[],
-  repoRoot: string,
+  _repoName: string,
+  _team: string,
+  agents: AgentEntry[],
 ): void {
-  for (const role of roles) {
-    let dir: string;
-    if (role === 'producer') {
-      dir = repoRoot;
-    } else {
-      dir = join(homedir(), '.nightshift', repoName, team, 'worktrees', role);
-    }
+  const dirs = agents.map(a => a.cwd);
 
+  for (const dir of dirs) {
     const settingsPath = getSettingsPath(dir);
     if (!existsSync(settingsPath)) continue;
 
@@ -158,13 +140,9 @@ export function removeHooks(
     }
 
     if (modified) {
-      // If hooks object is now empty, remove it
       if (Object.keys(hooks).length === 0) {
         delete settings.hooks;
       }
-
-      // If settings is now empty, we could delete the file,
-      // but it's safer to keep it with empty object
       writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
     }
   }

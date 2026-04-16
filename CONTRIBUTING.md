@@ -38,13 +38,13 @@ nightshift is a CLI tool with markdown agent profiles. Testing is primarily manu
 
 ### Agent Profile Guidelines
 
-When modifying agent profiles (`agents/nightshift-*.md`):
+When modifying agent behavior templates (`presets/<team>/agents/<role>.md`):
 
 - Keep them repo-agnostic -- no project-specific content
-- Use dynamic paths: `~/.nightshift/<repo>/` not hardcoded paths
+- Use `{{mustache}}` template variables (e.g., `{{repo_name}}`, `{{team_name}}`)
 - Reference extension files for any project-specific behavior
-- Preserve the `<PIPELINE-AGENT>` directive
-- Test the smoke check: grep for project-specific terms
+- Do not include frontmatter, `<PIPELINE-AGENT>`, or Team Protocol -- those are generated
+- Test: `npx nightshift reinit --team <team>` and verify generated output
 
 ### What We're Looking For
 

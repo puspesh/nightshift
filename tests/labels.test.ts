@@ -2,16 +2,17 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadLabels } from '../lib/labels.js';
+import { parseTeamConfig, getLabelsFromConfig } from '../lib/team-config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const presetDir = join(__dirname, '..', 'presets', 'dev');
+const presetDir = join(__dirname, '..', '..', 'presets', 'dev');
 
-const labels = loadLabels(presetDir);
+const config = parseTeamConfig(join(presetDir, 'team.yaml'));
+const labels = getLabelsFromConfig(config);
 
-describe('loadLabels from labels.json', () => {
-  it('has exactly 11 labels', () => {
-    assert.equal(labels.length, 11);
+describe('getLabelsFromConfig (dev team.yaml)', () => {
+  it('label count matches stages count', () => {
+    assert.equal(labels.length, config.stages.length, `Expected ${config.stages.length} labels, got ${labels.length}`);
   });
 
   it('all labels have status, color, and description', () => {
@@ -40,10 +41,8 @@ describe('loadLabels from labels.json', () => {
     const required = [
       'planning',
       'plan-review',
-      'plan-revising',
       'approved',
       'code-review',
-      'code-revising',
       'testing',
       'ready-to-merge',
       'blocked',

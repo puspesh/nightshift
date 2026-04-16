@@ -12,7 +12,6 @@ customize the pipeline by editing the extension files in `.claude/nightshift/`.
 | `ns-<team>-plan-template.md` | Implementation plan format | Planner |
 | `ns-<team>-pr-template.md` | PR body format | Coder |
 | `ns-<team>-test-config.md` | Test runner configuration | Tester |
-| `ns-<team>-agents.json` | Per-agent model/effort/thinking config | Start command |
 | `ns-<team>-citizens.json` | Per-agent display name and color | Visualization |
 
 ## Writing Review Criteria for Your Stack
@@ -48,43 +47,41 @@ Edit `.claude/nightshift/ns-<team>-test-config.md` with:
 
 ## Changing Label Names
 
-Labels are defined in the preset's `labels.json` and created with the team prefix during init.
-Note: Changing label names requires updating the agent profiles too, which
-is not recommended unless you fork the profiles.
+Labels are derived from the `stages` section of `team.yaml` and created with
+the team prefix during init. To customize labels, edit the stages in your
+team's `team.yaml` file.
 
 ## Per-Agent Model and Reasoning Configuration
 
-Edit `.claude/nightshift/ns-<team>-agents.json` to configure each agent's
-model, thinking budget, and reasoning effort independently:
+Model and reasoning settings are configured per-agent in `team.yaml`:
 
-```json
-{
-  "producer": { "model": "sonnet" },
-  "planner": { "model": "opus", "thinkingBudget": "high" },
-  "reviewer": { "model": "opus", "reasoningEffort": "high" },
-  "coder": { "model": "opus", "thinkingBudget": "10000" },
-  "tester": { "model": "sonnet", "reasoningEffort": "low" }
-}
+```yaml
+agents:
+  producer:
+    model: sonnet
+    reasoning_effort: medium
+    # ...
+  coder:
+    model: opus
+    # ...
 ```
 
 ### Available options
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `model` | `sonnet`, `opus`, `haiku` | Claude model to use |
-| `thinkingBudget` | `low`, `medium`, `high`, or a number | Thinking token budget |
-| `reasoningEffort` | `low`, `medium`, `high` | Reasoning effort level |
+| `model` | Any Claude model ID | Claude model to use |
+| `reasoning_effort` | `low`, `medium`, `high` | Reasoning effort level |
 
 ### Resolution order
 
-1. Exact role match (e.g., `"coder-1"` overrides `"coder"`)
-2. Base role wildcard (`"coder"` applies to all coder-N agents)
-3. Global runner from `repo.md` (base command)
+1. Agent-specific config in `team.yaml`
+2. Global runner from `repo.md` (base command)
 
 ### When changes take effect
 
-Changes to this file take effect the next time you run `nightshift start`.
-You do not need to re-run `nightshift init`.
+Changes to `team.yaml` take effect after running `nightshift reinit --team <team>`,
+then restarting with `nightshift start`.
 
 ### Cost optimization
 
@@ -95,7 +92,7 @@ You do not need to re-run `nightshift init`.
 
 ## Customizing the Plan Template
 
-Edit `.claude/nightshift/plan-template.md` to add project-specific sections:
+Edit `.claude/nightshift/ns-<team>-plan-template.md` to add project-specific sections:
 
 - **Data model section**: For projects with complex domain models
 - **Migration section**: For database-heavy projects

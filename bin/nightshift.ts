@@ -41,6 +41,7 @@ function printHelp(): void {
 
 Commands:
   init       Set up a nightshift team in this repository
+  reinit     Regenerate agent profiles and labels (no worktrees)
   teardown   Remove nightshift from this repository
   start      Launch all agents in a tmux session
   stop       Stop a running tmux session
@@ -48,10 +49,15 @@ Commands:
 
 Options (init):
   --team <name>     Team preset to initialize (required)
+  --from <path>     Custom team definition directory
   --coders <n>      Number of coder agents (1-4, default: 1)
   --yes             Accept defaults non-interactively
   --reset           Reset team config files
   --reset-repo      Reset shared repo.md (with confirmation)
+
+Options (reinit):
+  --team <name>     Team to regenerate (required)
+  --agent <role>    Regenerate a single agent only
 
 Options (teardown):
   --team <name>     Remove specific team (omit to remove all)
@@ -76,10 +82,12 @@ function printVersion(): void {
 }
 
 async function list(): Promise<void> {
-  const { detectRepoName } = await import('../lib/detect.js');
-  const { discoverTeams, discoverCoderCount } = await import('../lib/worktrees.js');
+  const { detectRepoRoot, detectRepoName } = await import('../lib/detect.js');
+  const { discoverTeams } = await import('../lib/worktrees.js');
+  const { loadTeamConfig, buildAgentListFromConfig } = await import('../lib/start.js');
 
   try {
+    const repoRoot = detectRepoRoot();
     const repoName = detectRepoName();
     const teams = discoverTeams(repoName);
 
@@ -93,8 +101,16 @@ async function list(): Promise<void> {
     console.log(`Nightshift teams in ${repoName}:`);
     console.log('');
     for (const team of teams) {
-      const coders = discoverCoderCount(repoName, team);
-      console.log(`  ${team} (${coders} coder${coders !== 1 ? 's' : ''})`);
+      const config = loadTeamConfig(team, repoRoot);
+      if (config) {
+        const agents = buildAgentListFromConfig(config, repoRoot, repoName);
+        console.log(`  ${team} (${agents.length} agents)`);
+        for (const a of agents) {
+          console.log(`    ${a.role.padEnd(12)} → @${a.agent}`);
+        }
+      } else {
+        console.log(`  ${team} (no team.yaml found)`);
+      }
     }
     console.log('');
   } catch (err) {
@@ -116,6 +132,11 @@ async function main(): Promise<void> {
     case 'teardown': {
       const { teardown } = await import('../lib/teardown.js');
       await teardown(commandArgs);
+      break;
+    }
+    case 'reinit': {
+      const { reinit } = await import('../lib/reinit.js');
+      await reinit(commandArgs);
       break;
     }
     case 'start': {

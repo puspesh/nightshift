@@ -21,22 +21,26 @@ export function resolveAgentConfig(
 /**
  * Build a runner command for a specific agent by applying config overrides
  * to the base runner. Replaces existing flags or appends new ones.
+ * If agentName is provided, also injects --agent <name>.
  */
 export function buildRunnerForAgent(
   baseRunner: string,
   agentDef?: AgentDefinition,
+  agentName?: string,
 ): string {
-  if (!agentDef) return baseRunner;
   let runner = baseRunner;
 
-  if (agentDef.model) {
+  if (agentDef?.model) {
     runner = replaceOrAppendFlag(runner, '--model', agentDef.model);
   }
-  if (agentDef.thinking_budget) {
+  if (agentDef?.thinking_budget) {
     runner = replaceOrAppendFlag(runner, '--thinking-budget', agentDef.thinking_budget);
   }
-  if (agentDef.reasoning_effort) {
+  if (agentDef?.reasoning_effort) {
     runner = replaceOrAppendFlag(runner, '--reasoning-effort', agentDef.reasoning_effort);
+  }
+  if (agentName) {
+    runner = replaceOrAppendFlag(runner, '--agent', agentName);
   }
 
   return runner;

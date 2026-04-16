@@ -62,6 +62,9 @@ function parseFlag(args: string[], flag: string): string | null {
 /**
  * Generate and install agent profiles from team.yaml + behavior templates.
  * Returns the list of generated file names.
+ *
+ * `targetDir` overrides the install location. Defaults to `getGlobalAgentsDir()`
+ * (~/.claude/agents/). Tests pass a temp dir so they don't clobber real profiles.
  */
 export function generateAndInstallProfiles(
   config: TeamConfig,
@@ -71,10 +74,11 @@ export function generateAndInstallProfiles(
   overrides?: Record<string, number>,
   repoRoot?: string,
   filterRole?: string,
+  targetDir?: string,
 ): string[] {
   const agentsDir = join(presetDir, 'agents');
-  const targetDir = getGlobalAgentsDir();
-  mkdirSync(targetDir, { recursive: true });
+  const installDir = targetDir ?? getGlobalAgentsDir();
+  mkdirSync(installDir, { recursive: true });
 
   // Behavior override dir: .claude/nightshift/agents/ in the repo
   const overrideDir = repoRoot
@@ -134,7 +138,7 @@ export function generateAndInstallProfiles(
     });
 
     const fileName = `${entry.agent}.md`;
-    writeFileSync(join(targetDir, fileName), content);
+    writeFileSync(join(installDir, fileName), content);
     installed.push(fileName);
   }
 

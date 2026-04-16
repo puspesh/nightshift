@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
-import { getSessionName, buildAgentListFromConfig, loadTeamConfig, parseRunner, getHeadlessPidDir, writeAgentPid, stopHeadlessAgents } from '../lib/start.js';
+import { getSessionName, buildAgentListFromConfig, loadTeamConfig, parseRunner, getHeadlessPidDir, writeAgentPid, stopHeadlessAgents, checkTeamInitialized } from '../lib/start.js';
 import { resolveAgentConfig } from '../lib/agent-config.js';
 import { parseTeamConfig, parseTeamConfigFromString } from '../lib/team-config.js';
 import { dirname } from 'node:path';
@@ -207,6 +207,105 @@ describe('buildAgentListFromConfig', () => {
     assert.equal(mainColumn.length, 2);
     // All agents accounted for
     assert.equal(sidebar.length + mainColumn.length, agents.length);
+  });
+});
+
+describe('checkTeamInitialized', () => {
+  // Minimal team.yaml: one worktree agent + one non-worktree agent.
+  // Using a unique team name so ns-<team>-<role>.md paths don't collide with
+  // real profiles in ~/.claude/agents/.
+  function makeConfig(teamName: string) {
+    return parseTeamConfigFromString(`
+name: ${teamName}
+description: test team
+stages:
+  - name: wip
+    color: "ededed"
+    meta: true
+agents:
+  producer:
+    description: triages
+    watches: [unlabeled]
+    transitions:
+      triage: wip
+    tools: [Read, Bash]
+    model: sonnet
+    worktree: false
+  planner:
+    description: plans
+    watches: [wip]
+    transitions:
+      done: wip
+    tools: [Read, Bash]
+    model: opus
+`);
+  }
+
+  it('returns missing profile and worktree when nothing is installed', () => {
+    const teamName = `test-init-check-none-${Date.now()}`;
+    const repoName = `test-init-check-repo-none-${Date.now()}`;
+    const config = makeConfig(teamName);
+
+    const missing = checkTeamInitialized(config, repoName);
+
+    // producer: profile missing (no worktree expected since worktree: false)
+    // planner: profile + worktree missing
+    assert.equal(missing.length, 3);
+    assert.ok(missing.some(m => m.includes(`ns-${teamName}-producer.md`)));
+    assert.ok(missing.some(m => m.includes(`ns-${teamName}-planner.md`)));
+    assert.ok(missing.some(m => m.includes(`worktrees/planner`)));
+    // producer has worktree: false → no worktree check
+    assert.ok(!missing.some(m => m.includes(`worktrees/producer`)));
+  });
+
+  it('returns empty when all profiles and worktrees exist', () => {
+    const teamName = `test-init-check-ok-${Date.now()}`;
+    const repoName = `test-init-check-repo-ok-${Date.now()}`;
+    const config = makeConfig(teamName);
+    const agentsDir = join(homedir(), '.claude', 'agents');
+    const teamDir = join(homedir(), '.nightshift', repoName, teamName);
+
+    mkdirSync(agentsDir, { recursive: true });
+    const producerProfile = join(agentsDir, `ns-${teamName}-producer.md`);
+    const plannerProfile = join(agentsDir, `ns-${teamName}-planner.md`);
+    const plannerWorktree = join(teamDir, 'worktrees', 'planner');
+
+    try {
+      writeFileSync(producerProfile, '---\nname: test\n---\n');
+      writeFileSync(plannerProfile, '---\nname: test\n---\n');
+      mkdirSync(plannerWorktree, { recursive: true });
+
+      const missing = checkTeamInitialized(config, repoName);
+      assert.deepEqual(missing, []);
+    } finally {
+      rmSync(producerProfile, { force: true });
+      rmSync(plannerProfile, { force: true });
+      rmSync(join(homedir(), '.nightshift', repoName), { recursive: true, force: true });
+    }
+  });
+
+  it('reports only the missing artifacts when profiles exist but worktrees dont', () => {
+    const teamName = `test-init-check-partial-${Date.now()}`;
+    const repoName = `test-init-check-repo-partial-${Date.now()}`;
+    const config = makeConfig(teamName);
+    const agentsDir = join(homedir(), '.claude', 'agents');
+
+    mkdirSync(agentsDir, { recursive: true });
+    const producerProfile = join(agentsDir, `ns-${teamName}-producer.md`);
+    const plannerProfile = join(agentsDir, `ns-${teamName}-planner.md`);
+
+    try {
+      writeFileSync(producerProfile, '---\nname: test\n---\n');
+      writeFileSync(plannerProfile, '---\nname: test\n---\n');
+
+      const missing = checkTeamInitialized(config, repoName);
+      // Only the planner's worktree should be reported missing
+      assert.equal(missing.length, 1);
+      assert.ok(missing[0].includes('worktrees/planner'));
+    } finally {
+      rmSync(producerProfile, { force: true });
+      rmSync(plannerProfile, { force: true });
+    }
   });
 });
 

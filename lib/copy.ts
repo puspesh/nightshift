@@ -3,11 +3,10 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
-  readFileSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join, basename, dirname } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -52,48 +51,6 @@ export function getDefaultsDir(): string {
  */
 export function getGlobalAgentsDir(): string {
   return join(homedir(), '.claude', 'agents');
-}
-
-/**
- * Copy agent profiles to the global ~/.claude/agents/ directory.
- */
-export function copyAgentProfiles(team: string, coderCount: number): string[] {
-  const agentsDir = getPresetAgentsDir(team);
-  const targetDir = getGlobalAgentsDir();
-  const copied: string[] = [];
-  const prefix = `ns-${team}-`;
-  const coderBaseName = `ns-${team}-coder`;
-
-  mkdirSync(targetDir, { recursive: true });
-
-  const files = readdirSync(agentsDir).filter(
-    (f) => f.startsWith(prefix) && f.endsWith('.md'),
-  );
-
-  for (const file of files) {
-    const nameWithoutExt = basename(file, '.md');
-
-    if (nameWithoutExt === coderBaseName) {
-      // Stamp N copies of the coder template
-      const templateContent = readFileSync(join(agentsDir, file), 'utf8');
-      for (let i = 1; i <= coderCount; i++) {
-        const stampedName = `${coderBaseName}-${i}`;
-        const stampedFile = `${stampedName}.md`;
-        const stampedContent = templateContent.replaceAll(
-          coderBaseName,
-          stampedName,
-        );
-        writeFileSync(join(targetDir, stampedFile), stampedContent);
-        copied.push(stampedFile);
-      }
-    } else {
-      // Non-coder agent — copy directly
-      copyFileSync(join(agentsDir, file), join(targetDir, file));
-      copied.push(file);
-    }
-  }
-
-  return copied;
 }
 
 /**

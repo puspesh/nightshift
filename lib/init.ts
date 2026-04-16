@@ -4,9 +4,12 @@ import { join } from 'node:path';
 import chalk from 'chalk';
 import prompts from 'prompts';
 import { detectRepoRoot, detectRepoName, detectMainBranch, detectPackageManager, detectLanguage, detectScripts, validateTeamName, detectRemote, type DetectedScripts } from './detect.js';
-import { createLabels } from './labels.js';
-import { createWorktrees, getTeamDir, discoverCoderCount } from './worktrees.js';
-import { copyAgentProfiles, copyExtensionFiles, getPresetDir } from './copy.js';
+import { createLabelsFromConfig } from './labels.js';
+import { createWorktrees, getTeamDir } from './worktrees.js';
+import { copyExtensionFiles, getPresetDir, getGlobalAgentsDir } from './copy.js';
+import { parseTeamConfig, validateTeamConfig, expandAgentInstances, getAgentRoles, getScalableAgents } from './team-config.js';
+import type { TeamConfig } from './team-config.js';
+import { generateAgentFile, buildTemplateVars } from './generate-agent.js';
 
 /**
  * Check if a command-line tool is available.
@@ -54,6 +57,107 @@ function parseFlag(args: string[], flag: string): string | null {
     return null;
   }
   return args[idx + 1];
+}
+
+/**
+ * Generate and install agent profiles from team.yaml + behavior templates.
+ * Returns the list of generated file names.
+ */
+export function generateAndInstallProfiles(
+  config: TeamConfig,
+  presetDir: string,
+  repoName: string,
+  mainBranch: string,
+  overrides?: Record<string, number>,
+  repoRoot?: string,
+  filterRole?: string,
+): string[] {
+  const agentsDir = join(presetDir, 'agents');
+  const targetDir = getGlobalAgentsDir();
+  mkdirSync(targetDir, { recursive: true });
+
+  // Behavior override dir: .claude/nightshift/agents/ in the repo
+  const overrideDir = repoRoot
+    ? join(repoRoot, '.claude', 'nightshift', 'agents')
+    : null;
+
+  let expanded = expandAgentInstances(config, overrides);
+
+  // If filterRole is set, only generate the matching agent
+  if (filterRole) {
+    expanded = expanded.filter(a => a.role === filterRole || a.agent === filterRole);
+  }
+
+  const installed: string[] = [];
+
+  for (const entry of expanded) {
+    const baseRole = entry.instanceNumber
+      ? entry.role.replace(/-\d+$/, '')
+      : entry.role;
+
+    // Template lookup order:
+    // 1. Repo-level override: .claude/nightshift/agents/<role>.md
+    // 2. Preset template: presets/<team>/agents/<role>.md
+    // 3. Legacy: presets/<team>/agents/ns-<team>-<role>.md
+    const overridePath = overrideDir ? join(overrideDir, `${baseRole}.md`) : null;
+    const templatePath = join(agentsDir, `${baseRole}.md`);
+    const legacyPath = join(agentsDir, `ns-${config.name}-${baseRole}.md`);
+
+    let behaviorTemplate: string;
+    if (overridePath && existsSync(overridePath)) {
+      behaviorTemplate = readFileSync(overridePath, 'utf-8');
+    } else if (existsSync(templatePath)) {
+      behaviorTemplate = readFileSync(templatePath, 'utf-8');
+    } else if (existsSync(legacyPath)) {
+      behaviorTemplate = readFileSync(legacyPath, 'utf-8');
+    } else {
+      throw new Error(
+        `Behavior template not found for agent "${baseRole}" in ${agentsDir}. ` +
+        `Expected: ${baseRole}.md`
+      );
+    }
+
+    const vars = buildTemplateVars(
+      config,
+      baseRole,
+      repoName,
+      mainBranch,
+      entry.instanceNumber,
+    );
+
+    const content = generateAgentFile({
+      teamConfig: config,
+      agentName: baseRole,
+      behaviorTemplate,
+      templateVars: vars,
+      instanceNumber: entry.instanceNumber,
+    });
+
+    const fileName = `${entry.agent}.md`;
+    writeFileSync(join(targetDir, fileName), content);
+    installed.push(fileName);
+  }
+
+  return installed;
+}
+
+/**
+ * Build the CLAUDE.md team subsection dynamically from team.yaml.
+ */
+function buildTeamSubsectionFromConfig(config: TeamConfig, repoName: string, overrides?: Record<string, number>): string {
+  const teamDir = getTeamDir(repoName, config.name);
+  const expanded = expandAgentInstances(config, overrides);
+
+  let rows = '';
+  for (const entry of expanded) {
+    const hasWorktree = entry.definition.worktree !== false;
+    const location = hasWorktree
+      ? `\`${teamDir}/worktrees/${entry.role}/\``
+      : '_(runs from main)_';
+    rows += `| @${entry.agent} | ${entry.definition.description} | ${location} |\n`;
+  }
+
+  return `### ${config.name}\n| Agent | Role | Worktree |\n|-------|------|----------|\n${rows}\nConfig: \`.claude/nightshift/ns-${config.name}-*.md\`\n`;
 }
 
 /**
@@ -199,12 +303,14 @@ claude --dangerously-skip-permissions
 
 /**
  * Append or update the nightshift team section in CLAUDE.md.
+ * The subsection content is a placeholder — callers should replace it with
+ * buildTeamSubsectionFromConfig() output after this structural insert.
  */
-export function appendClaudeMd(repoRoot: string, repoName: string, team: string, coderCount: number): void {
+export function appendClaudeMd(repoRoot: string, repoName: string, team: string): void {
   const claudeMdPath = join(repoRoot, 'CLAUDE.md');
 
-  // Build the team subsection
-  const teamSubsection = buildTeamSubsection(team, repoName, coderCount);
+  // Placeholder subsection (overwritten by caller with dynamic content)
+  const teamSubsection = `### ${team}\n_(agents configured via team.yaml)_\n`;
 
   if (!existsSync(claudeMdPath)) {
     // Create CLAUDE.md from scratch
@@ -263,30 +369,13 @@ export function appendClaudeMd(repoRoot: string, repoName: string, team: string,
 }
 
 /**
- * Build the markdown subsection for a team.
- */
-function buildTeamSubsection(team: string, repoName: string, coderCount: number): string {
-  const teamDir = getTeamDir(repoName, team);
-
-  let rows = '';
-  rows += `| @ns-${team}-producer | Triage issues, create branches | _(runs from main)_ |\n`;
-  rows += `| @ns-${team}-planner | Write implementation plans | \`${teamDir}/worktrees/planner/\` |\n`;
-  rows += `| @ns-${team}-reviewer | Review plans and code | \`${teamDir}/worktrees/reviewer/\` |\n`;
-  for (let i = 1; i <= coderCount; i++) {
-    rows += `| @ns-${team}-coder-${i} | Implement from plans | \`${teamDir}/worktrees/coder-${i}/\` |\n`;
-  }
-  rows += `| @ns-${team}-tester | Run tests against PRs | \`${teamDir}/worktrees/tester/\` |\n`;
-
-  return `### ${team}\n| Agent | Role | Worktree |\n|-------|------|----------|\n${rows}\nConfig: \`.claude/nightshift/ns-${team}-*.md\`\n`;
-}
-
-/**
  * Run the full nightshift init flow.
  */
 export async function init(args: string[]): Promise<void> {
   // 1. Parse flags
   const team = parseFlag(args, '--team');
   const codersFlag = parseFlag(args, '--coders');
+  const fromPath = parseFlag(args, '--from');
   const yes = args.includes('--yes');
   const reset = args.includes('--reset');
   const resetRepo = args.includes('--reset-repo');
@@ -303,12 +392,57 @@ export async function init(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // 4. Validate preset exists
-  const presetDir = getPresetDir(team);
-  if (!existsSync(presetDir)) {
-    const available = listAvailablePresets();
-    console.error(chalk.red(`Unknown preset: ${team}. Available presets: ${available.join(', ')}`));
+  // 4. Resolve team definition directory.
+  //    Lookup chain: --from path → .claude/nightshift/teams/<team>/ → presets/<team>/
+  let presetDir: string;
+  if (fromPath) {
+    if (!existsSync(fromPath) || !existsSync(join(fromPath, 'team.yaml'))) {
+      console.error(chalk.red(`Custom team path "${fromPath}" does not exist or has no team.yaml.`));
+      process.exit(1);
+    }
+    presetDir = fromPath;
+  } else {
+    // Try repo-local first (needs repo root, so detect early)
+    let earlyRepoRoot: string | null = null;
+    try { earlyRepoRoot = detectRepoRoot(); } catch { /* will fail properly later */ }
+
+    const localDir = earlyRepoRoot ? join(earlyRepoRoot, '.claude', 'nightshift', 'teams', team) : null;
+    if (localDir && existsSync(join(localDir, 'team.yaml'))) {
+      presetDir = localDir;
+    } else {
+      presetDir = getPresetDir(team);
+      if (!existsSync(presetDir)) {
+        const available = listAvailablePresets();
+        console.error(chalk.red(`Unknown team: ${team}. Available: ${available.join(', ')}`));
+        console.error(chalk.dim('  You can also provide a custom team directory with --from <path>'));
+        process.exit(1);
+      }
+    }
+  }
+
+  const teamYamlPath = join(presetDir, 'team.yaml');
+  if (!existsSync(teamYamlPath)) {
+    console.error(chalk.red(`No team.yaml found in ${presetDir}. Every team requires a team.yaml.`));
     process.exit(1);
+  }
+
+  const teamConfig = parseTeamConfig(teamYamlPath);
+  const validation = validateTeamConfig(teamConfig);
+  if (!validation.valid) {
+    console.error(chalk.red(`Invalid team.yaml: ${validation.errors.map(e => e.message).join(', ')}`));
+    process.exit(1);
+  }
+
+  // Validate that every agent has a behavior template
+  const agentsDir = join(presetDir, 'agents');
+  for (const role of Object.keys(teamConfig.agents)) {
+    const templatePath = join(agentsDir, `${role}.md`);
+    const legacyPath = join(agentsDir, `ns-${team}-${role}.md`);
+    if (!existsSync(templatePath) && !existsSync(legacyPath)) {
+      console.error(chalk.red(`Missing behavior template for agent "${role}" in ${agentsDir}/`));
+      console.error(chalk.dim(`  Expected: ${role}.md`));
+      process.exit(1);
+    }
   }
 
   // 5. Print banner
@@ -402,39 +536,57 @@ export async function init(args: string[]): Promise<void> {
     console.log(`  ${chalk.dim('  repo.md already exists (skipped)')}`);
   }
 
-  // 10. Setup team config files
+  // 10. Setup team config — scalable agent counts
   console.log('');
   console.log(chalk.bold(`Setting up ${team} team...`));
 
-  let coderCount = 1;
-  if (codersFlag) {
-    coderCount = parseInt(codersFlag, 10);
-    if (isNaN(coderCount) || coderCount < 1 || coderCount > 4) {
-      console.error(chalk.red('Invalid --coders value. Must be between 1 and 4.'));
+  // Build scalable agent overrides from --coders flag
+  let scalableOverrides: Record<string, number> | undefined;
+
+  const scalableAgents = getScalableAgents(teamConfig);
+  const primaryScalable = scalableAgents[0]; // first scalable agent from team.yaml
+
+  if (codersFlag && primaryScalable) {
+    const count = parseInt(codersFlag, 10);
+    const agentDef = teamConfig.agents[primaryScalable];
+    const maxInstances = agentDef.max_instances ?? 4;
+    if (isNaN(count) || count < 1 || count > maxInstances) {
+      console.error(chalk.red(`Invalid --coders value. Must be between 1 and ${maxInstances}.`));
       process.exit(1);
     }
-  } else if (!yes) {
+    scalableOverrides = { [primaryScalable]: count };
+  } else if (!codersFlag && !yes && primaryScalable) {
+    const agentDef = teamConfig.agents[primaryScalable];
+    const defaultInstances = agentDef.instances ?? 1;
+    const maxInstances = agentDef.max_instances ?? 4;
     const response = await prompts({
       type: 'number',
       name: 'count',
-      message: 'Number of coder agents (1-4)',
-      initial: 1,
+      message: `Number of ${primaryScalable} agents (1-${maxInstances})`,
+      initial: defaultInstances,
       min: 1,
-      max: 4,
+      max: maxInstances,
     });
-    coderCount = response.count || 1;
+    const count = response.count || defaultInstances;
+    if (count !== defaultInstances) {
+      scalableOverrides = { [primaryScalable]: count };
+    }
   }
 
   // 11. Copy team extension files (if not exist or --reset)
   console.log('');
   console.log(chalk.bold('Setting up team config...'));
   if (reset) {
-    // Remove existing ns-<team>-*.md files before copying fresh
+    // Remove existing ns-<team>-*.md extension files before copying fresh.
+    // IMPORTANT: Never touch .claude/nightshift/agents/ — those are user
+    // behavior overrides that must survive --reset.
     const nightshiftExtDir = join(repoRoot, '.claude', 'nightshift');
     if (existsSync(nightshiftExtDir)) {
-      const existingFiles = readdirSync(nightshiftExtDir).filter(
-        (f) => f.startsWith(`ns-${team}-`) && f.endsWith('.md')
-      );
+      const existingFiles = readdirSync(nightshiftExtDir, { withFileTypes: true })
+        .filter(
+          (entry) => entry.isFile() && entry.name.startsWith(`ns-${team}-`) && entry.name.endsWith('.md')
+        )
+        .map(entry => entry.name);
       for (const file of existingFiles) {
         unlinkSync(join(nightshiftExtDir, file));
       }
@@ -450,11 +602,11 @@ export async function init(args: string[]): Promise<void> {
     );
   }
 
-  // 12. Create labels
+  // 12. Create labels from team.yaml stages
   console.log('');
   console.log(chalk.bold('Creating GitHub labels...'));
   try {
-    const labelsCreated = createLabels(team, presetDir);
+    const labelsCreated = createLabelsFromConfig(teamConfig);
     console.log(
       `  ${chalk.green('v')} ${labelsCreated} labels created`
     );
@@ -466,13 +618,12 @@ export async function init(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // 13. Build roles array for worktrees (excluding producer)
-  const roles = [
-    'planner',
-    'reviewer',
-    ...Array.from({ length: coderCount }, (_, i) => `coder-${i + 1}`),
-    'tester',
-  ];
+  // 13. Build roles array for worktrees
+  const expanded = expandAgentInstances(teamConfig, scalableOverrides);
+  // Only agents with worktree !== false get worktrees
+  const roles = expanded
+    .filter(a => a.definition.worktree !== false)
+    .map(a => a.role);
 
   // 14. Create worktrees
   console.log('');
@@ -504,17 +655,18 @@ export async function init(args: string[]): Promise<void> {
     }
   }
 
-
-  // 17. Copy agent profiles
+  // 16. Install agent profiles
   console.log('');
   console.log(chalk.bold('Installing agent profiles...'));
   try {
-    const profilesCopied = copyAgentProfiles(team, coderCount);
+    const installed = generateAndInstallProfiles(
+      teamConfig, presetDir, repoName, mainBranch, scalableOverrides, repoRoot,
+    );
     console.log(
-      `  ${chalk.green('v')} ${profilesCopied.length} profiles installed to ~/.claude/agents/`
+      `  ${chalk.green('v')} ${installed.length} profiles generated to ~/.claude/agents/`
     );
   } catch (err) {
-    console.log(`  ${chalk.red('x')} Failed to copy profiles: ${(err as Error).message}`);
+    console.log(`  ${chalk.red('x')} Failed to install profiles: ${(err as Error).message}`);
     process.exit(1);
   }
 
@@ -543,24 +695,47 @@ export async function init(args: string[]): Promise<void> {
   console.log('');
   console.log(chalk.bold('Updating CLAUDE.md...'));
   try {
-    appendClaudeMd(repoRoot, repoName, team, coderCount);
+    const teamSubsection = buildTeamSubsectionFromConfig(teamConfig, repoName, scalableOverrides);
+    const claudeMdPath = join(repoRoot, 'CLAUDE.md');
+    if (!existsSync(claudeMdPath)) {
+      writeFileSync(claudeMdPath, `# ${repoName}\n\nProject documentation.\n\n## Nightshift Teams\n\n${teamSubsection}`);
+    } else {
+      // Use existing appendClaudeMd for the structural insert, then patch subsection
+      appendClaudeMd(repoRoot, repoName, team);
+      // Re-read and replace the team subsection with the dynamic one
+      let claudeContent = readFileSync(claudeMdPath, 'utf-8');
+      const teamHeader = `### ${team}`;
+      const teamIdx = claudeContent.indexOf(teamHeader);
+      if (teamIdx !== -1) {
+        const afterHeader = claudeContent.indexOf('\n', teamIdx);
+        let endOfSection = claudeContent.length;
+        const nextH3 = claudeContent.indexOf('\n### ', afterHeader + 1);
+        const nextH2 = claudeContent.indexOf('\n## ', afterHeader + 1);
+        if (nextH3 !== -1 && (nextH2 === -1 || nextH3 < nextH2)) {
+          endOfSection = nextH3;
+        } else if (nextH2 !== -1) {
+          endOfSection = nextH2;
+        }
+        claudeContent = claudeContent.slice(0, teamIdx) + teamSubsection + claudeContent.slice(endOfSection);
+        writeFileSync(claudeMdPath, claudeContent);
+      }
+    }
     console.log(`  ${chalk.green('v')} Team section added to CLAUDE.md`);
   } catch (err) {
     console.log(`  ${chalk.red('x')} Failed to update CLAUDE.md: ${(err as Error).message}`);
   }
 
-  // 18. Print next steps
+  // 19. Print next steps
   console.log('');
   console.log(chalk.green.bold('Done! nightshift is set up.'));
   console.log('');
+
+  const agentList = expanded.map(a => a.agent);
+
   console.log(chalk.bold('Agents:'));
-  console.log(`  @ns-${team}-producer`);
-  console.log(`  @ns-${team}-planner`);
-  console.log(`  @ns-${team}-reviewer`);
-  for (let i = 1; i <= coderCount; i++) {
-    console.log(`  @ns-${team}-coder-${i}`);
+  for (const agent of agentList) {
+    console.log(`  @${agent}`);
   }
-  console.log(`  @ns-${team}-tester`);
   console.log('');
   console.log(chalk.bold('Next steps:'));
   console.log('');
@@ -575,12 +750,8 @@ export async function init(args: string[]): Promise<void> {
   console.log(`     ${chalk.cyan(`npx nightshift start --team ${team}`)}`);
   console.log('');
   console.log(chalk.dim('     Or start individually in separate terminals:'));
-  console.log(`     ${chalk.dim(`/loop 15m @ns-${team}-producer`)}`);
-  console.log(`     ${chalk.dim(`/loop 15m @ns-${team}-planner`)}`);
-  console.log(`     ${chalk.dim(`/loop 15m @ns-${team}-reviewer`)}`);
-  for (let i = 1; i <= coderCount; i++) {
-    console.log(`     ${chalk.dim(`/loop 15m @ns-${team}-coder-${i}`)}`);
+  for (const agent of agentList) {
+    console.log(`     ${chalk.dim(`/loop 15m @${agent}`)}`);
   }
-  console.log(`     ${chalk.dim(`/loop 15m @ns-${team}-tester`)}`);
   console.log('');
 }

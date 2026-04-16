@@ -4,9 +4,11 @@ import chalk from 'chalk';
 import prompts from 'prompts';
 import { detectRepoRoot, detectRepoName } from './detect.js';
 import { removeLabels } from './labels.js';
-import { removeWorktrees, getNightshiftDir, getTeamDir, discoverTeams, discoverCoderCount } from './worktrees.js';
-import { removeAgentProfiles, removeExtensionFiles, removeRepoMd } from './copy.js';
+import { removeWorktrees, getNightshiftDir, getTeamDir, discoverTeams } from './worktrees.js';
+import { removeAgentProfiles, removeExtensionFiles, removeRepoMd, getGlobalAgentsDir } from './copy.js';
 import { removeHooks } from './hooks.js';
+import { loadTeamConfig } from './start.js';
+import type { AgentEntry } from './types.js';
 
 /**
  * Parse a flag value from CLI args (e.g. --team alpha -> "alpha").
@@ -15,6 +17,80 @@ function parseFlag(args: string[], flag: string): string | null {
   const index = args.indexOf(flag);
   if (index === -1 || index + 1 >= args.length) return null;
   return args[index + 1];
+}
+
+/**
+ * Discover all agent roles for a team by scanning the filesystem.
+ * Filesystem-first: scans worktree dirs + agent profile files.
+ * Merges with team.yaml if available (catches worktree: false agents).
+ *
+ * Returns AgentEntry[] with cwd set to the actual directory.
+ */
+export function discoverAgentEntries(
+  repoName: string,
+  team: string,
+  repoRoot: string,
+): AgentEntry[] {
+  const teamDir = getTeamDir(repoName, team);
+  const worktreesDir = join(teamDir, 'worktrees');
+  const roleSet = new Set<string>();
+  const entries: AgentEntry[] = [];
+
+  // 1. Scan worktree directories
+  if (existsSync(worktreesDir)) {
+    for (const dir of readdirSync(worktreesDir)) {
+      const fullPath = join(worktreesDir, dir);
+      roleSet.add(dir);
+      entries.push({
+        role: dir,
+        agent: `ns-${team}-${dir}`,
+        cwd: fullPath,
+      });
+    }
+  }
+
+  // 2. Scan ~/.claude/agents/ for agent files without worktrees
+  const agentsDir = getGlobalAgentsDir();
+  const prefix = `ns-${team}-`;
+  if (existsSync(agentsDir)) {
+    for (const file of readdirSync(agentsDir)) {
+      if (!file.startsWith(prefix) || !file.endsWith('.md')) continue;
+      const agentName = file.slice(0, -3); // strip .md
+      const role = agentName.slice(prefix.length);
+      if (!roleSet.has(role)) {
+        roleSet.add(role);
+        entries.push({
+          role,
+          agent: agentName,
+          cwd: repoRoot, // no worktree → runs from repo root
+        });
+      }
+    }
+  }
+
+  // 3. Merge with team.yaml (catches agents with worktree: false that might not have files yet)
+  const config = loadTeamConfig(team, repoRoot);
+  if (config) {
+    for (const [role, def] of Object.entries(config.agents)) {
+      if (def.scalable) {
+        // For scalable agents, the filesystem scan already caught actual instances
+        // Don't add base role — only instances exist on disk
+        continue;
+      }
+      if (!roleSet.has(role)) {
+        roleSet.add(role);
+        entries.push({
+          role,
+          agent: `ns-${team}-${role}`,
+          cwd: def.worktree === false
+            ? repoRoot
+            : join(worktreesDir, role),
+        });
+      }
+    }
+  }
+
+  return entries;
 }
 
 /**
@@ -177,15 +253,12 @@ export async function teardown(args: string[]): Promise<void> {
       console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);
     }
 
-    // 4b. Remove visualization hooks
+    // 4b. Remove visualization hooks (filesystem-first agent discovery)
     try {
-      const coderCount = discoverCoderCount(repoName, t);
-      const roles = [
-        'producer', 'planner', 'reviewer',
-        ...Array.from({ length: coderCount }, (_, i) => `coder-${i + 1}`),
-        'tester',
-      ];
-      removeHooks(repoName, t, roles, repoRoot);
+      const agentEntries = discoverAgentEntries(repoName, t, repoRoot);
+      if (agentEntries.length > 0) {
+        removeHooks(repoName, t, agentEntries);
+      }
       console.log(`  ${chalk.green('\u2713')} Visualization hooks removed`);
     } catch (err) {
       console.log(`  ${chalk.yellow('~')} ${(err as Error).message}`);

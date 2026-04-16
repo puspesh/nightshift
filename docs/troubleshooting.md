@@ -8,13 +8,13 @@
 
 **Fix**:
 ```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 
 # Check the lock file
-cat ~/.nightshift/${REPO_NAME}/locks/ns-dev-<role>.lock
+cat ~/.nightshift/${REPO_NAME}/<team>/locks/ns-<team>-<role>.lock
 
 # If it's more than 60 minutes old, remove it
-rm ~/.nightshift/${REPO_NAME}/locks/ns-dev-<role>.lock
+rm ~/.nightshift/${REPO_NAME}/<team>/locks/ns-<team>-<role>.lock
 
 # Also remove the wip label from the issue if it's stuck
 gh issue edit <number> --remove-label "dev:wip"
@@ -31,13 +31,13 @@ them. This usually only happens if the entire Claude Code session crashed.
 
 **Fix**:
 ```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 
 # Find which worktree has the branch
 git worktree list
 
 # Force the stuck worktree back to its home branch
-cd ~/.nightshift/${REPO_NAME}/worktrees/<agent>
+cd ~/.nightshift/${REPO_NAME}/<team>/worktrees/<agent>
 git checkout _ns/dev/<agent>
 ```
 
@@ -110,8 +110,8 @@ branch with different dependencies.
 
 **Fix**:
 ```bash
-REPO_NAME=$(basename $(git rev-parse --show-toplevel))
-cd ~/.nightshift/${REPO_NAME}/worktrees/<agent>
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
+cd ~/.nightshift/${REPO_NAME}/<team>/worktrees/<agent>
 git checkout main && git pull
 <package-manager> install
 ```
@@ -138,8 +138,8 @@ clean up any remaining artifacts:
 npx nightshift teardown --force --remove-labels
 
 # Manual cleanup if needed
-REPO_NAME=$(basename $(git rev-parse --show-toplevel))
+REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 rm -rf ~/.nightshift/${REPO_NAME}
-rm -f ~/.claude/agents/nightshift-*.md
+rm -f ~/.claude/agents/ns-*.md
 rm -rf .claude/nightshift/
 ```

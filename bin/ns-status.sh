@@ -2,8 +2,11 @@
 # Reads agent status file and outputs formatted text for tmux pane border.
 # Usage: ns-status.sh <status-file> <interval-seconds>
 #
-# Status file format: "working|<timestamp>|" or "idle|<timestamp>|"
-# Output: "working" or "idle · 8m left" or "idle · soon"
+# Status file format: "<state>|<timestamp>|" where state is one of:
+#   ready    — session started but agent has not run a cycle yet
+#   working  — agent is currently executing a cycle
+#   idle     — agent finished a cycle, waiting for next loop iteration
+# Output: "ready", "working", "working · 3m", "idle · 8m left", or "idle · soon"
 
 STATUS_FILE="$1"
 INTERVAL="${2:-900}" # default 15 minutes
@@ -24,7 +27,9 @@ fi
 
 NOW=$(date +%s)
 
-if [ "$STATUS" = "working" ]; then
+if [ "$STATUS" = "ready" ]; then
+  echo "ready"
+elif [ "$STATUS" = "working" ]; then
   ELAPSED=$(( (NOW - TIMESTAMP) / 60 ))
   if [ "$ELAPSED" -gt 0 ]; then
     echo "working · ${ELAPSED}m"

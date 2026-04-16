@@ -81,8 +81,23 @@ export function createWorktrees(repoName: string, team: string, roles: string[],
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (err) {
+      const raw = (err as Error).message;
+      // Git emits `fatal: 'branch' is already used by worktree at '<path>'`
+      // when the branch is checked out elsewhere. This usually means either
+      // (a) another nightshift init already ran for this repo, or (b) stale
+      // git state (worktree dir deleted without `git worktree prune`).
+      const collision = raw.match(/is already used by worktree at '([^']+)'/);
+      if (collision) {
+        throw new Error(
+          `Branch ${branchName} is already checked out at ${collision[1]}.\n` +
+          `  This typically means nightshift is already initialized for this repo,\n` +
+          `  or a previous worktree wasn't cleaned up. Try:\n` +
+          `    npx nightshift teardown --team ${team} --force  # to start clean\n` +
+          `    git worktree prune                              # to drop stale entries`
+        );
+      }
       throw new Error(
-        `Failed to create worktree for ${role} at ${worktreePath}: ${(err as Error).message}`
+        `Failed to create worktree for ${role} at ${worktreePath}: ${raw}`
       );
     }
   }

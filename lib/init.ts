@@ -10,6 +10,7 @@ import { copyExtensionFiles, getPresetDir, getGlobalAgentsDir } from './copy.js'
 import { parseTeamConfig, validateTeamConfig, expandAgentInstances, getAgentRoles, getScalableAgents } from './team-config.js';
 import type { TeamConfig } from './team-config.js';
 import { generateAgentFile, buildTemplateVars } from './generate-agent.js';
+import { checkTeamInitialized } from './start.js';
 
 /**
  * Check if a command-line tool is available.
@@ -509,6 +510,32 @@ export async function init(args: string[]): Promise<void> {
   console.log(`  ${chalk.green('v')} Main branch: ${mainBranch}`);
   console.log(`  ${chalk.green('v')} Package manager: ${packageManager}`);
   console.log(`  ${chalk.green('v')} Language: ${language}`);
+
+  // 8b. Short-circuit if this team is already fully initialized for this repo.
+  //     `nightshift init` is meant to run once per (repo, team). Running it
+  //     again — especially by accident from a linked worktree — would race
+  //     against the existing `_ns/<team>/*` branches in git and surface a raw
+  //     `git worktree add` failure. Exit cleanly with guidance instead.
+  if (!reset) {
+    const missing = checkTeamInitialized(teamConfig, repoName);
+    if (missing.length === 0) {
+      const teamDir = getTeamDir(repoName, team);
+      console.log('');
+      console.log(chalk.yellow(`Team "${team}" is already initialized for ${repoName}.`));
+      console.log('');
+      console.log(chalk.dim(`  Agent profiles: ~/.claude/agents/ns-${team}-*.md`));
+      console.log(chalk.dim(`  Worktrees:      ${teamDir}/worktrees/`));
+      console.log('');
+      console.log(chalk.bold('Next steps:'));
+      console.log(`  Start agents:    ${chalk.cyan(`npx nightshift start --team ${team}`)}`);
+      console.log(`  Regen profiles:  ${chalk.cyan(`npx nightshift reinit --team ${team}`)}`);
+      console.log(`  Remove team:     ${chalk.cyan(`npx nightshift teardown --team ${team}`)}`);
+      console.log('');
+      console.log(chalk.dim(`  (Use --reset to rewrite team config files without touching worktrees.)`));
+      console.log('');
+      return;
+    }
+  }
 
   // 9. Setup repo.md (only on first init or --reset-repo)
   console.log('');

@@ -1,13 +1,12 @@
-import { describe, it, afterEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync, readdirSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { resolvePresetDir } from '../lib/reinit.js';
 import { parseTeamConfig, parseTeamConfigFromString } from '../lib/team-config.js';
 import { generateAndInstallProfiles } from '../lib/init.js';
-import { getGlobalAgentsDir } from '../lib/copy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,21 +41,22 @@ describe('resolvePresetDir', () => {
 });
 
 describe('reinit regeneration', () => {
-  const agentsDir = getGlobalAgentsDir();
-  const testFiles: string[] = [];
+  let agentsDir: string;
+
+  beforeEach(() => {
+    agentsDir = mkdtempSync(join(tmpdir(), 'ns-reinit-test-'));
+  });
 
   afterEach(() => {
-    for (const f of testFiles) {
-      try { rmSync(join(agentsDir, f)); } catch { /* ignore */ }
-    }
-    testFiles.length = 0;
+    rmSync(agentsDir, { recursive: true, force: true });
   });
 
   it('generates all agent files from dev preset', () => {
     const presetDir = join(PRESETS_DIR, 'dev');
     const config = parseTeamConfig(join(presetDir, 'team.yaml'));
-    const installed = generateAndInstallProfiles(config, presetDir, 'test-repo', 'main');
-    testFiles.push(...installed);
+    const installed = generateAndInstallProfiles(
+      config, presetDir, 'test-repo', 'main', undefined, undefined, undefined, agentsDir,
+    );
 
     assert.equal(installed.length, 6); // 4 non-scalable + 2 default coder instances
     for (const f of installed) {
@@ -69,12 +69,15 @@ describe('reinit regeneration', () => {
     const config = parseTeamConfig(join(presetDir, 'team.yaml'));
 
     // First generation
-    const first = generateAndInstallProfiles(config, presetDir, 'test-repo', 'main');
-    testFiles.push(...first);
+    const first = generateAndInstallProfiles(
+      config, presetDir, 'test-repo', 'main', undefined, undefined, undefined, agentsDir,
+    );
     const firstContent = readFileSync(join(agentsDir, first[0]), 'utf-8');
 
     // Second generation
-    const second = generateAndInstallProfiles(config, presetDir, 'test-repo', 'main');
+    const second = generateAndInstallProfiles(
+      config, presetDir, 'test-repo', 'main', undefined, undefined, undefined, agentsDir,
+    );
     const secondContent = readFileSync(join(agentsDir, second[0]), 'utf-8');
 
     assert.equal(firstContent, secondContent);
@@ -85,12 +88,13 @@ describe('reinit regeneration', () => {
     const config = parseTeamConfig(join(presetDir, 'team.yaml'));
 
     // Generate all first
-    const all = generateAndInstallProfiles(config, presetDir, 'test-repo', 'main');
-    testFiles.push(...all);
+    generateAndInstallProfiles(
+      config, presetDir, 'test-repo', 'main', undefined, undefined, undefined, agentsDir,
+    );
 
     // Now regenerate only planner
     const single = generateAndInstallProfiles(
-      config, presetDir, 'test-repo', 'main', undefined, undefined, 'planner',
+      config, presetDir, 'test-repo', 'main', undefined, undefined, 'planner', agentsDir,
     );
 
     assert.equal(single.length, 1, 'Should generate exactly one file');
@@ -100,8 +104,9 @@ describe('reinit regeneration', () => {
   it('reinit does not create worktrees (lightweight regeneration)', () => {
     const presetDir = join(PRESETS_DIR, 'dev');
     const config = parseTeamConfig(join(presetDir, 'team.yaml'));
-    const installed = generateAndInstallProfiles(config, presetDir, 'test-repo', 'main');
-    testFiles.push(...installed);
+    const installed = generateAndInstallProfiles(
+      config, presetDir, 'test-repo', 'main', undefined, undefined, undefined, agentsDir,
+    );
 
     // generateAndInstallProfiles is the reinit core — it only writes agent files
     // Verify it wrote files but did NOT create any worktree directories
@@ -115,8 +120,9 @@ describe('reinit regeneration', () => {
   it('generated files have no unrendered template vars', () => {
     const presetDir = join(PRESETS_DIR, 'dev');
     const config = parseTeamConfig(join(presetDir, 'team.yaml'));
-    const installed = generateAndInstallProfiles(config, presetDir, 'test-repo', 'main');
-    testFiles.push(...installed);
+    const installed = generateAndInstallProfiles(
+      config, presetDir, 'test-repo', 'main', undefined, undefined, undefined, agentsDir,
+    );
 
     for (const f of installed) {
       const content = readFileSync(join(agentsDir, f), 'utf-8');
@@ -126,15 +132,16 @@ describe('reinit regeneration', () => {
 });
 
 describe('behavior override system', () => {
-  const agentsDir = getGlobalAgentsDir();
-  const testFiles: string[] = [];
-  const tmpRoot = join(homedir(), '.nightshift-test-override-' + Date.now());
+  let agentsDir: string;
+  let tmpRoot: string;
+
+  beforeEach(() => {
+    agentsDir = mkdtempSync(join(tmpdir(), 'ns-override-agents-'));
+    tmpRoot = mkdtempSync(join(tmpdir(), 'ns-override-root-'));
+  });
 
   afterEach(() => {
-    for (const f of testFiles) {
-      try { rmSync(join(agentsDir, f)); } catch { /* ignore */ }
-    }
-    testFiles.length = 0;
+    rmSync(agentsDir, { recursive: true, force: true });
     rmSync(tmpRoot, { recursive: true, force: true });
   });
 
@@ -151,9 +158,8 @@ describe('behavior override system', () => {
     );
 
     const installed = generateAndInstallProfiles(
-      config, presetDir, 'test-repo', 'main', undefined, tmpRoot,
+      config, presetDir, 'test-repo', 'main', undefined, tmpRoot, undefined, agentsDir,
     );
-    testFiles.push(...installed);
 
     // Find the producer file and verify override was used
     const producerFile = installed.find(f => f.includes('producer'));
@@ -175,9 +181,8 @@ describe('behavior override system', () => {
     );
 
     const installed = generateAndInstallProfiles(
-      config, presetDir, 'test-repo', 'main', undefined, tmpRoot,
+      config, presetDir, 'test-repo', 'main', undefined, tmpRoot, undefined, agentsDir,
     );
-    testFiles.push(...installed);
 
     // Planner should use built-in template (not overridden)
     const plannerFile = installed.find(f => f.includes('planner'));
@@ -213,15 +218,16 @@ describe('behavior override system', () => {
 });
 
 describe('custom team definitions', () => {
-  const agentsDir = getGlobalAgentsDir();
-  const testFiles: string[] = [];
-  const tmpRoot = join(homedir(), '.nightshift-test-custom-team-' + Date.now());
+  let agentsDir: string;
+  let tmpRoot: string;
+
+  beforeEach(() => {
+    agentsDir = mkdtempSync(join(tmpdir(), 'ns-custom-agents-'));
+    tmpRoot = mkdtempSync(join(tmpdir(), 'ns-custom-root-'));
+  });
 
   afterEach(() => {
-    for (const f of testFiles) {
-      try { rmSync(join(agentsDir, f)); } catch { /* ignore */ }
-    }
-    testFiles.length = 0;
+    rmSync(agentsDir, { recursive: true, force: true });
     rmSync(tmpRoot, { recursive: true, force: true });
   });
 
@@ -280,8 +286,9 @@ agents:
     );
 
     const config = parseTeamConfig(join(teamDir, 'team.yaml'));
-    const installed = generateAndInstallProfiles(config, teamDir, 'test-repo', 'main');
-    testFiles.push(...installed);
+    const installed = generateAndInstallProfiles(
+      config, teamDir, 'test-repo', 'main', undefined, undefined, undefined, agentsDir,
+    );
 
     assert.equal(installed.length, 1);
     assert.ok(installed[0].includes('ns-ops-operator'));
@@ -313,7 +320,9 @@ agents:
 
     const config = parseTeamConfig(join(teamDir, 'team.yaml'));
     assert.throws(
-      () => generateAndInstallProfiles(config, teamDir, 'test-repo', 'main'),
+      () => generateAndInstallProfiles(
+        config, teamDir, 'test-repo', 'main', undefined, undefined, undefined, agentsDir,
+      ),
       /Behavior template not found for agent "worker"/
     );
   });

@@ -37,24 +37,58 @@ describe('ns-agent-loop.sh cost tracking', () => {
     );
   });
 
-  it('reads breadcrumb from last-issue directory', () => {
+  it('derives breadcrumb path from TEAM_DIR (not find)', () => {
     assert.ok(
-      loopScript.includes('last-issue/'),
-      'Should read breadcrumb from last-issue directory'
+      loopScript.includes('TEAM_DIR=$(dirname "$COSTS_FILE")'),
+      'Should derive team dir from costs file path'
+    );
+    assert.ok(
+      loopScript.includes('"${TEAM_DIR}/last-issue/${AGENT_NAME}"'),
+      'Should build breadcrumb path from TEAM_DIR, not use find'
+    );
+    assert.ok(
+      !loopScript.includes('find "$HOME'),
+      'Should not use find to locate breadcrumb'
     );
   });
 
-  it('appends cost entries to costs file via node', () => {
+  it('clears breadcrumb after reading to prevent stale attribution', () => {
+    // The breadcrumb must be removed after reading so idle cycles
+    // don't re-attribute cost to the previous issue
     assert.ok(
-      loopScript.includes('appendFileSync'),
-      'Should append cost entries to JSONL file'
+      loopScript.includes('rm -f "$BREADCRUMB"'),
+      'Should clear breadcrumb after reading issue number'
     );
   });
 
-  it('cleans up temp file after each cycle', () => {
+  it('uses O_APPEND for atomic writes to shared costs file', () => {
+    assert.ok(
+      loopScript.includes("openSync(process.argv[5], 'a')"),
+      'Should use openSync with append flag for atomic JSONL writes'
+    );
+    assert.ok(
+      loopScript.includes('writeSync(fd,'),
+      'Should use writeSync for atomic write'
+    );
+  });
+
+  it('logs errors to stderr instead of silently swallowing', () => {
+    assert.ok(
+      loopScript.includes("process.stderr.write('cost-tracking:"),
+      'Should log cost tracking errors to stderr'
+    );
+  });
+
+  it('cleans up temp file after each cycle and on SIGTERM', () => {
     assert.ok(
       loopScript.includes('rm -f "$CYCLE_OUTPUT"'),
       'Should clean up temp file after parsing'
+    );
+    // Trap handler should also clean up temp file
+    const trapLine = loopScript.split('\n').find(l => l.includes('trap '));
+    assert.ok(
+      trapLine?.includes('CYCLE_OUTPUT'),
+      'SIGTERM trap should clean up CYCLE_OUTPUT'
     );
   });
 });
@@ -73,7 +107,6 @@ describe('start.ts passes cost args to headless agents', () => {
   });
 
   it('passes agent.agent name to AGENT_LOOP_SCRIPT', () => {
-    // The spawn call should include agent.agent as a parameter
     assert.ok(
       startTs.includes('agent.agent,'),
       'start.ts should pass agent name to the loop script'

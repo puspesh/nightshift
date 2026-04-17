@@ -21,19 +21,19 @@ PROMPT="$5"
 COSTS_FILE="${6:-}"
 AGENT_NAME="${7:-}"
 
-# Clean up child process on SIGTERM/SIGINT
+# Clean up child process and temp file on SIGTERM/SIGINT
 CHILD_PID=""
-trap 'if [ -n "$CHILD_PID" ]; then kill "$CHILD_PID" 2>/dev/null; fi; echo "idle|$(date +%s)|" > "$STATUS_FILE"; exit 0' TERM INT
+CYCLE_OUTPUT=""
+trap 'rm -f "$CYCLE_OUTPUT"; if [ -n "$CHILD_PID" ]; then kill "$CHILD_PID" 2>/dev/null; fi; echo "idle|$(date +%s)|" > "$STATUS_FILE"; exit 0' TERM INT
 
 cd "$CWD" || exit 1
 
-# Derive repo name for breadcrumb path (matches agent profile convention)
-REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
-
 # Determine if cost tracking is enabled
 TRACK_COST=""
+TEAM_DIR=""
 if [ -n "$COSTS_FILE" ] && [ -n "$AGENT_NAME" ]; then
   TRACK_COST=1
+  TEAM_DIR=$(dirname "$COSTS_FILE")
 fi
 
 while true; do
@@ -51,14 +51,18 @@ while true; do
     CYCLE_END=$(date +%s)
     DURATION=$(( CYCLE_END - CYCLE_START ))
 
-    # Read breadcrumb to get which issue this cycle worked on
-    BREADCRUMB=$(find "$HOME/.nightshift/${REPO_NAME}" -path "*/last-issue/${AGENT_NAME}" 2>/dev/null | head -1)
+    # Read breadcrumb to get which issue this cycle worked on.
+    # Breadcrumb path is deterministic: <team-dir>/last-issue/<agent-name>
+    BREADCRUMB="${TEAM_DIR}/last-issue/${AGENT_NAME}"
     ISSUE=""
-    if [ -n "$BREADCRUMB" ] && [ -f "$BREADCRUMB" ]; then
+    if [ -f "$BREADCRUMB" ]; then
       ISSUE=$(tr -d '[:space:]' < "$BREADCRUMB")
+      # Clear breadcrumb so idle cycles don't re-attribute cost to previous issue
+      rm -f "$BREADCRUMB"
     fi
 
-    # Parse JSON and write cost entry (node is always available in a Node.js project)
+    # Parse JSON and write cost entry (node is always available in a Node.js project).
+    # Uses O_APPEND | O_WRONLY | O_CREAT for atomic appends under PIPE_BUF (4096 bytes).
     if [ -n "$ISSUE" ] && [ -f "$CYCLE_OUTPUT" ] && [ -s "$CYCLE_OUTPUT" ]; then
       node -e "
         const fs = require('fs');
@@ -74,13 +78,17 @@ while true; do
               model_usage: data.modelUsage || {},
               ts: new Date().toISOString()
             };
-            fs.appendFileSync(process.argv[5], JSON.stringify(entry) + '\n');
+            const line = JSON.stringify(entry) + '\n';
+            const fd = fs.openSync(process.argv[5], 'a');
+            fs.writeSync(fd, line);
+            fs.closeSync(fd);
           }
-        } catch {}
+        } catch (e) { process.stderr.write('cost-tracking: ' + e.message + '\n'); }
       " "$CYCLE_OUTPUT" "$ISSUE" "$AGENT_NAME" "$DURATION" "$COSTS_FILE"
     fi
 
     rm -f "$CYCLE_OUTPUT"
+    CYCLE_OUTPUT=""
   else
     # No cost tracking: original behavior
     $RUNNER --print -p "$PROMPT" 2>&1 &

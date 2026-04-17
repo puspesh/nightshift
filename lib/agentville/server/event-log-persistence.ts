@@ -4,8 +4,10 @@
  * the feed survives server restarts.
  */
 
-import { appendFileSync, readFileSync, existsSync } from 'node:fs';
+import { appendFileSync, readFileSync, existsSync, renameSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
 
 export interface LogEntry {
   id: number;
@@ -49,7 +51,22 @@ export class EventLogPersistence {
   append(entry: Omit<LogEntry, 'id'>): LogEntry {
     const logEntry: LogEntry = { id: this.nextId++, ...entry };
     appendFileSync(this.logPath, JSON.stringify(logEntry) + '\n');
+    this.maybeRotate();
     return logEntry;
+  }
+
+  private maybeRotate(): void {
+    try {
+      if (!existsSync(this.logPath)) return;
+      const stat = statSync(this.logPath);
+      if (stat.size > MAX_LOG_SIZE) {
+        const rotatedPath = this.logPath + '.1';
+        renameSync(this.logPath, rotatedPath);
+        // nextId continues from where it left off — no reset
+      }
+    } catch {
+      // ignore rotation errors
+    }
   }
 
   loadRecent(count = 200): LogEntry[] {

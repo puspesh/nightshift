@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -177,5 +177,51 @@ describe('formatSummary', () => {
   it('returns type for unknown event types', () => {
     const result = formatSummary('unknown:type', 'nightshift/coder', {});
     assert.equal(result, 'unknown:type');
+  });
+});
+
+describe('Log rotation', () => {
+  it('rotates files over 10MB', () => {
+    const log = new EventLogPersistence(tmp);
+
+    // Write enough data to exceed 10MB
+    // Each entry is roughly 1100 bytes as JSON with big summary, so ~10000 entries ≈ 11MB
+    const bigSummary = 'x'.repeat(1000);
+    for (let i = 0; i < 11000; i++) {
+      log.append({
+        timestamp: i,
+        agentKey: 'test/agent',
+        type: 'work:completed',
+        summary: bigSummary,
+      });
+    }
+
+    // File should have been rotated — events.log.1 should exist
+    assert.ok(existsSync(join(tmp, 'events.log.1')), 'rotated file should exist');
+
+    // Current events.log should be smaller than 10MB (it was just created after rotation)
+    const stat = statSync(join(tmp, 'events.log'));
+    assert.ok(stat.size < 10 * 1024 * 1024, 'current log should be under 10MB after rotation');
+  });
+
+  it('concurrent appends do not corrupt the file', () => {
+    const log = new EventLogPersistence(tmp);
+
+    // Rapid sequential appends
+    for (let i = 0; i < 100; i++) {
+      log.append({
+        timestamp: i,
+        agentKey: `agent-${i % 5}`,
+        type: 'work:completed',
+        summary: `task ${i}`,
+      });
+    }
+
+    // All lines should be valid JSON
+    const entries = log.loadRecent(200);
+    assert.equal(entries.length, 100);
+    for (let i = 0; i < 100; i++) {
+      assert.equal(entries[i].summary, `task ${i}`);
+    }
   });
 });

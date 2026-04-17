@@ -106,17 +106,33 @@ describe('persistence', () => {
   });
 
   describe('bootstrapWorld', () => {
-    it('creates correct structure with 2 desks', () => {
+    it('creates correct structure with 2 desks and wall clock', () => {
       const world = bootstrapWorld('America/Chicago');
       assert.equal(world.schemaVersion, 1);
       assert.equal(world.coins, 0);
-      assert.equal(world.inventory.length, 2);
+      assert.equal(world.inventory.length, 3);
       assert.equal(world.inventory[0].catalogId, 'desk_basic');
       assert.equal(world.inventory[1].catalogId, 'desk_basic');
       assert.equal(world.inventory[0].placed, true);
       assert.equal(world.inventory[1].placed, true);
       assert.deepEqual(world.inventory[0].placedAt, { roomId: 'room_0', x: 7, y: 4 });
       assert.deepEqual(world.inventory[1].placedAt, { roomId: 'room_0', x: 13, y: 4 });
+    });
+
+    it('includes wall_clock_basic in inventory', () => {
+      const world = bootstrapWorld('UTC');
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock, 'wall_clock_basic should be in inventory');
+      assert.equal(clock.type, 'decoration');
+      assert.equal(clock.placed, true);
+      assert.equal(clock.id, 'starter_clock_1');
+    });
+
+    it('places clock on wall row at correct position', () => {
+      const world = bootstrapWorld('UTC');
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock);
+      assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 10, y: 1 });
     });
 
     it('creates 1 floor and 1 room (20x11)', () => {

@@ -10,7 +10,7 @@ import type { AgentvilleWorld } from '../schema.js';
 import type { AgentvilleEvent } from '../event-types.js';
 import { validateEvent } from '../event-types.js';
 import { awardCoins } from '../economy.js';
-import { DEFAULT_COSMETICS, getCatalogByType, getCatalogItem } from '../catalog.js';
+import { DEFAULT_COSMETICS, getCatalogByType, getCatalogItem, getShopCatalog } from '../catalog.js';
 import { purchaseItem, placeItem, unplaceItem, setAgentCosmetic } from '../shop.js';
 
 export interface AgentvilleServerConfig {
@@ -1200,7 +1200,7 @@ export class AgentvilleServer {
       const types = ['desk', 'facility', 'decoration', 'cosmetic', 'consumable', 'expansion'] as const;
       const catalog: Record<string, unknown[]> = {};
       for (const type of types) {
-        catalog[type] = getCatalogByType(type);
+        catalog[type] = getShopCatalog(type);
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ catalog }));
@@ -1209,7 +1209,7 @@ export class AgentvilleServer {
 
     if (req.method === 'GET' && url.pathname.startsWith('/api/catalog/')) {
       const type = url.pathname.slice('/api/catalog/'.length);
-      const items = getCatalogByType(type);
+      const items = getShopCatalog(type);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ items }));
       return;

@@ -63,6 +63,13 @@ export function bootstrapWorld(timezone: string): AgentvilleWorld {
         placed: true,
         placedAt: { roomId: 'room_0', x: 13, y: 4 },
       },
+      {
+        id: 'starter_clock_1',
+        catalogId: 'wall_clock_basic',
+        type: 'decoration',
+        placed: true,
+        placedAt: { roomId: 'room_0', x: 10, y: 1 },
+      },
     ],
     world: {
       floors: [

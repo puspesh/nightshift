@@ -92,14 +92,21 @@ describe('CoinStackSystem', () => {
   });
 
   describe('auto-collect', () => {
-    it('triggers after 60s of inactivity', () => {
+    it('starts fly animation after 60s then fires callback when animation completes', () => {
       system.addStack('agent-1', 100, 200, 3);
-      // Advance past 60s
+      // Advance past 60s — should start collecting animation, not fire callback yet
       system.update(61);
-      // The onCollect callback should have been called
-      assert.equal(collectCalls.length, 1);
+      assert.equal(collectCalls.length, 0, 'callback should not fire immediately — animation must play first');
+      const stack = system.getStacks().get('agent-1');
+      assert.ok(stack, 'stack should still exist during animation');
+      assert.ok(stack!.collecting, 'stack should be in collecting state');
+      // Advance past animation duration (0.5s)
+      system.update(0.6);
+      assert.equal(collectCalls.length, 1, 'callback should fire after animation completes');
       assert.equal(collectCalls[0].agentId, 'agent-1');
       assert.equal(collectCalls[0].totalCount, 3);
+      // Stack should be removed after animation
+      assert.equal(system.getStacks().size, 0, 'stack should be removed after animation');
     });
 
     it('does not trigger before 60s', () => {
@@ -153,11 +160,18 @@ describe('CoinStackSystem', () => {
   });
 
   describe('setCoinCollectTarget', () => {
-    it('sets the fly-to target position', () => {
+    it('sets the fly-to target position used by collect animation', () => {
       system.setCoinCollectTarget(400, 20);
-      // No assertion on internals — just verify it doesn't throw
-      // The target is used during collect animation rendering
-      assert.ok(true);
+      // Verify target is used: add a stack far from target, collect, and check
+      // that it doesn't throw during animation (rendering tested via canvas in E2E)
+      system.addStack('agent-1', 100, 200, 1);
+      system.collectStack('agent-1');
+      // Advance partially — stack should still exist mid-animation
+      system.update(0.25);
+      const stack = system.getStacks().get('agent-1');
+      assert.ok(stack, 'stack should still exist mid-animation');
+      assert.ok(stack!.collectProgress > 0, 'animation should be progressing');
+      assert.ok(stack!.collectProgress < 1, 'animation should not be complete yet');
     });
   });
 

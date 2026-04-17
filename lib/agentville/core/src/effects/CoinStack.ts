@@ -140,16 +140,10 @@ export class CoinStackSystem implements RenderLayer {
         // Advance auto-collect timer
         stack.timer += delta;
         if (stack.timer >= AUTO_COLLECT_DELAY) {
-          // Trigger auto-collect
+          // Start collecting animation — the collecting branch above
+          // handles the callback + removal when collectProgress >= 1
           stack.collecting = true;
           stack.collectProgress = 0;
-          this.collectCallback?.({
-            agentId,
-            x: stack.x,
-            y: stack.y,
-            totalCount: stack.totalCount,
-          });
-          toRemove.push(agentId);
         }
       }
     }

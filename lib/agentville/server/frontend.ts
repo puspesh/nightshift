@@ -1221,11 +1221,8 @@ async function startLegacyWorld(prefetched) {
     if (window.__av) window.__av.collectAllStacks();
   });
 
-  // Optional: visual feedback when stacks are collected
-  mv.onCoinCollect(() => {
-    // Balance is already correct — this is just visual closure
-    // Could add a sparkle or pulse at HUD here in the future
-  });
+  // TODO(#55): add sparkle/pulse at HUD coin counter on collect
+  // mv.onCoinCollect(() => { ... });
 
   mv.addLayer({ order: 5, render: (ctx) => props.renderBelow(ctx) });
   mv.addLayer({ order: 15, render: (ctx) => props.renderAbove(ctx) });

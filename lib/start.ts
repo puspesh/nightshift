@@ -289,7 +289,9 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   const vizUrl = await setupVisualization(team, agents, repoRoot, repoName, citizenOverrides, vizPort);
 
   const statusDir = getStatusDir(repoName, team);
-  const logDir = join(getTeamDir(repoName, team), 'logs');
+  const teamDir = getTeamDir(repoName, team);
+  const logDir = join(teamDir, 'logs');
+  const costsFile = join(teamDir, 'costs.jsonl');
   mkdirSync(logDir, { recursive: true });
 
   for (const agent of agents) {
@@ -302,6 +304,7 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
     const child = spawn('bash', [
       AGENT_LOOP_SCRIPT, agent.cwd,
       String(LOOP_INTERVAL), runner, statusFile, PIPELINE_PROMPT,
+      costsFile, agent.agent,
     ], {
       detached: true,
       stdio: ['ignore', logFd, logFd],
@@ -315,13 +318,18 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   }
 
   // Print summary
-  console.log(chalk.bold(`
-       _       __    __       __    _ ______
- ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
-/ _ \\/ / __ \`/ __ \\/ __/ ___/ __ \\/ / /_/ __/
-/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
-/_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
-        /____/`));
+  const banner = [
+    '███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗███████╗██╗  ██╗██╗███████╗████████╗',
+    '████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝██╔════╝██║  ██║██║██╔════╝╚══██╔══╝',
+    '██╔██╗ ██║██║██║  ███╗███████║   ██║   ███████╗███████║██║█████╗     ██║   ',
+    '██║╚██╗██║██║██║   ██║██╔══██║   ██║   ╚════██║██╔══██║██║██╔══╝     ██║   ',
+    '██║ ╚████║██║╚██████╔╝██║  ██║   ██║   ███████║██║  ██║██║██║        ██║   ',
+    '╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ',
+  ];
+  console.log('');
+  for (const line of banner) {
+    console.log(chalk.bold(`  ${line}`));
+  }
   console.log(chalk.dim(`  Started ${agents.length} agents in headless mode`));
   console.log(chalk.dim(`  Runner: ${baseRunner}`));
   if (vizUrl) {
@@ -473,13 +481,18 @@ export async function startSession(team: string, options?: StartOptions): Promis
   }
 
   // Print info
-  console.log(chalk.bold(`
-       _       __    __       __    _ ______
- ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
-/ _ \\/ / __ \`/ __ \\/ __/ ___/ __ \\/ / /_/ __/
-/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
-/_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
-        /____/`));
+  const banner = [
+    '███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗███████╗██╗  ██╗██╗███████╗████████╗',
+    '████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝██╔════╝██║  ██║██║██╔════╝╚══██╔══╝',
+    '██╔██╗ ██║██║██║  ███╗███████║   ██║   ███████╗███████║██║█████╗     ██║   ',
+    '██║╚██╗██║██║██║   ██║██╔══██║   ██║   ╚════██║██╔══██║██║██╔══╝     ██║   ',
+    '██║ ╚████║██║╚██████╔╝██║  ██║   ██║   ███████║██║  ██║██║██║        ██║   ',
+    '╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ',
+  ];
+  console.log('');
+  for (const line of banner) {
+    console.log(chalk.bold(`  ${line}`));
+  }
   console.log(chalk.dim(`  Starting ${team} team in tmux session: ${session}`));
   console.log(chalk.dim(`  Runner: ${baseRunner}`));
   if (vizUrl) {

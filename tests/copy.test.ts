@@ -16,8 +16,15 @@ import {
   removeRepoMd,
   getPresetDefaultsDir,
   copyScaffoldFiles,
+  getPresetDir,
 } from '../lib/copy.js';
 import { readdirSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PRESETS_DIR = join(__dirname, '..', '..', 'presets');
 
 let tmp: string;
 
@@ -164,6 +171,30 @@ describe('removeRepoMd', () => {
   it('returns false when repo.md does not exist', () => {
     const removed = removeRepoMd(tmp);
     assert.equal(removed, false);
+  });
+});
+
+describe('content preset file existence', () => {
+  it('defaults dir exists and has files', () => {
+    const defaultsDir = join(PRESETS_DIR, 'content', 'defaults');
+    assert.ok(existsSync(defaultsDir), 'content defaults dir should exist');
+    const files = readdirSync(defaultsDir);
+    assert.ok(files.includes('ns-content-style-guide.md'), 'should have style guide');
+    assert.ok(files.includes('ns-content-platforms.md'), 'should have platforms guide');
+    assert.ok(files.includes('ns-content-citizens.json'), 'should have citizens JSON');
+  });
+
+  it('scaffold dir exists with expected structure', () => {
+    const scaffoldDir = join(PRESETS_DIR, 'content', 'scaffold');
+    assert.ok(existsSync(scaffoldDir), 'content scaffold dir should exist');
+    assert.ok(existsSync(join(scaffoldDir, 'config', 'topics.yaml')), 'should have config/topics.yaml');
+    assert.ok(existsSync(join(scaffoldDir, 'config', 'platforms.yaml')), 'should have config/platforms.yaml');
+    assert.ok(existsSync(join(scaffoldDir, 'knowledge', 'style-guide.md')), 'should have knowledge/style-guide.md');
+    assert.ok(existsSync(join(scaffoldDir, 'knowledge', 'references', '.gitkeep')), 'should have references/.gitkeep');
+    assert.ok(existsSync(join(scaffoldDir, 'knowledge', 'past-posts', '.gitkeep')), 'should have past-posts/.gitkeep');
+    assert.ok(existsSync(join(scaffoldDir, 'content-calendar.md')), 'should have content-calendar.md');
+    assert.ok(existsSync(join(scaffoldDir, 'drafts', '.gitkeep')), 'should have drafts/.gitkeep');
+    assert.ok(existsSync(join(scaffoldDir, 'CLAUDE.md')), 'should have CLAUDE.md');
   });
 });
 

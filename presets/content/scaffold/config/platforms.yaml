@@ -1,0 +1,20 @@
+# Platform Configuration
+# Add your handles and posting preferences.
+
+platforms:
+  twitter:
+    enabled: true
+    handle: "@your-handle"
+    max_daily_posts: 2
+    preferred_times: ["9:00", "17:00"]
+
+  linkedin:
+    enabled: true
+    handle: "your-linkedin-profile"
+    max_daily_posts: 1
+    preferred_times: ["8:00"]
+
+  # Add more platforms as needed:
+  # threads:
+  #   enabled: false
+  #   handle: "@your-handle"

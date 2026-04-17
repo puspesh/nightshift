@@ -471,3 +471,101 @@ describe('dev preset round-trip', () => {
     assert.ok(result.includes('dev:wip'));
   });
 });
+
+// --- Integration: content preset round-trip ---
+
+describe('content preset round-trip', () => {
+  function loadContentTemplate(role: string): string {
+    return readFileSync(join(PRESETS_DIR, 'content', 'agents', `${role}.md`), 'utf-8');
+  }
+
+  function contentConfig(): TeamConfig {
+    return parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
+  }
+
+  it('content agent templates exist for all roles', () => {
+    const roles = ['producer', 'researcher', 'writer', 'reviewer'];
+    for (const role of roles) {
+      const path = join(PRESETS_DIR, 'content', 'agents', `${role}.md`);
+      assert.ok(
+        readFileSync(path, 'utf-8').length > 0,
+        `${role}.md should exist and be non-empty`,
+      );
+    }
+  });
+
+  it('content agent templates render without unresolved variables', () => {
+    const config = contentConfig();
+    const roles = ['producer', 'researcher', 'writer', 'reviewer'];
+    for (const role of roles) {
+      const template = loadContentTemplate(role);
+      const vars = buildTemplateVars(config, role, 'test-repo', 'main');
+      const result = generateAgentFile({
+        teamConfig: config,
+        agentName: role,
+        behaviorTemplate: template,
+        templateVars: vars,
+      });
+      assert.ok(
+        !result.match(/\{\{[a-z_]+\}\}/),
+        `${role}.md has unrendered template vars`,
+      );
+    }
+  });
+
+  it('content agent templates contain no banned terms', () => {
+    const bannedTerms = ['TODO', 'FIXME', 'placeholder'];
+    const roles = ['producer', 'researcher', 'writer', 'reviewer'];
+    for (const role of roles) {
+      const content = loadContentTemplate(role);
+      for (const term of bannedTerms) {
+        assert.ok(
+          !content.includes(term),
+          `${role}.md contains banned term "${term}"`,
+        );
+      }
+    }
+  });
+
+  it('content producer template references content-calendar.md', () => {
+    const config = contentConfig();
+    const template = loadContentTemplate('producer');
+    const vars = buildTemplateVars(config, 'producer', 'test-repo', 'main');
+    const result = generateAgentFile({
+      teamConfig: config,
+      agentName: 'producer',
+      behaviorTemplate: template,
+      templateVars: vars,
+    });
+    assert.ok(result.includes('content-calendar.md'), 'producer should reference content-calendar.md');
+  });
+
+  it('content writer template references style-guide', () => {
+    const config = contentConfig();
+    const template = loadContentTemplate('writer');
+    const vars = buildTemplateVars(config, 'writer', 'test-repo', 'main');
+    const result = generateAgentFile({
+      teamConfig: config,
+      agentName: 'writer',
+      behaviorTemplate: template,
+      templateVars: vars,
+    });
+    assert.ok(result.includes('style-guide'), 'writer should reference style-guide');
+  });
+
+  it('content reviewer template references humanizer or AI-sounding', () => {
+    const config = contentConfig();
+    const template = loadContentTemplate('reviewer');
+    const vars = buildTemplateVars(config, 'reviewer', 'test-repo', 'main');
+    const result = generateAgentFile({
+      teamConfig: config,
+      agentName: 'reviewer',
+      behaviorTemplate: template,
+      templateVars: vars,
+    });
+    assert.ok(
+      result.includes('humanizer') || result.includes('AI-sounding') || result.includes('AI-generated'),
+      'reviewer should reference humanizer or AI-generated content checks',
+    );
+  });
+});

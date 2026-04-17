@@ -568,4 +568,28 @@ describe('content preset round-trip', () => {
       'reviewer should reference humanizer or AI-generated content checks',
     );
   });
+
+  // --- Knowledge loop verification (Phase 4) ---
+
+  it('producer template includes past-post commit-back instructions', () => {
+    const template = loadContentTemplate('producer');
+    assert.ok(template.includes('past-posts'), 'producer should reference past-posts directory');
+    assert.ok(
+      template.includes('knowledge/past-posts') || template.includes('commit-back') || template.includes('after merge') || template.includes('merged PR'),
+      'producer should include commit-back instructions',
+    );
+  });
+
+  it('reviewer template includes 30-day duplicate check', () => {
+    const template = loadContentTemplate('reviewer');
+    assert.ok(
+      template.includes('30 day') || template.includes('30-day') || template.includes('past 30'),
+      'reviewer should include 30-day duplicate check',
+    );
+  });
+
+  it('writer template includes duplicate awareness via past-posts', () => {
+    const template = loadContentTemplate('writer');
+    assert.ok(template.includes('past-posts'), 'writer should reference past-posts for duplicate awareness');
+  });
 });

@@ -3,6 +3,30 @@ import { join } from 'node:path';
 import { validateWorldState } from './schema.js';
 import type { AgentvilleWorld } from './schema.js';
 
+/**
+ * Ensure all starter items exist in the world inventory.
+ * Used as a post-load migration for existing worlds that pre-date new starter items.
+ * Returns true if changes were made (caller should persist).
+ */
+export function ensureStarterItems(world: AgentvilleWorld): boolean {
+  let changed = false;
+
+  // Ensure wall_clock_basic
+  const hasClock = world.inventory.some(i => i.catalogId === 'wall_clock_basic');
+  if (!hasClock) {
+    world.inventory.push({
+      id: 'starter_clock_1',
+      catalogId: 'wall_clock_basic',
+      type: 'decoration',
+      placed: true,
+      placedAt: { roomId: 'room_0', x: 10, y: 1 },
+    });
+    changed = true;
+  }
+
+  return changed;
+}
+
 export function loadWorld(dir: string): AgentvilleWorld | null {
   const primary = join(dir, 'world.json');
   const backup = join(dir, 'world.json.bak');

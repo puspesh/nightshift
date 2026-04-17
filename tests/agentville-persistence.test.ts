@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadWorld, saveWorld, bootstrapWorld } from '../lib/agentville/persistence.js';
+import { loadWorld, saveWorld, bootstrapWorld, ensureStarterItems } from '../lib/agentville/persistence.js';
 import type { AgentvilleWorld } from '../lib/agentville/schema.js';
 
 let tmp: string;
@@ -160,6 +160,45 @@ describe('persistence', () => {
       assert.equal(world.stats.totalCoinsSpent, 0);
       assert.equal(world.stats.totalWorkCompleted, 0);
       assert.equal(world.stats.streakDays, 0);
+    });
+  });
+
+  describe('ensureStarterItems', () => {
+    it('adds clock to existing world without one', () => {
+      const world = makeWorld({
+        inventory: [
+          {
+            id: 'starter_desk_1',
+            catalogId: 'desk_basic',
+            type: 'desk',
+            placed: true,
+            placedAt: { roomId: 'room_0', x: 7, y: 4 },
+          },
+        ],
+      });
+      const changed = ensureStarterItems(world);
+      assert.equal(changed, true);
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock, 'clock should be added');
+      assert.equal(clock.id, 'starter_clock_1');
+      assert.equal(clock.placed, true);
+      assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 10, y: 1 });
+    });
+
+    it('does not duplicate clock if already present', () => {
+      const world = bootstrapWorld('UTC');
+      const changed = ensureStarterItems(world);
+      assert.equal(changed, false);
+      const clocks = world.inventory.filter(i => i.catalogId === 'wall_clock_basic');
+      assert.equal(clocks.length, 1);
+    });
+
+    it('migrated clock is placed at default position', () => {
+      const world = makeWorld({ inventory: [] });
+      ensureStarterItems(world);
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock);
+      assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 10, y: 1 });
     });
   });
 });

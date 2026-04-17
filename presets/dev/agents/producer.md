@@ -11,6 +11,7 @@ Read `.claude/nightshift/repo.md` for branch naming pattern, label definitions, 
 | Issues with no `{{team_name}}:*` label (feature) | Validate, create branch, triage | `{{team_name}}:planning` |
 | Issues with no `{{team_name}}:*` label (bug/fix) | Validate, create branch, fast-track | `{{team_name}}:approved` |
 | `{{team_name}}:ready-to-merge` | Verify reviewer approved cleanly | _(human merges)_ or `{{team_name}}:code-revising` |
+| Open PR behind main (idle-cycle) | Flag for rebase | `{{team_name}}:rebase-needed` |
 | `{{team_name}}:blocked` | Skip — log and move on | _(unchanged)_ |
 | Orphaned `{{team_name}}:wip` (stale lock, 60+ min) | Clear lock, remove `{{team_name}}:wip` | _(stage label unchanged)_ |
 | Conflicting `{{team_name}}:*` stage labels | Keep most advanced, remove others | _(single label)_ |
@@ -109,6 +110,15 @@ REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | 
   **Next**: Awaiting agent (label: \`{{team_name}}:<current-stage>\`)"
   ```
 
+  **If the issue also has `{{team_name}}:rebase-needed`**: the agent may have crashed mid-rebase, leaving the branch in an unknown state. Remove `{{team_name}}:rebase-needed` and set `{{team_name}}:blocked` instead of releasing for re-pickup:
+  ```bash
+  gh issue edit <number> --remove-label "{{team_name}}:wip" --remove-label "{{team_name}}:rebase-needed" --add-label "{{team_name}}:blocked"
+  gh issue comment <number> --body "### @{{agent_name}} -- Stale rebase detected
+  **Status**: pipeline repair
+  **Reason**: Agent crashed during rebase. Branch may be in an inconsistent state.
+  **Next**: Needs human intervention (label: \`{{team_name}}:blocked\`)"
+  ```
+
 #### 4b. Detect conflicting labels (multiple pipeline stage labels)
 
 Valid pipeline stage labels (exactly ONE should be present): `planning`, `plan-review`, `plan-revising`, `approved`, `code-review`, `code-revising`, `testing`, `ready-to-merge`.
@@ -150,6 +160,7 @@ If an issue has `{{team_name}}:wip` but NO pipeline stage label — this means a
   - `@ns-{{team_name}}-reviewer -- Code Review` with REVISE → set `{{team_name}}:code-revising`
   - `@ns-{{team_name}}-tester -- Tests passed` → set `{{team_name}}:ready-to-merge`
   - `@ns-{{team_name}}-tester -- Tests failed` → set `{{team_name}}:code-revising`
+  - `@ns-{{team_name}}-coder -- Rebase complete` → remove `{{team_name}}:wip` and `{{team_name}}:rebase-needed`; restore stage label from comment's `**Next**:` line
 - If determinable: add the correct stage label and remove `{{team_name}}:wip`
 - If not determinable (no matching comment pattern): remove `{{team_name}}:wip` and add `{{team_name}}:blocked`:
   ```bash
@@ -240,7 +251,33 @@ For issues labeled `{{team_name}}:ready-to-merge`:
   ```
 - This is the end of the pipeline — a human decides to merge
 
-### 6. Report and set idle status
+### 6. Detect PRs behind main (idle-cycle only)
+
+**Only run this step if steps 2–5 found NO work.** If any work was done this cycle, skip to step 7.
+
+```bash
+git fetch origin
+gh pr list --state open --json number,headRefName
+```
+
+For each PR whose `headRefName` matches the `issue-<number>-<slug>` pattern, extract the issue number, then:
+
+- **Skip** if the issue has `{{team_name}}:rebase-needed`, `{{team_name}}:wip`, `{{team_name}}:blocked`, or `on-hold`
+- Check how far behind main:
+  ```bash
+  git rev-list --count origin/<branch>..origin/{{main_branch}}
+  ```
+- If count > 0, flag it:
+  ```bash
+  gh issue edit <number> --add-label "{{team_name}}:rebase-needed"
+  gh issue comment <number> --body "### @{{agent_name}} -- Rebase needed
+  **Status**: branch behind main
+  **Branch**: \`<branch>\`
+  **Behind by**: <N> commits
+  **Next**: Awaiting @ns-{{team_name}}-coder to rebase (label: \`{{team_name}}:rebase-needed\`)"
+  ```
+
+### 7. Report and set idle status
 
 Log a one-line summary of what was processed (e.g., "Triaged 1 issue, 0 warnings, 1 repaired, 2 ready-to-merge"). Then run this EXACT bash command:
 
@@ -323,6 +360,7 @@ An issue **needs clarification** if:
 - **Label transitions** — allowed transitions:
   - **Triage**: add `{{team_name}}:planning`, `{{team_name}}:needs-info`, or `{{team_name}}:approved` (fast-track bugs)
   - **Quality gate**: remove `{{team_name}}:ready-to-merge`, add `{{team_name}}:code-revising` (unresolved findings)
+  - **Rebase flag**: add `{{team_name}}:rebase-needed` (branch behind main, idle-cycle only)
   - **Stale repair**: remove orphaned `{{team_name}}:wip`; resolve conflicting stage labels (verify with last agent comment, block if unsure); restore correct stage label for wip-only issues (from comment mapping); add `{{team_name}}:blocked` for stuck/unrecoverable issues
   - No other label transitions.
 - **Don't merge PRs** — only humans merge

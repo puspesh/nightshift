@@ -9,6 +9,8 @@ import { InteractiveObject } from './objects/InteractiveObject';
 import type { ObjectConfig } from './objects/InteractiveObject';
 import { ParticleSystem } from './effects/Particles';
 import { SpeechBubbleSystem } from './effects/SpeechBubble';
+import { CoinStackSystem } from './effects/CoinStack';
+import type { CoinStackInfo } from './effects/CoinStack';
 import { Signal } from './signal/Signal';
 import type { SignalConfig, AgentStatus } from './signal/Signal';
 
@@ -41,6 +43,7 @@ export class Agentville {
   private objects: InteractiveObject[] = [];
   private particles: ParticleSystem;
   private speechBubbles: SpeechBubbleSystem;
+  private coinStacks: CoinStackSystem;
   private signal: Signal;
   private config: AgentvilleConfig;
   private eventHandlers: Map<AgentvilleEvent, Set<(data: unknown) => void>> = new Map();
@@ -63,6 +66,7 @@ export class Agentville {
     this.citizenLayer = new CitizenLayer();
     this.particles = new ParticleSystem();
     this.speechBubbles = new SpeechBubbleSystem();
+    this.coinStacks = new CoinStackSystem();
     this.signal = new Signal(config.signal);
 
     // Add render layers
@@ -79,6 +83,7 @@ export class Agentville {
     for (const layer of this.citizenLayer.getLayers()) {
       this.renderer.addLayer(layer);
     }
+    this.renderer.addLayer(this.coinStacks);
     this.renderer.addLayer(this.particles);
     this.renderer.addLayer(this.speechBubbles);
 
@@ -487,6 +492,35 @@ export class Agentville {
     return this.config.worldBasePath ?? `worlds/${this.config.world}`;
   }
 
+  /** Add visual coin stack near an agent's desk. Stack is purely cosmetic — wallet is already credited. */
+  earnCoinVisual(agentId: string, amount: number): void {
+    const citizen = this.citizens.find(r => r.agentId === agentId);
+    if (!citizen) return; // Agent not rendered — skip silently, coins are in wallet
+    // Offset one tile to the right of the agent's position (beside the desk)
+    const offsetX = this.scene.config.tileWidth;
+    this.coinStacks.addStack(agentId, citizen.x + offsetX, citizen.y, amount);
+  }
+
+  /** Trigger collection of all visible coin stacks (fly-to-HUD animation) */
+  collectAllStacks(): void {
+    this.coinStacks.collectAll();
+  }
+
+  /** Set the canvas-space target for coin fly-to animation */
+  setCoinCollectTarget(x: number, y: number): void {
+    this.coinStacks.setCoinCollectTarget(x, y);
+  }
+
+  /** Register callback for when coin stacks finish collecting */
+  onCoinCollect(callback: (info: CoinStackInfo) => void): void {
+    this.coinStacks.onCollect(callback);
+  }
+
+  /** Get current coin stack state (debug/test only) */
+  _getCoinStacks(): Map<string, { x: number; y: number; visualCount: number; totalCount: number }> {
+    return this.coinStacks.getStacks();
+  }
+
   async addCitizen(config: CitizenConfig, sheetConfig?: SpriteSheetConfig): Promise<Citizen> {
     const sc = sheetConfig ?? createStandardSpriteConfig(config.sprite);
     const sheet = new SpriteSheet(sc);
@@ -706,6 +740,13 @@ export class Agentville {
   private handleClick(e: MouseEvent) {
     const world = this.renderer.screenToWorld(e.offsetX, e.offsetY);
 
+    // Check coin stacks first (click-to-collect takes priority over citizen tooltips)
+    const hitStack = this.coinStacks.containsPoint(world.x, world.y);
+    if (hitStack) {
+      this.coinStacks.collectStack(hitStack);
+      return;
+    }
+
     // Check citizens
     for (const citizen of this.citizens) {
       if (citizen.containsPoint(world.x, world.y)) {
@@ -814,6 +855,8 @@ export { InteractiveObject } from './objects';
 export type { ObjectConfig } from './objects';
 export { ParticleSystem } from './effects';
 export { SpeechBubbleSystem } from './effects';
+export { CoinStackSystem } from './effects';
+export type { CoinStackInfo, CoinStackEntry } from './effects';
 export { Signal } from './signal';
 export type { SignalConfig, SignalCallback, EventCallback, MessageCallback, AgentStatus } from './signal';
 export { PropSystem, ANCHOR_TYPES, ANCHOR_COLORS } from './props';

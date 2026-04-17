@@ -151,7 +151,7 @@ export class AgentvilleServer {
   }
 
   /** Send a targeted event notification to all connected WebSocket clients. */
-  private broadcastWs(message: { type: string; payload: Record<string, unknown>; timestamp: number }): void {
+  private broadcastWs(message: Record<string, unknown>): void {
     const msg = JSON.stringify(message);
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
@@ -237,10 +237,7 @@ export class AgentvilleServer {
               summary: `drop — ${dropLabel}`,
               data: { drop: result.drop },
             });
-            const dropMsg = JSON.stringify({ type: 'log:entry', entry: dropEntry });
-            for (const ws of this.clients) {
-              if (ws.readyState === WebSocket.OPEN) ws.send(dropMsg);
-            }
+            this.broadcastWs({ type: 'log:entry', entry: dropEntry });
           }
         }
         this.broadcastWs({ type: 'work:completed', payload: { agent: agentKey, ...data }, timestamp: Date.now() });
@@ -326,10 +323,7 @@ export class AgentvilleServer {
         summary,
         data,
       });
-      const logMsg = JSON.stringify({ type: 'log:entry', entry: logEntry });
-      for (const ws of this.clients) {
-        if (ws.readyState === WebSocket.OPEN) ws.send(logMsg);
-      }
+      this.broadcastWs({ type: 'log:entry', entry: logEntry });
     }
 
   }
@@ -1273,9 +1267,10 @@ export class AgentvilleServer {
       }
       const before = url.searchParams.get('before');
       const limitParam = url.searchParams.get('limit');
-      const limit = limitParam ? parseInt(limitParam, 10) : 200;
-      const entries = before
-        ? this.eventLogPersistence.loadBefore(parseInt(before, 10), limit)
+      const limit = Math.min(Math.max(parseInt(limitParam ?? '', 10) || 200, 1), 500);
+      const beforeId = before ? parseInt(before, 10) : undefined;
+      const entries = (beforeId !== undefined && !isNaN(beforeId))
+        ? this.eventLogPersistence.loadBefore(beforeId, limit)
         : this.eventLogPersistence.loadRecent(limit);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ entries }));

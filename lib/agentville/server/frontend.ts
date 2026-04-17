@@ -729,6 +729,10 @@ function showToast(message, type) {
 }
 
 // --- Event Log Sidebar ---
+const LOG_DOM_CAP = 500;
+const SCROLL_BOTTOM_THRESHOLD = 20;
+const SCROLL_TOP_TRIGGER = 40;
+
 const logSidebar = document.getElementById('event-log-sidebar');
 const logEntries = document.getElementById('event-log-entries');
 const logToggle = document.getElementById('event-log-toggle');
@@ -763,7 +767,7 @@ function renderLogEntry(entry) {
 }
 
 function isLogAtBottom() {
-  return logEntries.scrollTop + logEntries.clientHeight >= logEntries.scrollHeight - 20;
+  return logEntries.scrollTop + logEntries.clientHeight >= logEntries.scrollHeight - SCROLL_BOTTOM_THRESHOLD;
 }
 
 function appendLogEntry(entry) {
@@ -771,8 +775,8 @@ function appendLogEntry(entry) {
   const div = renderLogEntry(entry);
   logEntries.appendChild(div);
 
-  // Cap DOM entries at 500
-  while (logEntries.children.length > 500) {
+  // Cap DOM entries
+  while (logEntries.children.length > LOG_DOM_CAP) {
     logEntries.removeChild(logEntries.firstChild);
   }
 
@@ -829,7 +833,7 @@ async function loadOlderEntries() {
 
 // Infinite scroll — load older when scrolled to top
 logEntries.addEventListener('scroll', () => {
-  if (logEntries.scrollTop < 40) {
+  if (logEntries.scrollTop < SCROLL_TOP_TRIGGER) {
     loadOlderEntries();
   }
 });

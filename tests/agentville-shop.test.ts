@@ -71,20 +71,18 @@ describe('purchaseItem', () => {
     assert.equal(world.inventory.length, initialLen + 1);
   });
 
-  it('handles expansion: new room', () => {
+  it('handles expansion: expand_room adds columns', () => {
     const world = freshWorld(10000);
-    const initialRooms = world.world.floors[0].rooms.length;
+    const initialWidth = world.world.floors[0].rooms[0].width;
     purchaseItem(world, 'expand_room');
-    assert.equal(world.world.floors[0].rooms.length, initialRooms + 1);
+    assert.equal(world.world.floors[0].rooms[0].width, initialWidth + 5);
   });
 
-  it('handles expansion: new floor', () => {
+  it('handles expansion: expand_floor adds rows', () => {
     const world = freshWorld(15000);
-    const initialFloors = world.world.floors.length;
+    const initialHeight = world.world.floors[0].rooms[0].height;
     purchaseItem(world, 'expand_floor');
-    assert.equal(world.world.floors.length, initialFloors + 1);
-    const newFloor = world.world.floors[world.world.floors.length - 1];
-    assert.equal(newFloor.rooms.length, 1);
+    assert.equal(world.world.floors[0].rooms[0].height, initialHeight + 5);
   });
 });
 
@@ -119,8 +117,8 @@ describe('placeItem', () => {
   it('fails for out-of-bounds position', () => {
     const world = freshWorld(500);
     const { item } = purchaseItem(world, 'deco_plant');
-    // room_0 is 12x8
-    const result = placeItem(world, item!.id, 'room_0', 15, 3);
+    // room_0 is 20x11
+    const result = placeItem(world, item!.id, 'room_0', 25, 3);
     assert.equal(result.success, false);
     assert.equal(result.error, 'Position out of bounds');
   });

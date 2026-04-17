@@ -171,17 +171,21 @@ export async function registerAgentvilleAgents(url: string, agents: AgentEntry[]
     const agentId = `ns-${team}-${agent.role}`;
     const resolved = resolveCitizenProps(agent.role, overrides ?? {});
     const payload = {
+      type: 'agent:heartbeat',
+      source: 'nightshift',
       agent: agentId,
-      name: resolved.displayName,
-      color: resolved.color,
-      state: 'idle',
-      task: 'Initializing',
+      data: {
+        name: resolved.displayName,
+        color: resolved.color,
+        state: 'idle',
+        task: 'Initializing',
+      },
     };
 
     let success = false;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const response = await fetch(`${url}/api/heartbeat`, {
+        const response = await fetch(`${url}/api/events`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

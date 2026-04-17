@@ -36,35 +36,18 @@ export function purchaseItem(world: AgentvilleWorld, catalogId: string): ShopRes
   return { success: true, item };
 }
 
-/** Handle expansion purchases — add rooms or floors to the world layout. */
+/** Handle expansion purchases — resize the world grid. */
 function handleExpansion(world: AgentvilleWorld, catalogId: string): void {
-  const uid = Math.random().toString(36).slice(2, 8);
+  const floor = world.world.floors[0];
+  if (!floor || !floor.rooms[0]) return;
+  const room = floor.rooms[0];
+
   if (catalogId === 'expand_room') {
-    // Add a new room to the first floor
-    const floor = world.world.floors[0];
-    if (floor) {
-      const roomNum = floor.rooms.length;
-      floor.rooms.push({
-        id: `room_${uid}`,
-        name: `Room ${roomNum + 1}`,
-        width: 10,
-        height: 6,
-        style: 'basic',
-      });
-    }
+    // Expand the world grid — add 5 columns
+    room.width += 5;
   } else if (catalogId === 'expand_floor') {
-    const floorNum = world.world.floors.length;
-    world.world.floors.push({
-      id: `floor_${uid}`,
-      name: `Floor ${floorNum + 1}`,
-      rooms: [{
-        id: `room_${uid}_0`,
-        name: 'Main Room',
-        width: 10,
-        height: 6,
-        style: 'basic',
-      }],
-    });
+    // Expand the world grid — add 5 rows
+    room.height += 5;
   }
   // expand_room_upgrade is handled via placement/UI (Phase 6)
 }

@@ -10,7 +10,7 @@ import type { AgentvilleWorld } from '../schema.js';
 import type { AgentvilleEvent } from '../event-types.js';
 import { validateEvent } from '../event-types.js';
 import { awardCoins } from '../economy.js';
-import { DEFAULT_COSMETICS, getCatalogByType } from '../catalog.js';
+import { DEFAULT_COSMETICS, getCatalogByType, getCatalogItem } from '../catalog.js';
 import { purchaseItem, placeItem, unplaceItem, setAgentCosmetic } from '../shop.js';
 
 export interface AgentvilleServerConfig {
@@ -151,12 +151,13 @@ export class AgentvilleServer {
 
     switch (event.type) {
       case 'agent:heartbeat': {
-        const name = (data.name as string) ?? event.agent;
+        const name = (data.name as string | undefined);
+        const storeName = name ?? (this.store.has(agentKey) ? undefined : event.agent);
         const state = (data.state as string) ?? undefined;
         const task = data.task !== undefined ? (data.task as string | null) : undefined;
         const color = data.color as string | undefined;
         const energy = typeof data.energy === 'number' ? data.energy : undefined;
-        this.store.heartbeat({ agent: agentKey, name, state, task, color, energy });
+        this.store.heartbeat({ agent: agentKey, name: storeName, state, task, color, energy });
 
         // Register agent and assign desk if game state is active
         if (this.gameState) {
@@ -165,7 +166,7 @@ export class AgentvilleServer {
             const cosmetic = DEFAULT_COSMETICS[agentCount % DEFAULT_COSMETICS.length];
             this.gameState.agents[agentKey] = {
               source: event.source,
-              name,
+              name: name ?? event.agent,
               cosmetic,
               accessories: [],
               desk: null,
@@ -744,12 +745,8 @@ export class AgentvilleServer {
     }
   }
 
-  /** Scan publicDir for a world matching an optional team filter. Returns "repo/team" or null.
-   *  When gameState is available, returns 'agentville' as a fixed identifier. */
+  /** Scan publicDir subdirectories for a legacy repo/team world.json. */
   private findWorldId(teamFilter?: string): string | null {
-    if (this.gameState) return 'agentville';
-
-    // Legacy file-based fallback
     const publicDir = this.publicDir ?? './public';
     if (!existsSync(publicDir)) return null;
     const safeTeam = teamFilter?.replace(/[^a-zA-Z0-9_-]/g, '');
@@ -773,10 +770,23 @@ export class AgentvilleServer {
     } catch { return null; }
   }
 
+  /** Load world.json from a repo/team subdirectory of publicDir. */
   private loadWorldData(worldId: string): unknown | null {
     const safeId = worldId.replace(/[^a-zA-Z0-9_/-]/g, '').replace(/\.\./g, '');
     const publicDir = this.publicDir ?? './public';
     const worldPath = path.join(publicDir, safeId, 'world.json');
+    if (!existsSync(worldPath)) return null;
+    try {
+      return JSON.parse(readFileSync(worldPath, 'utf-8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /** Load the global world.json at publicDir root (the persistent base world). */
+  private loadGlobalWorld(): Record<string, unknown> | null {
+    const publicDir = this.publicDir ?? './public';
+    const worldPath = path.join(publicDir, 'world.json');
     if (!existsSync(worldPath)) return null;
     try {
       return JSON.parse(readFileSync(worldPath, 'utf-8'));
@@ -826,17 +836,107 @@ export class AgentvilleServer {
     if (req.method === 'GET' && url.pathname === '/api/world') {
       const repo = url.searchParams.get('repo');
       const team = url.searchParams.get('team');
-      let worldData: unknown | null;
+      let worldData: Record<string, unknown> | null = null;
+      let resolvedWorldId: string | null = null;
+
       if (repo && team) {
-        worldData = this.loadWorldData(repo + '/' + team);
+        // Explicit repo/team — use legacy path
+        resolvedWorldId = repo + '/' + team;
+        worldData = this.loadWorldData(resolvedWorldId) as Record<string, unknown> | null;
       } else if (team) {
-        const teamWorldId = this.findWorldId(team);
-        worldData = teamWorldId ? this.loadWorldData(teamWorldId) : null;
+        resolvedWorldId = this.findWorldId(team);
+        worldData = resolvedWorldId ? this.loadWorldData(resolvedWorldId) as Record<string, unknown> | null : null;
       } else {
-        const defaultId = this.findWorldId();
-        worldData = defaultId ? this.loadWorldData(defaultId) : null;
+        // Default: global world.json first, then legacy scan
+        worldData = this.loadGlobalWorld();
+        if (!worldData) {
+          resolvedWorldId = this.findWorldId();
+          worldData = resolvedWorldId ? this.loadWorldData(resolvedWorldId) as Record<string, unknown> | null : null;
+        }
       }
+
+      // Last resort: generate minimal world from game state room dimensions
+      if (!worldData && this.gameState) {
+        const room = this.gameState.world.floors[0]?.rooms[0];
+        const cols = room?.width ?? 12;
+        const rows = room?.height ?? 8;
+        const floor: string[][] = [];
+        for (let r = 0; r < rows; r++) {
+          const row: string[] = [];
+          for (let c = 0; c < cols; c++) row.push('floor');
+          floor.push(row);
+        }
+        worldData = { gridCols: cols, gridRows: rows, floor, tiles: {}, props: [], wanderPoints: [], propImages: {} };
+      }
+
       if (worldData) {
+        if (resolvedWorldId) worldData.worldId = resolvedWorldId;
+
+        // Merge placed inventory items from game state as additional props
+        if (this.gameState) {
+          const existingProps = (worldData.props as any[]) || [];
+          const inventoryProps = this.gameState.inventory
+            .filter(item => item.placed && item.placedAt)
+            .map(item => {
+              const catalog = getCatalogItem(item.catalogId);
+              return {
+                id: item.id,
+                catalogId: item.catalogId,
+                x: item.placedAt!.x,
+                y: item.placedAt!.y,
+                w: catalog?.w ?? 1,
+                h: catalog?.h ?? 1,
+                layer: 'below' as const,
+                fromInventory: true,
+                anchors: item.type === 'desk' ? [{
+                  name: 'desk_' + item.id,
+                  ox: 1,
+                  oy: 1.5,
+                  type: 'work',
+                }] : [],
+              };
+            });
+          // Add chair props alongside each desk
+          const chairProps = inventoryProps
+            .filter(p => p.catalogId.startsWith('desk_'))
+            .map((p, i) => ({
+              id: `chair_${p.id}`,
+              x: p.x + 1,
+              y: p.y + 1,
+              w: 1.1,
+              h: 1.9,
+              layer: 'above' as const,
+              fromInventory: true,
+              anchors: [] as { name: string; ox: number; oy: number; type: string }[],
+            }));
+
+          worldData.props = [...existingProps, ...inventoryProps, ...chairProps];
+
+          // Add propImages entries so the engine can render inventory items.
+          // Map catalog IDs to base world prop sprite IDs.
+          const propImages = worldData.propImages as Record<string, string> | undefined;
+          if (propImages && Object.keys(propImages).length > 0) {
+            const CATALOG_TO_SPRITE: Record<string, string> = {
+              desk_basic: 'desk_corner_right',
+              desk_dual_monitor: 'desk_corner_left',
+              desk_standing: 'desk_corner_right',
+              desk_corner_office: 'desk_corner_left',
+            };
+            for (const prop of inventoryProps) {
+              if (!propImages[prop.id]) {
+                const spriteKey = CATALOG_TO_SPRITE[prop.catalogId];
+                propImages[prop.id] = propImages[spriteKey] ?? propImages[prop.catalogId] ?? `world_assets/props/${prop.catalogId}.png`;
+              }
+            }
+            // Map chair props to existing chair sprite
+            for (const chair of chairProps) {
+              if (!propImages[chair.id]) {
+                propImages[chair.id] = propImages['desk_chair_dark'] ?? 'world_assets/props/desk_chair_dark.png';
+              }
+            }
+          }
+        }
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(worldData));
       } else {

@@ -54,14 +54,14 @@ export function bootstrapWorld(timezone: string): AgentvilleWorld {
         catalogId: 'desk_basic',
         type: 'desk',
         placed: true,
-        placedAt: { roomId: 'room_0', x: 2, y: 3 },
+        placedAt: { roomId: 'room_0', x: 7, y: 4 },
       },
       {
         id: 'starter_desk_2',
         catalogId: 'desk_basic',
         type: 'desk',
         placed: true,
-        placedAt: { roomId: 'room_0', x: 6, y: 3 },
+        placedAt: { roomId: 'room_0', x: 13, y: 4 },
       },
     ],
     world: {
@@ -73,8 +73,8 @@ export function bootstrapWorld(timezone: string): AgentvilleWorld {
             {
               id: 'room_0',
               name: 'Main Office',
-              width: 12,
-              height: 8,
+              width: 20,
+              height: 11,
               style: 'basic',
             },
           ],

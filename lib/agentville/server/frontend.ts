@@ -764,92 +764,6 @@ function renderEffects(timestamp) {
 }
 requestAnimationFrame(renderEffects);
 
-// --- World state -> render config (6.1) ---
-function worldStateToRenderConfig(world) {
-  const room = world.world.floors[0]?.rooms[0];
-  const gridCols = room ? room.width : 12;
-  const gridRows = room ? room.height : 8;
-  const tileSize = 32;
-
-  // Generate basic floor tile grid
-  const floor = [];
-  for (let r = 0; r < gridRows; r++) {
-    const row = [];
-    for (let c = 0; c < gridCols; c++) {
-      row.push('floor');
-    }
-    floor.push(row);
-  }
-
-  // Walkable: all floor tiles walkable
-  const walkable = floor.map(row => row.map(() => true));
-
-  // Map placed inventory items to props
-  const props = [];
-  const placedItems = world.inventory.filter(item => item.placed && item.placedAt);
-  for (const item of placedItems) {
-    props.push({
-      id: item.id,
-      type: item.type,
-      catalogId: item.catalogId,
-      x: item.placedAt.x,
-      y: item.placedAt.y,
-    });
-    // Block walkable for desks/facilities
-    if (item.type === 'desk' || item.type === 'facility') {
-      const px = item.placedAt.x;
-      const py = item.placedAt.y;
-      if (py >= 0 && py < gridRows && px >= 0 && px < gridCols) {
-        walkable[py][px] = false;
-      }
-    }
-  }
-
-  // Build spawn locations from placed desks (agents sit at desks)
-  const spawnLocations = {};
-  for (const item of placedItems) {
-    if (item.type === 'desk' && item.placedAt) {
-      // Agent spawn one tile below desk
-      const sx = item.placedAt.x;
-      const sy = Math.min(item.placedAt.y + 1, gridRows - 1);
-      spawnLocations['desk_' + item.id] = { x: sx, y: sy };
-    }
-  }
-
-  // Map registered agents to citizens
-  const citizens = [];
-  const agentEntries = Object.entries(world.agents);
-  for (let i = 0; i < agentEntries.length; i++) {
-    const [agentKey, agentRec] = agentEntries[i];
-    const deskItem = agentRec.desk ? placedItems.find(it => it.id === agentRec.desk) : null;
-    let position;
-    if (deskItem && deskItem.placedAt) {
-      position = 'desk_' + deskItem.id;
-    } else {
-      // Default position spread across room
-      position = { x: 2 + (i * 2) % gridCols, y: Math.min(4 + Math.floor(i / 3), gridRows - 1) };
-    }
-    citizens.push({
-      agentId: agentKey,
-      name: agentRec.name,
-      sprite: agentRec.cosmetic || 'cosmetic_robot',
-      position,
-      npc: false,
-    });
-  }
-
-  return {
-    gridCols,
-    gridRows,
-    tileSize,
-    floor,
-    walkable,
-    props,
-    spawnLocations,
-    citizens,
-  };
-}
-
 // --- Shop UI (6.4) ---
 const SHOP_CATEGORIES = [
   { type: 'desk', label: 'Desks' },
@@ -1141,81 +1055,38 @@ document.getElementById('inv-backdrop').addEventListener('click', closeInventory
 
 // --- Load and start the world ---
 async function startWorld() {
-  // Try game state first (Phase 6 world)
-  let gameStateData = null;
+  // Load game state for economy HUD (coins, streak, inventory)
   try {
     const gsRes = await fetch('/api/game-state');
     if (gsRes.ok) {
-      gameStateData = await gsRes.json();
+      const gameStateData = await gsRes.json();
       gameState = gameStateData;
+      currentCoins = gameStateData.coins || 0;
+      document.getElementById('hud-coins').textContent = formatNumber(currentCoins);
+      updateHudStreak(gameStateData.stats?.streakDays || 0);
     }
   } catch { /* no game state */ }
 
-  if (gameStateData) {
-    // Populate HUD from game state
-    currentCoins = gameStateData.coins || 0;
-    document.getElementById('hud-coins').textContent = formatNumber(currentCoins);
-    updateHudStreak(gameStateData.stats?.streakDays || 0);
-    return startWorldFromGameState(gameStateData);
-  }
-
-  // Fall back to legacy /api/world
-  return startLegacyWorld();
-}
-
-async function startWorldFromGameState(world) {
-  const config = worldStateToRenderConfig(world);
-  const tileSize = config.tileSize;
-
-  const sceneConfig = {
-    name: 'main',
-    tileWidth: tileSize,
-    tileHeight: tileSize,
-    layers: [config.floor],
-    walkable: config.walkable,
-    locations: config.spawnLocations,
-    tiles: { floor: null }, // basic floor — no sprite, engine draws flat color
-  };
-
-  const spriteSheets = {};
-  for (const c of config.citizens) {
-    spriteSheets[c.sprite] = createStandardSpriteConfig(c.sprite);
-  }
-
-  const mv = new Agentville({
-    container,
-    world: 'nightshift',
-    scene: 'main',
-    signal: {
-      type: 'websocket',
-      url: 'ws://' + location.host + '/ws',
-    },
-    citizens: config.citizens,
-    scale: 2,
-    width: config.gridCols * tileSize,
-    height: config.gridRows * tileSize,
-    sceneConfig,
-    spriteSheets,
-    objects: [],
-  });
-
-  await mv.start();
-  window.__av = mv;
-  resizeEffectsOverlay();
-
-  // Tooltip on click
-  mv.on('citizen:click', (data) => {
-    tooltip.style.display = 'block';
-    tooltip.querySelector('.name').textContent = data.name;
-    tooltip.querySelector('.state').textContent = 'State: ' + data.state;
-    tooltip.querySelector('.task').textContent = data.task ? 'Task: ' + data.task : 'No active task';
-    setTimeout(() => { tooltip.style.display = 'none'; }, 3000);
-  });
-}
-
-async function startLegacyWorld() {
-  let worldData;
+  // Render world from /api/world (base world + placed inventory merged server-side)
   try {
+    const wRes = await fetch('/api/world');
+    if (wRes.ok) {
+      const wd = await wRes.json();
+      if (!wd.error) {
+        await startLegacyWorld(wd);
+        return;
+      }
+    }
+  } catch { /* no world data */ }
+
+  console.warn('No world data available — UI will show status panel only');
+}
+
+async function startLegacyWorld(prefetched) {
+  let worldData;
+  if (prefetched) {
+    worldData = prefetched;
+  } else try {
     worldData = await fetch('/api/world').then(r => r.json());
   } catch {
     console.warn('No world data available');
@@ -1231,8 +1102,9 @@ async function startLegacyWorld() {
   const gridRows = worldData.gridRows || 12;
   const tileSize = 32;
 
-  // Single-world Agentville: assets live under /worlds/agentville/.
-  const basePath = '/worlds/agentville';
+  // Use the worldId from the API response to construct the correct asset path.
+  // When worldId is set (legacy repo/team path), use it. Otherwise root-level world.json.
+  const basePath = worldData.worldId ? '/worlds/' + worldData.worldId : '/worlds';
 
   const floor = worldData.floor || Array.from({ length: gridRows }, () => Array(gridCols).fill(''));
   const walkable = [];
@@ -1310,7 +1182,9 @@ async function startLegacyWorld() {
   await Promise.all(
     Object.entries(propImages).map(([id, src]) => {
       const clean = src.startsWith('/') ? src.slice(1) : src;
-      return props.loadSprite(id, basePath + '/' + clean);
+      return props.loadSprite(id, basePath + '/' + clean).catch(() => {
+        // Sprite not found — prop will render without an image
+      });
     })
   );
   props.setLayout(worldData.props || []);

@@ -115,18 +115,18 @@ describe('persistence', () => {
       assert.equal(world.inventory[1].catalogId, 'desk_basic');
       assert.equal(world.inventory[0].placed, true);
       assert.equal(world.inventory[1].placed, true);
-      assert.deepEqual(world.inventory[0].placedAt, { roomId: 'room_0', x: 2, y: 3 });
-      assert.deepEqual(world.inventory[1].placedAt, { roomId: 'room_0', x: 6, y: 3 });
+      assert.deepEqual(world.inventory[0].placedAt, { roomId: 'room_0', x: 7, y: 4 });
+      assert.deepEqual(world.inventory[1].placedAt, { roomId: 'room_0', x: 13, y: 4 });
     });
 
-    it('creates 1 floor and 1 room (12x8)', () => {
+    it('creates 1 floor and 1 room (20x11)', () => {
       const world = bootstrapWorld('America/Chicago');
       assert.equal(world.world.floors.length, 1);
       assert.equal(world.world.floors[0].name, 'Ground Floor');
       assert.equal(world.world.floors[0].rooms.length, 1);
       const room = world.world.floors[0].rooms[0];
-      assert.equal(room.width, 12);
-      assert.equal(room.height, 8);
+      assert.equal(room.width, 20);
+      assert.equal(room.height, 11);
       assert.equal(room.style, 'basic');
     });
 

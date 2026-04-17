@@ -633,7 +633,7 @@ export class Agentville {
       .then((citizen) => {
         citizen.updateState(agent.state, agent.task, agent.energy);
       })
-      .catch(() => { /* sprite load failed — agent just won't appear */ })
+      .catch((err) => { console.warn(`[agentville] Auto-spawn failed for "${agent.id}":`, err); })
       .finally(() => { this.spawningAgents.delete(agent.id); });
   }
 

@@ -10,7 +10,6 @@ import { parseTeamConfig, expandAgentInstances } from './team-config.js';
 import type { TeamConfig } from './team-config.js';
 import { getPresetDir } from './copy.js';
 import { startAgentville, waitForAgentville, registerAgentvilleAgents, stopAgentville } from './agentville.js';
-import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
 import { installHooks } from './hooks.js';
 import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
 import { resolveAgentConfig, buildRunnerForAgent } from './agent-config.js';
@@ -171,6 +170,10 @@ const AGENT_LOOP_SCRIPT = join(__dirname, '..', 'bin', 'ns-agent-loop.sh');
 /**
  * Set up visualization server, hooks, and world config.
  * Shared between tmux and headless modes.
+ *
+ * The global world.json (copied from base-world.json on first run) is never
+ * overwritten — it persists across starts. Desks/items come from game state
+ * inventory and are merged at serve time by the /api/world endpoint.
  */
 async function setupVisualization(
   team: string, agents: AgentEntry[], repoRoot: string,
@@ -179,31 +182,20 @@ async function setupVisualization(
   let vizUrl: string | null = null;
   try {
     const vizDataDir = join(homedir(), '.nightshift', 'agentville');
-    const teamWorldDir = join(vizDataDir, repoName, team);
-
-    // Read base world data for spawn position computation
     const baseWorldDir = join(__dirname, '..', 'worlds', 'agentville');
-    let baseWorld: { floor: string[][]; gridCols: number; gridRows: number; props: Array<{ x: number; y: number; w: number; h: number }> } | undefined;
-    const srcBaseWorldPath = join(baseWorldDir, 'base-world.json');
-    if (existsSync(srcBaseWorldPath)) {
-      try {
-        baseWorld = JSON.parse(readFileSync(srcBaseWorldPath, 'utf-8'));
-      } catch { /* fallback to no positions */ }
+
+    // Copy base world to global location (only if not already present)
+    const globalWorldJson = join(vizDataDir, 'world.json');
+    mkdirSync(vizDataDir, { recursive: true });
+    if (!existsSync(globalWorldJson) && existsSync(join(baseWorldDir, 'base-world.json'))) {
+      execSync(`cp "${join(baseWorldDir, 'base-world.json')}" "${globalWorldJson}"`, { stdio: 'pipe' });
     }
 
-    // Generate dynamic world config (with spawn positions if base world available)
-    const worldConfig = generateWorldConfig(agents, team, citizenOverrides, baseWorld);
-
-    // Copy base world assets to team world dir
-    mkdirSync(teamWorldDir, { recursive: true });
+    // Always sync assets (new versions may have updated sprites/tiles)
     if (existsSync(baseWorldDir)) {
-      execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp -R "${baseWorldDir}/world_assets" "${vizDataDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
       execSync(`cp -R "${baseWorldDir}/universal_assets" "${vizDataDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
-
-    const baseWorldPath = join(teamWorldDir, 'base-world.json');
-    const merged = mergeWorldConfig(baseWorldPath, worldConfig);
-    writeFileSync(join(teamWorldDir, 'world.json'), JSON.stringify(merged, null, 2) + '\n');
 
     const coreDir = join(__dirname, 'agentville', 'core');
     mkdirSync(join(vizDataDir, '..', 'core'), { recursive: true });
@@ -212,7 +204,6 @@ async function setupVisualization(
     }
 
     // Singleton: startAgentville() piggybacks on an existing instance if one is running.
-    // Don't stopAgentville() here — that would wipe state from other teams/repos.
     const result = startAgentville(vizPort, vizDataDir);
     if (!result) {
       console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));

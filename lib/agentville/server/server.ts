@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AgentStore } from './store.js';
 import { EventLog, type WorldEvent } from './events.js';
+import { EventLogPersistence, isSignificant, formatSummary } from './event-log-persistence.js';
 import { getFrontendHtml } from './frontend.js';
 import type { AgentvilleWorld } from '../schema.js';
 import type { AgentvilleEvent } from '../event-types.js';
@@ -40,12 +41,16 @@ export class AgentvilleServer {
   private mutationCallbacks: Array<() => void> = [];
   /** Event API: track spawned child keys per parent agent key for cleanup */
   private spawnedChildren: Map<string, Set<string>> = new Map();
+  private eventLogPersistence: EventLogPersistence | null = null;
 
   constructor(config: AgentvilleServerConfig = {}) {
     this.port = config.port ?? 4321;
     this.publicDir = config.publicDir ?? null;
     this.store = new AgentStore(config.offlineTimeout ?? 30000);
     this.events = new EventLog();
+    if (this.publicDir) {
+      this.eventLogPersistence = new EventLogPersistence(this.publicDir);
+    }
 
     this.httpServer = createServer((req, res) => this.handleHttp(req, res));
     this.wss = new WebSocketServer({ server: this.httpServer });
@@ -222,6 +227,21 @@ export class AgentvilleServer {
             },
             timestamp: Date.now(),
           });
+          // Log rare drops as separate event log entries
+          if (this.eventLogPersistence && result.drop) {
+            const dropLabel = result.drop.type === 'item' ? result.drop.catalogId : `${result.drop.amount} coins`;
+            const dropEntry = this.eventLogPersistence.append({
+              timestamp: Date.now(),
+              agentKey,
+              type: 'coins:earned',
+              summary: `drop — ${dropLabel}`,
+              data: { drop: result.drop },
+            });
+            const dropMsg = JSON.stringify({ type: 'log:entry', entry: dropEntry });
+            for (const ws of this.clients) {
+              if (ws.readyState === WebSocket.OPEN) ws.send(dropMsg);
+            }
+          }
         }
         this.broadcastWs({ type: 'work:completed', payload: { agent: agentKey, ...data }, timestamp: Date.now() });
         break;
@@ -295,6 +315,23 @@ export class AgentvilleServer {
         break;
       }
     }
+
+    // Persist significant events to the event log and broadcast to sidebar
+    if (this.eventLogPersistence && isSignificant(event.type)) {
+      const summary = formatSummary(event.type, agentKey, data);
+      const logEntry = this.eventLogPersistence.append({
+        timestamp: Date.now(),
+        agentKey,
+        type: event.type,
+        summary,
+        data,
+      });
+      const logMsg = JSON.stringify({ type: 'log:entry', entry: logEntry });
+      for (const ws of this.clients) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(logMsg);
+      }
+    }
+
   }
 
   // --- Interactive protocol ---
@@ -1224,6 +1261,24 @@ export class AgentvilleServer {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ channels }));
+      return;
+    }
+
+    // --- Persistent Event Log API ---
+    if (req.method === 'GET' && url.pathname === '/api/event-log') {
+      if (!this.eventLogPersistence) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ entries: [] }));
+        return;
+      }
+      const before = url.searchParams.get('before');
+      const limitParam = url.searchParams.get('limit');
+      const limit = limitParam ? parseInt(limitParam, 10) : 200;
+      const entries = before
+        ? this.eventLogPersistence.loadBefore(parseInt(before, 10), limit)
+        : this.eventLogPersistence.loadRecent(limit);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ entries }));
       return;
     }
 

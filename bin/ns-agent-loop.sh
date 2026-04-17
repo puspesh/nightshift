@@ -61,10 +61,10 @@ while true; do
       rm -f "$BREADCRUMB"
     fi
 
-    # Parse JSON and write cost entry (node is always available in a Node.js project).
+    # Parse JSON, write cost entry to JSONL, and post cost comment on the issue.
     # Uses O_APPEND | O_WRONLY | O_CREAT for atomic appends under PIPE_BUF (4096 bytes).
     if [ -n "$ISSUE" ] && [ -f "$CYCLE_OUTPUT" ] && [ -s "$CYCLE_OUTPUT" ]; then
-      node -e "
+      COST_COMMENT=$(node -e "
         const fs = require('fs');
         try {
           const raw = fs.readFileSync(process.argv[1], 'utf8');
@@ -82,9 +82,27 @@ while true; do
             const fd = fs.openSync(process.argv[5], 'a');
             fs.writeSync(fd, line);
             fs.closeSync(fd);
+            const mins = Math.floor(entry.duration_s / 60);
+            const secs = entry.duration_s % 60;
+            const models = Object.keys(entry.model_usage);
+            const modelStr = models.length > 0
+              ? models.map(m => m.replace(/^claude-/, '')).join(', ')
+              : entry.agent.includes('tester') ? 'sonnet' : 'opus';
+            console.log('| ' + entry.agent + ' | ' + mins + 'm ' + secs + 's | \\$' + entry.cost_usd.toFixed(4) + ' | ' + modelStr + ' |');
           }
         } catch (e) { process.stderr.write('cost-tracking: ' + e.message + '\n'); }
-      " "$CYCLE_OUTPUT" "$ISSUE" "$AGENT_NAME" "$DURATION" "$COSTS_FILE"
+      " "$CYCLE_OUTPUT" "$ISSUE" "$AGENT_NAME" "$DURATION" "$COSTS_FILE")
+
+      # Post cost as a comment on the GitHub issue (best-effort, don't fail the loop)
+      if [ -n "$COST_COMMENT" ]; then
+        gh issue comment "$ISSUE" --body "$(cat <<EOF
+**Cost** (measured by orchestrator, not self-reported):
+| Agent | Duration | Cost | Model |
+|-------|----------|------|-------|
+${COST_COMMENT}
+EOF
+)" 2>/dev/null || true
+      fi
     fi
 
     rm -f "$CYCLE_OUTPUT"

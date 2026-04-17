@@ -15,8 +15,9 @@ import {
   copyRepoMd,
   removeRepoMd,
   getPresetDefaultsDir,
+  copyScaffoldFiles,
 } from '../lib/copy.js';
-import { readdirSync } from 'node:fs';
+import { readdirSync, mkdirSync } from 'node:fs';
 
 let tmp: string;
 
@@ -163,5 +164,82 @@ describe('removeRepoMd', () => {
   it('returns false when repo.md does not exist', () => {
     const removed = removeRepoMd(tmp);
     assert.equal(removed, false);
+  });
+});
+
+describe('copyScaffoldFiles', () => {
+  it('copies directory tree to repo root', () => {
+    // Create a mock preset with scaffold dir
+    const presetDir = join(tmp, 'mock-preset');
+    const scaffoldDir = join(presetDir, 'scaffold');
+    mkdirSync(join(scaffoldDir, 'config'), { recursive: true });
+    writeFileSync(join(scaffoldDir, 'config', 'topics.yaml'), 'topics: []');
+    writeFileSync(join(scaffoldDir, 'README.md'), '# Content Repo');
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(repoRoot, { recursive: true });
+
+    const { copied, skipped } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 2);
+    assert.equal(skipped.length, 0);
+    assert.ok(existsSync(join(repoRoot, 'config', 'topics.yaml')));
+    assert.ok(existsSync(join(repoRoot, 'README.md')));
+    assert.equal(readFileSync(join(repoRoot, 'config', 'topics.yaml'), 'utf-8'), 'topics: []');
+  });
+
+  it('skips existing files', () => {
+    const presetDir = join(tmp, 'mock-preset');
+    const scaffoldDir = join(presetDir, 'scaffold');
+    mkdirSync(join(scaffoldDir, 'config'), { recursive: true });
+    writeFileSync(join(scaffoldDir, 'config', 'topics.yaml'), 'default content');
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(join(repoRoot, 'config'), { recursive: true });
+    writeFileSync(join(repoRoot, 'config', 'topics.yaml'), 'custom content');
+
+    const { copied, skipped } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 0);
+    assert.equal(skipped.length, 1);
+    assert.ok(skipped[0].includes('topics.yaml'));
+    assert.equal(readFileSync(join(repoRoot, 'config', 'topics.yaml'), 'utf-8'), 'custom content');
+  });
+
+  it('creates nested directories', () => {
+    const presetDir = join(tmp, 'mock-preset');
+    const scaffoldDir = join(presetDir, 'scaffold');
+    mkdirSync(join(scaffoldDir, 'knowledge', 'references'), { recursive: true });
+    writeFileSync(join(scaffoldDir, 'knowledge', 'references', '.gitkeep'), '');
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(repoRoot, { recursive: true });
+
+    const { copied } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 1);
+    assert.ok(existsSync(join(repoRoot, 'knowledge', 'references', '.gitkeep')));
+  });
+
+  it('returns empty result when no scaffold dir', () => {
+    const presetDir = join(tmp, 'mock-preset');
+    mkdirSync(presetDir, { recursive: true });
+    // No scaffold/ directory
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(repoRoot, { recursive: true });
+
+    const { copied, skipped } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 0);
+    assert.equal(skipped.length, 0);
+  });
+
+  it('handles empty scaffold dir', () => {
+    const presetDir = join(tmp, 'mock-preset');
+    mkdirSync(join(presetDir, 'scaffold'), { recursive: true });
+
+    const repoRoot = join(tmp, 'repo');
+    mkdirSync(repoRoot, { recursive: true });
+
+    const { copied, skipped } = copyScaffoldFiles(repoRoot, presetDir);
+    assert.equal(copied.length, 0);
+    assert.equal(skipped.length, 0);
   });
 });

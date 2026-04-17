@@ -771,3 +771,152 @@ test('inventory UI — unplace button moves item to unplaced section', async ({ 
     expect(unplacedText).toBeTruthy();
   }).toPass({ timeout: 5000 });
 });
+
+// ---------------------------------------------------------------------------
+// Event Log Sidebar (Phase 2)
+// ---------------------------------------------------------------------------
+
+test('event log sidebar is visible on page load', async ({ page }) => {
+  await page.goto(`http://localhost:${serverPort}`);
+  await expect(page.locator('#connection-status')).toHaveText('Connected', { timeout: 5000 });
+
+  await expect(page.locator('#event-log-sidebar')).toBeVisible();
+  await expect(page.locator('#event-log-header')).toBeVisible();
+  await expect(page.locator('#event-log-entries')).toBeVisible();
+});
+
+test('sidebar shows entries from /api/event-log on load', async ({ page }) => {
+  // Post 3 work:completed events before page load
+  for (let i = 0; i < 3; i++) {
+    await postEvent(serverPort, {
+      type: 'work:completed',
+      source: SOURCE,
+      agent: 'log-agent',
+      data: { workType: 'commit', description: `completed task ${i + 1}` },
+    });
+  }
+
+  await page.goto(`http://localhost:${serverPort}`);
+  await expect(page.locator('#connection-status')).toHaveText('Connected', { timeout: 5000 });
+
+  // Sidebar should contain entries with correct format [HH:MM] agent: description
+  await expect(async () => {
+    const entries = page.locator('#event-log-entries .log-entry');
+    const count = await entries.count();
+    expect(count).toBeGreaterThanOrEqual(3);
+  }).toPass({ timeout: 5000 });
+
+  // Check format — entries should contain agent name and description text
+  const lastEntry = page.locator('#event-log-entries .log-entry').last();
+  await expect(lastEntry).toContainText('log-agent');
+});
+
+test('sidebar updates live when work:completed fires', async ({ page }) => {
+  await page.goto(`http://localhost:${serverPort}`);
+  await expect(page.locator('#connection-status')).toHaveText('Connected', { timeout: 5000 });
+
+  // Count existing entries
+  const initialCount = await page.locator('#event-log-entries .log-entry').count();
+
+  // Post a new work:completed event
+  await postEvent(serverPort, {
+    type: 'work:completed',
+    source: SOURCE,
+    agent: 'live-agent',
+    data: { workType: 'pr_merged', description: 'merged live PR' },
+  });
+
+  // New entry should appear within 2s
+  await expect(async () => {
+    const count = await page.locator('#event-log-entries .log-entry').count();
+    expect(count).toBeGreaterThan(initialCount);
+  }).toPass({ timeout: 3000 });
+
+  // The new entry should contain our description
+  const lastEntry = page.locator('#event-log-entries .log-entry').last();
+  await expect(lastEntry).toContainText('merged live PR');
+});
+
+test('sidebar does not show heartbeat events', async ({ page }) => {
+  await page.goto(`http://localhost:${serverPort}`);
+  await expect(page.locator('#connection-status')).toHaveText('Connected', { timeout: 5000 });
+
+  // Wait for initial entries to settle
+  await page.waitForTimeout(500);
+  const initialCount = await page.locator('#event-log-entries .log-entry').count();
+
+  // Post a heartbeat event
+  await heartbeat(serverPort, 'heartbeat-test-agent', 'working');
+
+  // Wait a bit and verify count hasn't changed
+  await page.waitForTimeout(1000);
+  const afterCount = await page.locator('#event-log-entries .log-entry').count();
+  expect(afterCount).toBe(initialCount);
+});
+
+test('collapse toggle hides sidebar content', async ({ page }) => {
+  await page.goto(`http://localhost:${serverPort}`);
+  await expect(page.locator('#connection-status')).toHaveText('Connected', { timeout: 5000 });
+
+  const sidebar = page.locator('#event-log-sidebar');
+  const toggle = page.locator('#event-log-toggle');
+
+  // Initially expanded (not collapsed)
+  await expect(sidebar).not.toHaveClass(/collapsed/);
+
+  // Click collapse
+  await toggle.click();
+
+  // Should now be collapsed
+  await expect(sidebar).toHaveClass(/collapsed/);
+});
+
+test('expand toggle restores sidebar', async ({ page }) => {
+  await page.goto(`http://localhost:${serverPort}`);
+  await expect(page.locator('#connection-status')).toHaveText('Connected', { timeout: 5000 });
+
+  const sidebar = page.locator('#event-log-sidebar');
+  const toggle = page.locator('#event-log-toggle');
+
+  // Collapse then expand
+  await toggle.click();
+  await expect(sidebar).toHaveClass(/collapsed/);
+
+  await toggle.click();
+  await expect(sidebar).not.toHaveClass(/collapsed/);
+});
+
+test('auto-scrolls to bottom when already at bottom', async ({ page }) => {
+  await page.goto(`http://localhost:${serverPort}`);
+  await expect(page.locator('#connection-status')).toHaveText('Connected', { timeout: 5000 });
+
+  // Post enough events to make sidebar scrollable, then check scroll behavior
+  for (let i = 0; i < 30; i++) {
+    await postEvent(serverPort, {
+      type: 'work:completed',
+      source: SOURCE,
+      agent: 'scroll-agent',
+      data: { description: `scroll test task ${i}` },
+    });
+  }
+
+  // Wait for entries to appear
+  await expect(async () => {
+    const count = await page.locator('#event-log-entries .log-entry').count();
+    expect(count).toBeGreaterThanOrEqual(30);
+  }).toPass({ timeout: 5000 });
+
+  // Post one more event
+  await postEvent(serverPort, {
+    type: 'work:completed',
+    source: SOURCE,
+    agent: 'scroll-agent',
+    data: { description: 'final scroll event' },
+  });
+
+  // Last entry should be visible (auto-scrolled to bottom)
+  await expect(async () => {
+    const lastEntry = page.locator('#event-log-entries .log-entry').last();
+    await expect(lastEntry).toContainText('final scroll event');
+  }).toPass({ timeout: 3000 });
+});

@@ -374,6 +374,74 @@ h1 {
   font-weight: 400;
 }
 
+/* --- Event Log Sidebar --- */
+#event-log-sidebar {
+  position: fixed;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  width: 280px;
+  background: #0d1117;
+  border-left: 1px solid #30363d;
+  display: flex;
+  flex-direction: column;
+  z-index: 15;
+  transition: transform 0.2s ease;
+}
+#event-log-sidebar.collapsed {
+  transform: translateX(calc(100% - 32px));
+}
+#event-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid #30363d;
+  flex-shrink: 0;
+}
+#event-log-header span {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8b949e;
+}
+#event-log-toggle {
+  background: none;
+  border: none;
+  color: #8b949e;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+#event-log-toggle:hover { color: #c9d1d9; }
+#event-log-entries {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.log-entry {
+  font-size: 12px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  padding: 4px 0;
+  border-bottom: 1px solid #21262d;
+  color: #8b949e;
+  line-height: 1.4;
+}
+.log-entry-time { color: #484f58; }
+.log-entry-agent { color: #58a6ff; }
+.log-entry-error { color: #f85149; }
+.log-entry-drop { color: #f0c040; }
+body.event-log-open {
+  padding-right: 280px;
+}
+@media (max-width: 1024px) {
+  #event-log-sidebar { transform: translateX(calc(100% - 32px)); }
+  #event-log-sidebar.collapsed { transform: translateX(calc(100% - 32px)); }
+  #event-log-sidebar.expanded { transform: translateX(0); }
+  body.event-log-open { padding-right: 0; }
+}
+
 /* Placement mode */
 #placement-overlay {
   display: none;
@@ -503,6 +571,15 @@ h1 {
 
 <!-- Toast container -->
 <div id="toast-container"></div>
+
+<!-- Event Log Sidebar -->
+<div id="event-log-sidebar">
+  <div id="event-log-header">
+    <span>Activity</span>
+    <button id="event-log-toggle">&#x25C0;</button>
+  </div>
+  <div id="event-log-entries"></div>
+</div>
 
 <script type="module">
 import { Agentville, PropSystem, createStandardSpriteConfig } from '/agentville-core.js';
@@ -650,6 +727,133 @@ function showToast(message, type) {
     setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
+
+// --- Event Log Sidebar ---
+const logSidebar = document.getElementById('event-log-sidebar');
+const logEntries = document.getElementById('event-log-entries');
+const logToggle = document.getElementById('event-log-toggle');
+let logReachedStart = false; // true when no more older entries to load
+let logLoadingOlder = false; // debounce for infinite scroll
+
+function formatLogTime(ts) {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return hh + ':' + mm;
+}
+
+function shortAgentName(key) {
+  if (!key) return 'unknown';
+  const parts = key.split('/');
+  return parts[parts.length - 1];
+}
+
+function renderLogEntry(entry) {
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  if (entry.type === 'agent:error') div.classList.add('log-entry-error');
+  if (entry.data && entry.data.drop) div.classList.add('log-entry-drop');
+  div.dataset.id = String(entry.id);
+  div.dataset.agent = entry.agentKey || '';
+  div.innerHTML =
+    '<span class="log-entry-time">[' + formatLogTime(entry.timestamp) + ']</span> ' +
+    '<span class="log-entry-agent">' + esc(shortAgentName(entry.agentKey)) + '</span>: ' +
+    esc(entry.summary);
+  return div;
+}
+
+function isLogAtBottom() {
+  return logEntries.scrollTop + logEntries.clientHeight >= logEntries.scrollHeight - 20;
+}
+
+function appendLogEntry(entry) {
+  const atBottom = isLogAtBottom();
+  const div = renderLogEntry(entry);
+  logEntries.appendChild(div);
+
+  // Cap DOM entries at 500
+  while (logEntries.children.length > 500) {
+    logEntries.removeChild(logEntries.firstChild);
+  }
+
+  if (atBottom) {
+    logEntries.scrollTop = logEntries.scrollHeight;
+  }
+}
+
+async function loadEventLog() {
+  try {
+    const res = await fetch('/api/event-log?limit=200');
+    if (!res.ok) return;
+    const data = await res.json();
+    const entries = data.entries || [];
+    logEntries.innerHTML = '';
+    for (const entry of entries) {
+      logEntries.appendChild(renderLogEntry(entry));
+    }
+    // Scroll to bottom initially
+    logEntries.scrollTop = logEntries.scrollHeight;
+    if (entries.length < 200) logReachedStart = true;
+  } catch { /* ignore */ }
+}
+
+async function loadOlderEntries() {
+  if (logReachedStart || logLoadingOlder) return;
+  const firstEntry = logEntries.querySelector('.log-entry');
+  if (!firstEntry) return;
+  const beforeId = firstEntry.dataset.id;
+  if (!beforeId) return;
+
+  logLoadingOlder = true;
+  try {
+    const res = await fetch('/api/event-log?before=' + beforeId + '&limit=50');
+    if (!res.ok) return;
+    const data = await res.json();
+    const entries = data.entries || [];
+    if (entries.length < 50) logReachedStart = true;
+    if (entries.length === 0) return;
+
+    // Preserve scroll position
+    const prevHeight = logEntries.scrollHeight;
+    const prevTop = logEntries.scrollTop;
+
+    for (let i = entries.length - 1; i >= 0; i--) {
+      logEntries.insertBefore(renderLogEntry(entries[i]), logEntries.firstChild);
+    }
+
+    logEntries.scrollTop = prevTop + (logEntries.scrollHeight - prevHeight);
+  } catch { /* ignore */ } finally {
+    logLoadingOlder = false;
+  }
+}
+
+// Infinite scroll — load older when scrolled to top
+logEntries.addEventListener('scroll', () => {
+  if (logEntries.scrollTop < 40) {
+    loadOlderEntries();
+  }
+});
+
+// Collapse/expand toggle
+function initSidebarState() {
+  const collapsed = localStorage.getItem('event-log-collapsed') === '1';
+  if (collapsed) {
+    logSidebar.classList.add('collapsed');
+    logToggle.innerHTML = '&#x25B6;';
+  } else {
+    document.body.classList.add('event-log-open');
+  }
+}
+
+logToggle.addEventListener('click', () => {
+  const isCollapsed = logSidebar.classList.toggle('collapsed');
+  logToggle.innerHTML = isCollapsed ? '&#x25B6;' : '&#x25C0;';
+  document.body.classList.toggle('event-log-open', !isCollapsed);
+  localStorage.setItem('event-log-collapsed', isCollapsed ? '1' : '0');
+});
+
+initSidebarState();
+loadEventLog();
 
 // --- Agent card rendering ---
 function renderCard(agent) {
@@ -1336,6 +1540,13 @@ function connect() {
 
         case 'work:completed': {
           // Already handled by coins:earned for HUD, but can show agent card update
+          break;
+        }
+
+        case 'log:entry': {
+          if (msg.entry) {
+            appendLogEntry(msg.entry);
+          }
           break;
         }
 

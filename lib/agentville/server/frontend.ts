@@ -777,6 +777,7 @@ const SHOP_CATEGORIES = [
 let shopActiveTab = 'desk';
 
 async function openShop() {
+  if (window.__av) window.__av.collectAllStacks();
   const panel = document.getElementById('shop-panel');
   const backdrop = document.getElementById('shop-backdrop');
   panel.classList.add('open');
@@ -887,6 +888,7 @@ function renderShopItems() {
 let placementItem = null;
 
 async function openInventory() {
+  if (window.__av) window.__av.collectAllStacks();
   const panel = document.getElementById('inv-panel');
   const backdrop = document.getElementById('inv-backdrop');
   panel.classList.add('open');
@@ -1202,6 +1204,29 @@ async function startLegacyWorld(prefetched) {
   window.__av = mv;
   resizeEffectsOverlay();
 
+  // Coin stack fly-to target: HUD coins element position in canvas-space
+  const hudCoinsEl = document.getElementById('hud-coins');
+  if (hudCoinsEl) {
+    const hudRect = hudCoinsEl.getBoundingClientRect();
+    const canvasRect = container.getBoundingClientRect();
+    const scale = mv.getScale();
+    mv.setCoinCollectTarget(
+      (hudRect.left - canvasRect.left) / scale,
+      (hudRect.top - canvasRect.top) / scale,
+    );
+  }
+
+  // Auto-collect coin stacks on any user interaction
+  document.addEventListener('click', () => {
+    if (window.__av) window.__av.collectAllStacks();
+  });
+
+  // Optional: visual feedback when stacks are collected
+  mv.onCoinCollect(() => {
+    // Balance is already correct — this is just visual closure
+    // Could add a sparkle or pulse at HUD here in the future
+  });
+
   mv.addLayer({ order: 5, render: (ctx) => props.renderBelow(ctx) });
   mv.addLayer({ order: 15, render: (ctx) => props.renderAbove(ctx) });
 
@@ -1280,6 +1305,10 @@ function connect() {
             }
             // Update HUD
             updateHudCoins(total, true);
+            // Visual coin stack on agent desk
+            if (window.__av && p.agentKey && earned > 0) {
+              window.__av.earnCoinVisual(p.agentKey, earned);
+            }
             // Track for coins/hr
             earningsHistory.push({ coins: earned, time: Date.now() });
             if (earningsHistory.length > 200) earningsHistory = earningsHistory.slice(-100);

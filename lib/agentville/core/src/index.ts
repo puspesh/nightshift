@@ -492,6 +492,11 @@ export class Agentville {
     return this.config.worldBasePath ?? `worlds/${this.config.world}`;
   }
 
+  /** Get the configured canvas scale factor */
+  getScale(): number {
+    return this.config.scale ?? 2;
+  }
+
   /** Add visual coin stack near an agent's desk. Stack is purely cosmetic — wallet is already credited. */
   earnCoinVisual(agentId: string, amount: number): void {
     const citizen = this.citizens.find(r => r.agentId === agentId);

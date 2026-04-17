@@ -921,6 +921,7 @@ export class AgentvilleServer {
               desk_dual_monitor: 'desk_corner_left',
               desk_standing: 'desk_corner_right',
               desk_corner_office: 'desk_corner_left',
+              wall_clock_basic: 'wall_clock',
             };
             for (const prop of inventoryProps) {
               if (!propImages[prop.id]) {
@@ -935,6 +936,11 @@ export class AgentvilleServer {
               }
             }
           }
+        }
+
+        // Include timezone from game state for clock rendering
+        if (this.gameState?.stats?.timezone) {
+          (worldData as any).timezone = this.gameState.stats.timezone;
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });

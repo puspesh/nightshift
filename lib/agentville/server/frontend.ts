@@ -1205,6 +1205,47 @@ async function startLegacyWorld(prefetched) {
   mv.addLayer({ order: 5, render: (ctx) => props.renderBelow(ctx) });
   mv.addLayer({ order: 15, render: (ctx) => props.renderAbove(ctx) });
 
+  // --- Wall clock live time overlay (order 16, above all props) ---
+  {
+    // Inline from lib/agentville/clock.ts — keep in sync
+    function formatClockTime(timezone, now) {
+      const date = now || new Date();
+      return date.toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', hour12: false,
+        timeZone: timezone,
+      });
+    }
+
+    const worldTimezone = worldData.timezone;
+    const clockProp = (worldData.props || []).find(p => p.catalogId === 'wall_clock_basic');
+
+    if (clockProp && worldTimezone) {
+      let cachedTime = '';
+      let lastMinute = -1;
+
+      mv.addLayer({
+        order: 16,
+        render(ctx) {
+          const now = new Date();
+          const minute = now.getMinutes();
+          if (minute !== lastMinute) {
+            cachedTime = formatClockTime(worldTimezone, now);
+            lastMinute = minute;
+          }
+          ctx.save();
+          ctx.font = '5px monospace';
+          ctx.fillStyle = '#1a1a2e';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const cx = (clockProp.x + (clockProp.w || 1) / 2) * tileSize;
+          const cy = (clockProp.y + (clockProp.h || 1) / 2) * tileSize;
+          ctx.fillText(cachedTime, cx, cy);
+          ctx.restore();
+        },
+      });
+    }
+  }
+
   mv.on('citizen:click', (data) => {
     tooltip.style.display = 'block';
     tooltip.querySelector('.name').textContent = data.name;

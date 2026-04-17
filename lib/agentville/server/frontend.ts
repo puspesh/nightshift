@@ -843,14 +843,18 @@ function initSidebarState() {
   const collapsed = localStorage.getItem('event-log-collapsed') === '1';
   if (collapsed) {
     logSidebar.classList.add('collapsed');
+    logSidebar.classList.remove('expanded');
     logToggle.innerHTML = '&#x25B6;';
   } else {
+    logSidebar.classList.add('expanded');
+    logSidebar.classList.remove('collapsed');
     document.body.classList.add('event-log-open');
   }
 }
 
 logToggle.addEventListener('click', () => {
   const isCollapsed = logSidebar.classList.toggle('collapsed');
+  logSidebar.classList.toggle('expanded', !isCollapsed);
   logToggle.innerHTML = isCollapsed ? '&#x25B6;' : '&#x25C0;';
   document.body.classList.toggle('event-log-open', !isCollapsed);
   localStorage.setItem('event-log-collapsed', isCollapsed ? '1' : '0');

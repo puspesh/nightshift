@@ -920,3 +920,51 @@ test('auto-scrolls to bottom when already at bottom', async ({ page }) => {
     await expect(lastEntry).toContainText('final scroll event');
   }).toPass({ timeout: 3000 });
 });
+
+test('scroll position preserved on new event when scrolled up', async ({ page }) => {
+  // Post enough events to make sidebar scrollable
+  for (let i = 0; i < 30; i++) {
+    await postEvent(serverPort, {
+      type: 'work:completed',
+      source: SOURCE,
+      agent: 'scroll-agent',
+      data: { description: `preserve scroll task ${i}` },
+    });
+  }
+
+  await page.goto(`http://localhost:${serverPort}`);
+  await expect(page.locator('#connection-status')).toHaveText('Connected', { timeout: 5000 });
+
+  // Wait for entries to appear
+  await expect(async () => {
+    const count = await page.locator('#event-log-entries .log-entry').count();
+    expect(count).toBeGreaterThanOrEqual(30);
+  }).toPass({ timeout: 5000 });
+
+  // Scroll to top (away from bottom)
+  await page.evaluate(() => {
+    document.getElementById('event-log-entries')!.scrollTop = 0;
+  });
+
+  const scrollBefore = await page.evaluate(() =>
+    document.getElementById('event-log-entries')!.scrollTop
+  );
+
+  // Post a new event while scrolled up
+  await postEvent(serverPort, {
+    type: 'work:completed',
+    source: SOURCE,
+    agent: 'scroll-agent',
+    data: { description: 'should not auto-scroll' },
+  });
+
+  // Wait for the event to arrive via WebSocket
+  await page.waitForTimeout(1000);
+
+  const scrollAfter = await page.evaluate(() =>
+    document.getElementById('event-log-entries')!.scrollTop
+  );
+
+  // Scroll position should be preserved (not jumped to bottom)
+  expect(scrollAfter).toBe(scrollBefore);
+});

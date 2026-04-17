@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AgentStore } from './store.js';
 import { EventLog, type WorldEvent } from './events.js';
-import { EventLogPersistence, isSignificant, formatSummary } from './event-log-persistence.js';
+import { EventLogPersistence, isSignificant, formatSummary, type LogEntry } from './event-log-persistence.js';
 import { getFrontendHtml } from './frontend.js';
 import type { AgentvilleWorld } from '../schema.js';
 import type { AgentvilleEvent } from '../event-types.js';
@@ -151,7 +151,10 @@ export class AgentvilleServer {
   }
 
   /** Send a targeted event notification to all connected WebSocket clients. */
-  private broadcastWs(message: Record<string, unknown>): void {
+  private broadcastWs(message:
+    | { type: string; payload: Record<string, unknown>; timestamp: number }
+    | { type: 'log:entry'; entry: LogEntry }
+  ): void {
     const msg = JSON.stringify(message);
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);

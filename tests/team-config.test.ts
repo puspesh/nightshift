@@ -278,14 +278,14 @@ describe('presets/dev/team.yaml', () => {
     assert.equal(result.valid, true, `Validation errors: ${result.errors.map(e => e.message).join(', ')}`);
   });
 
-  it('has 11 stages defined in team.yaml', () => {
+  it('has 12 stages defined in team.yaml', () => {
     const config = parseTeamConfig(join(PRESETS_DIR, 'dev', 'team.yaml'));
-    assert.equal(config.stages.length, 11);
+    assert.equal(config.stages.length, 12);
 
     const expectedStages = [
       'planning', 'plan-review', 'plan-revising', 'approved',
       'code-review', 'code-revising', 'testing', 'ready-to-merge',
-      'wip', 'blocked', 'needs-info',
+      'wip', 'blocked', 'needs-info', 'rebase-needed',
     ];
     const actual = config.stages.map(s => s.name);
     assert.deepEqual(actual, expectedStages);
@@ -297,7 +297,7 @@ describe('presets/dev/team.yaml', () => {
       'planning': '1d76db', 'plan-review': '5319e7', 'plan-revising': 'fbca04',
       'approved': '0e8a16', 'code-review': '5319e7', 'code-revising': 'fbca04',
       'testing': '1d76db', 'ready-to-merge': '0e8a16',
-      'wip': 'ededed', 'blocked': 'd93f0b', 'needs-info': 'd93f0b',
+      'wip': 'ededed', 'blocked': 'd93f0b', 'needs-info': 'd93f0b', 'rebase-needed': 'c2e0c6',
     };
     for (const stage of config.stages) {
       assert.equal(stage.color, colorMap[stage.name], `Color mismatch for stage "${stage.name}"`);
@@ -328,6 +328,6 @@ describe('presets/dev/team.yaml', () => {
   it('label extraction produces correct count from team.yaml stages', () => {
     const config = parseTeamConfig(join(PRESETS_DIR, 'dev', 'team.yaml'));
     const labels = getLabelsFromConfig(config);
-    assert.equal(labels.length, 11); // one label per stage
+    assert.equal(labels.length, 12); // one label per stage
   });
 });

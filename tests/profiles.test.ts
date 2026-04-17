@@ -128,6 +128,21 @@ describe('lock file paths', () => {
   }
 });
 
+describe('cost tracking breadcrumb', () => {
+  const workerAgents = templates.filter(
+    (p) => !p.name.includes('producer')
+  );
+
+  for (const p of workerAgents) {
+    it(`${p.name} writes last-issue breadcrumb during claim`, () => {
+      assert.ok(
+        p.content.includes('last-issue/{{agent_name}}') || p.content.includes('last-issue/${AGENT_NAME}'),
+        `${p.name} should write a last-issue breadcrumb for cost tracking`
+      );
+    });
+  }
+});
+
 describe('branch naming', () => {
   const agentsWithWorktrees = templates.filter(
     (p) => !p.name.includes('producer')

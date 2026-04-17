@@ -35,6 +35,37 @@ lsof -iTCP:<port> -sTCP:LISTEN -t
 | API server | `TODO` |
 | Frontend dev server | `TODO` |
 
+## Screenshot Guidelines (UI / E2E)
+
+When running browser-based tests (Playwright, Cypress, etc.), always capture screenshots for visual validation.
+
+**Playwright**:
+```bash
+# Take a screenshot in a test or ad-hoc script
+npx playwright screenshot --browser chromium <url> /tmp/ns-screenshots-<issue>/page.png
+
+# In test code, use page.screenshot():
+#   await page.screenshot({ path: '/tmp/ns-screenshots-<issue>/step-name.png', fullPage: true });
+```
+
+**Cypress**:
+```bash
+# Cypress saves screenshots on failure by default to cypress/screenshots/
+# For explicit captures in test code:
+#   cy.screenshot('step-name')
+
+# Copy to the standard location after the run:
+cp cypress/screenshots/**/*.png /tmp/ns-screenshots-<issue>/
+```
+
+**What to capture**:
+- The main happy-path flow (1-3 screenshots covering the feature)
+- Any error/edge-case states the tests exercise
+- For bug fixes: the corrected behavior
+- Full-page screenshots preferred (`fullPage: true`) so the user can see the complete layout
+
+All screenshots go to `/tmp/ns-screenshots-<issue>/` and are uploaded to the GitHub issue in step 5 of the tester pipeline.
+
 ## Diagnostic Procedures
 
 When tests fail:

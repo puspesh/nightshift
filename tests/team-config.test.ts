@@ -263,68 +263,6 @@ describe('expandAgentInstances', () => {
   });
 });
 
-// --- Integration tests: presets/content/team.yaml ---
-
-describe('presets/content/team.yaml', () => {
-  it('parses without errors', () => {
-    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
-    assert.equal(config.name, 'content');
-    assert.equal(config.description, 'Content creation pipeline');
-  });
-
-  it('validates with zero errors', () => {
-    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
-    const result = validateTeamConfig(config);
-    assert.equal(result.valid, true, `Validation errors: ${result.errors.map(e => e.message).join(', ')}`);
-  });
-
-  it('has required wip stage with meta', () => {
-    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
-    const wipStage = config.stages.find(s => s.name === 'wip');
-    assert.ok(wipStage, 'wip stage should exist');
-    assert.equal(wipStage.meta, true, 'wip stage should have meta: true');
-  });
-
-  it('has all 4 agents', () => {
-    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
-    const roles = getAgentRoles(config);
-    assert.deepEqual(roles, ['producer', 'researcher', 'writer', 'reviewer']);
-  });
-
-  it('agent watches reference valid stages', () => {
-    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
-    const stageNames = config.stages.map(s => s.name);
-    for (const [role, agent] of Object.entries(config.agents)) {
-      for (const watch of agent.watches) {
-        assert.ok(
-          watch === 'unlabeled' || stageNames.includes(watch),
-          `Agent "${role}" watches unknown stage "${watch}"`,
-        );
-      }
-    }
-  });
-
-  it('agent transitions reference valid stages', () => {
-    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
-    const stageNames = config.stages.map(s => s.name);
-    for (const [role, agent] of Object.entries(config.agents)) {
-      if (agent.transitions) {
-        for (const [action, target] of Object.entries(agent.transitions)) {
-          assert.ok(
-            stageNames.includes(target),
-            `Agent "${role}" transition "${action}" targets unknown stage "${target}"`,
-          );
-        }
-      }
-    }
-  });
-
-  it('has 9 stages', () => {
-    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
-    assert.equal(config.stages.length, 9);
-  });
-});
-
 // --- Integration tests: presets/dev/team.yaml ---
 
 describe('presets/dev/team.yaml', () => {
@@ -340,14 +278,14 @@ describe('presets/dev/team.yaml', () => {
     assert.equal(result.valid, true, `Validation errors: ${result.errors.map(e => e.message).join(', ')}`);
   });
 
-  it('has 11 stages defined in team.yaml', () => {
+  it('has 12 stages defined in team.yaml', () => {
     const config = parseTeamConfig(join(PRESETS_DIR, 'dev', 'team.yaml'));
-    assert.equal(config.stages.length, 11);
+    assert.equal(config.stages.length, 12);
 
     const expectedStages = [
       'planning', 'plan-review', 'plan-revising', 'approved',
       'code-review', 'code-revising', 'testing', 'ready-to-merge',
-      'wip', 'blocked', 'needs-info',
+      'wip', 'blocked', 'needs-info', 'rebase-needed',
     ];
     const actual = config.stages.map(s => s.name);
     assert.deepEqual(actual, expectedStages);
@@ -359,7 +297,7 @@ describe('presets/dev/team.yaml', () => {
       'planning': '1d76db', 'plan-review': '5319e7', 'plan-revising': 'fbca04',
       'approved': '0e8a16', 'code-review': '5319e7', 'code-revising': 'fbca04',
       'testing': '1d76db', 'ready-to-merge': '0e8a16',
-      'wip': 'ededed', 'blocked': 'd93f0b', 'needs-info': 'd93f0b',
+      'wip': 'ededed', 'blocked': 'd93f0b', 'needs-info': 'd93f0b', 'rebase-needed': 'c2e0c6',
     };
     for (const stage of config.stages) {
       assert.equal(stage.color, colorMap[stage.name], `Color mismatch for stage "${stage.name}"`);
@@ -390,6 +328,6 @@ describe('presets/dev/team.yaml', () => {
   it('label extraction produces correct count from team.yaml stages', () => {
     const config = parseTeamConfig(join(PRESETS_DIR, 'dev', 'team.yaml'));
     const labels = getLabelsFromConfig(config);
-    assert.equal(labels.length, 11); // one label per stage
+    assert.equal(labels.length, 12); // one label per stage
   });
 });

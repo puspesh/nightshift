@@ -68,6 +68,7 @@ Pick the oldest issue across both queries. **If NEITHER query returns a result, 
 REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
 gh issue edit <number> --add-label "{{team_name}}:wip"
 echo '{"issue": <number>, "agent": "{{agent_name}}", "started": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > ~/.nightshift/${REPO_NAME}/{{team_name}}/locks/{{agent_name}}.lock
+mkdir -p ~/.nightshift/${REPO_NAME}/{{team_name}}/last-issue && echo <number> > ~/.nightshift/${REPO_NAME}/{{team_name}}/last-issue/{{agent_name}}
 ```
 
 ### 2. Read the issue and checkout branch

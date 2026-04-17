@@ -152,56 +152,6 @@ export function removeExtensionFiles(repoRoot: string, team: string): string[] {
 }
 
 /**
- * Get the path to a team's preset scaffold directory.
- * Takes a resolved presetDir path (not a team name) to support custom
- * --from paths in `ns init`, unlike getPresetAgentsDir/getPresetDefaultsDir
- * which resolve internally via getPresetDir(team).
- */
-export function getPresetScaffoldDir(presetDir: string): string {
-  return join(presetDir, 'scaffold');
-}
-
-/**
- * Copy scaffold files from presets/<team>/scaffold/ to the repo root.
- * Recursively walks the scaffold directory and recreates the directory tree
- * under repoRoot. Skips files that already exist (same pattern as copyExtensionFiles).
- */
-export function copyScaffoldFiles(repoRoot: string, presetDir: string): CopyResult {
-  const scaffoldDir = getPresetScaffoldDir(presetDir);
-  const copied: string[] = [];
-  const skipped: string[] = [];
-
-  if (!existsSync(scaffoldDir)) {
-    return { copied, skipped };
-  }
-
-  const entries = readdirSync(scaffoldDir, { recursive: true, withFileTypes: true });
-
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-
-    // Build the relative path from the scaffold dir
-    // parentPath is available in Node 20.12+; fall back to (entry as any).path
-    const parentPath: string = entry.parentPath ?? (entry as any).path ?? scaffoldDir;
-    const relativePath = join(
-      parentPath.slice(scaffoldDir.length + 1),
-      entry.name,
-    );
-    const targetPath = join(repoRoot, relativePath);
-
-    if (existsSync(targetPath)) {
-      skipped.push(relativePath);
-    } else {
-      mkdirSync(dirname(targetPath), { recursive: true });
-      copyFileSync(join(parentPath, entry.name), targetPath);
-      copied.push(relativePath);
-    }
-  }
-
-  return { copied, skipped };
-}
-
-/**
  * Remove .claude/nightshift/repo.md from the repository.
  */
 export function removeRepoMd(repoRoot: string): boolean {

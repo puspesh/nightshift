@@ -5,12 +5,11 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 import { getTeamDir, getStatusDir } from './worktrees.js';
-import { detectRepoRoot, detectRepoName, detectMainBranch } from './detect.js';
+import { detectRepoRoot, detectRepoName } from './detect.js';
 import { parseTeamConfig, expandAgentInstances } from './team-config.js';
 import type { TeamConfig } from './team-config.js';
 import { getPresetDir } from './copy.js';
-import { startServer, waitForServer, registerAgents, stopServer } from './visualize.js';
-import { generateWorldConfig, mergeWorldConfig } from './world-config.js';
+import { startAgentville, waitForAgentville, registerAgentvilleAgents, stopAgentville } from './agentville.js';
 import { installHooks } from './hooks.js';
 import { loadCitizenConfig, resolveCitizenProps, hexToTmuxStyle } from './citizen-config.js';
 import { resolveAgentConfig, buildRunnerForAgent } from './agent-config.js';
@@ -171,6 +170,10 @@ const AGENT_LOOP_SCRIPT = join(__dirname, '..', 'bin', 'ns-agent-loop.sh');
 /**
  * Set up visualization server, hooks, and world config.
  * Shared between tmux and headless modes.
+ *
+ * The global world.json (copied from base-world.json on first run) is never
+ * overwritten — it persists across starts. Desks/items come from game state
+ * inventory and are merged at serve time by the /api/world endpoint.
  */
 async function setupVisualization(
   team: string, agents: AgentEntry[], repoRoot: string,
@@ -178,52 +181,41 @@ async function setupVisualization(
 ): Promise<string | null> {
   let vizUrl: string | null = null;
   try {
-    const miniverseDir = join(homedir(), '.nightshift', 'miniverse');
-    const teamWorldDir = join(miniverseDir, repoName, team);
+    const vizDataDir = join(homedir(), '.nightshift', 'agentville');
+    const baseWorldDir = join(__dirname, '..', 'worlds', 'agentville');
 
-    // Read base world data for spawn position computation
-    const baseWorldDir = join(__dirname, '..', 'worlds', 'nightshift');
-    let baseWorld: { floor: string[][]; gridCols: number; gridRows: number; props: Array<{ x: number; y: number; w: number; h: number }> } | undefined;
-    const srcBaseWorldPath = join(baseWorldDir, 'base-world.json');
-    if (existsSync(srcBaseWorldPath)) {
-      try {
-        baseWorld = JSON.parse(readFileSync(srcBaseWorldPath, 'utf-8'));
-      } catch { /* fallback to no positions */ }
+    // Copy base world to global location (only if not already present)
+    const globalWorldJson = join(vizDataDir, 'world.json');
+    mkdirSync(vizDataDir, { recursive: true });
+    if (!existsSync(globalWorldJson) && existsSync(join(baseWorldDir, 'base-world.json'))) {
+      execSync(`cp "${join(baseWorldDir, 'base-world.json')}" "${globalWorldJson}"`, { stdio: 'pipe' });
     }
 
-    // Generate dynamic world config (with spawn positions if base world available)
-    const worldConfig = generateWorldConfig(agents, team, citizenOverrides, baseWorld);
-
-    // Copy base world assets to team world dir
-    mkdirSync(teamWorldDir, { recursive: true });
+    // Always sync assets (new versions may have updated sprites/tiles)
     if (existsSync(baseWorldDir)) {
-      execSync(`cp -R "${baseWorldDir}/world_assets" "${baseWorldDir}/base-world.json" "${teamWorldDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
-      execSync(`cp -R "${baseWorldDir}/universal_assets" "${miniverseDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp -R "${baseWorldDir}/world_assets" "${vizDataDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
+      execSync(`cp -R "${baseWorldDir}/universal_assets" "${vizDataDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
-    const baseWorldPath = join(teamWorldDir, 'base-world.json');
-    const merged = mergeWorldConfig(baseWorldPath, worldConfig);
-    writeFileSync(join(teamWorldDir, 'world.json'), JSON.stringify(merged, null, 2) + '\n');
-
-    const coreDir = join(__dirname, 'miniverse', 'core');
-    mkdirSync(join(miniverseDir, '..', 'core'), { recursive: true });
-    if (existsSync(join(coreDir, 'miniverse-core.js'))) {
-      execSync(`cp "${coreDir}/miniverse-core.js" "${join(miniverseDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
+    const coreDir = join(__dirname, 'agentville', 'core');
+    mkdirSync(join(vizDataDir, '..', 'core'), { recursive: true });
+    if (existsSync(join(coreDir, 'agentville-core.js'))) {
+      execSync(`cp "${coreDir}/agentville-core.js" "${join(vizDataDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
     }
 
-    stopServer();
-    const result = startServer(vizPort, miniverseDir);
+    // Singleton: startAgentville() piggybacks on an existing instance if one is running.
+    const result = startAgentville(vizPort, vizDataDir);
     if (!result) {
       console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
       throw new Error('Server start failed');
     }
-    const healthy = await waitForServer(result.url, 10000);
+    const healthy = await waitForAgentville(result.url, 10000);
     if (!healthy) {
       console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
       throw new Error('Server health check failed');
     }
 
-    await registerAgents(result.url, agents, team, citizenOverrides);
+    await registerAgentvilleAgents(result.url, agents, team, citizenOverrides);
     vizUrl = result.url;
 
     installHooks(repoName, team, agents, result.url);
@@ -297,7 +289,9 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   const vizUrl = await setupVisualization(team, agents, repoRoot, repoName, citizenOverrides, vizPort);
 
   const statusDir = getStatusDir(repoName, team);
-  const logDir = join(getTeamDir(repoName, team), 'logs');
+  const teamDir = getTeamDir(repoName, team);
+  const logDir = join(teamDir, 'logs');
+  const costsFile = join(teamDir, 'costs.jsonl');
   mkdirSync(logDir, { recursive: true });
 
   for (const agent of agents) {
@@ -305,11 +299,12 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
     const runner = buildRunnerForAgent(baseRunner, config, agent.agent);
     const statusFile = join(statusDir, agent.role);
     const logFile = join(logDir, `${agent.role}.log`);
-    const logFd = openSync(logFile, 'a');
+    const logFd = openSync(logFile, 'w');
 
     const child = spawn('bash', [
       AGENT_LOOP_SCRIPT, agent.cwd,
       String(LOOP_INTERVAL), runner, statusFile, PIPELINE_PROMPT,
+      costsFile, agent.agent,
     ], {
       detached: true,
       stdio: ['ignore', logFd, logFd],
@@ -323,13 +318,18 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
   }
 
   // Print summary
-  console.log(chalk.bold(`
-       _       __    __       __    _ ______
- ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
-/ _ \\/ / __ \`/ __ \\/ __/ ___/ __ \\/ / /_/ __/
-/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
-/_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
-        /____/`));
+  const banner = [
+    '███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗███████╗██╗  ██╗██╗███████╗████████╗',
+    '████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝██╔════╝██║  ██║██║██╔════╝╚══██╔══╝',
+    '██╔██╗ ██║██║██║  ███╗███████║   ██║   ███████╗███████║██║█████╗     ██║   ',
+    '██║╚██╗██║██║██║   ██║██╔══██║   ██║   ╚════██║██╔══██║██║██╔══╝     ██║   ',
+    '██║ ╚████║██║╚██████╔╝██║  ██║   ██║   ███████║██║  ██║██║██║        ██║   ',
+    '╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ',
+  ];
+  console.log('');
+  for (const line of banner) {
+    console.log(chalk.bold(`  ${line}`));
+  }
   console.log(chalk.dim(`  Started ${agents.length} agents in headless mode`));
   console.log(chalk.dim(`  Runner: ${baseRunner}`));
   if (vizUrl) {
@@ -481,13 +481,18 @@ export async function startSession(team: string, options?: StartOptions): Promis
   }
 
   // Print info
-  console.log(chalk.bold(`
-       _       __    __       __    _ ______
- ___  (_)___ _/ /_  / /______/ /_  (_) __/ /_
-/ _ \\/ / __ \`/ __ \\/ __/ ___/ __ \\/ / /_/ __/
-/ / / / / /_/ / / / / /_(__  ) / / / / __/ /_
-/_/ /_/_/\\__, /_/ /_/\\__/____/_/ /_/_/_/  \\__/
-        /____/`));
+  const banner = [
+    '███╗   ██╗██╗ ██████╗ ██╗  ██╗████████╗███████╗██╗  ██╗██╗███████╗████████╗',
+    '████╗  ██║██║██╔════╝ ██║  ██║╚══██╔══╝██╔════╝██║  ██║██║██╔════╝╚══██╔══╝',
+    '██╔██╗ ██║██║██║  ███╗███████║   ██║   ███████╗███████║██║█████╗     ██║   ',
+    '██║╚██╗██║██║██║   ██║██╔══██║   ██║   ╚════██║██╔══██║██║██╔══╝     ██║   ',
+    '██║ ╚████║██║╚██████╔╝██║  ██║   ██║   ███████║██║  ██║██║██║        ██║   ',
+    '╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ',
+  ];
+  console.log('');
+  for (const line of banner) {
+    console.log(chalk.bold(`  ${line}`));
+  }
   console.log(chalk.dim(`  Starting ${team} team in tmux session: ${session}`));
   console.log(chalk.dim(`  Runner: ${baseRunner}`));
   if (vizUrl) {
@@ -536,11 +541,11 @@ export function stopSession(team: string): void {
     const sessions = execSync('tmux list-sessions -F "#{session_name}"', { encoding: 'utf-8' });
     const otherSessions = sessions.split('\n').map(s => s.trim()).filter(s => s.startsWith(sessionPrefix) && s !== session);
     if (otherSessions.length === 0) {
-      stopServer();
+      stopAgentville();
     }
   } catch {
     // No tmux server running — safe to stop
-    stopServer();
+    stopAgentville();
   }
 
   try {

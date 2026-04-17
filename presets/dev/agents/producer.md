@@ -198,7 +198,46 @@ For issues labeled `{{team_name}}:ready-to-merge`:
   **Reason**: Reviewer's last code review has unresolved warnings. Sending back for fixes.
   **Next**: @ns-{{team_name}}-coder to address warnings (label: \`{{team_name}}:code-revising\`)"
   ```
-- If clean: post summary comment with PR link and test status
+- If clean: aggregate cost data and post summary comment:
+  ```bash
+  REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\.git$||')")
+  COSTS_FILE="$HOME/.nightshift/${REPO_NAME}/{{team_name}}/costs.jsonl"
+  # Extract all cost entries for this issue (headless mode writes these automatically)
+  if [ -f "$COSTS_FILE" ]; then
+    node -e "
+      const fs = require('fs');
+      const lines = fs.readFileSync(process.argv[1],'utf8').trim().split('\n').filter(Boolean);
+      const entries = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+      const issueEntries = entries.filter(e => e.issue === parseInt(process.argv[2]));
+      if (issueEntries.length === 0) { console.log('NO_COST_DATA'); process.exit(0); }
+      let total_cost = 0, total_dur = 0;
+      const rows = issueEntries.map(e => {
+        total_cost += e.cost_usd || 0;
+        total_dur += e.duration_s || 0;
+        const role = e.agent.replace(/^ns-{{team_name}}-/, '');
+        return '| ' + role + ' | ' + e.duration_s + 's | $' + (e.cost_usd||0).toFixed(4) + ' | ' + e.ts.slice(0,19) + 'Z |';
+      });
+      const mins = Math.floor(total_dur/60);
+      const secs = total_dur % 60;
+      console.log('| Agent | Duration | Cost | Timestamp |');
+      console.log('|-------|----------|------|-----------|');
+      rows.forEach(r => console.log(r));
+      console.log('| **Total** | **' + total_dur + 's (' + mins + 'm ' + secs + 's)** | **$' + total_cost.toFixed(4) + '** | |');
+    " "$COSTS_FILE" "<number>"
+  fi
+  ```
+  Include the cost table in the summary comment. If `NO_COST_DATA` is returned (tmux mode or costs file missing), omit the cost section — do NOT estimate.
+  Post the summary:
+  ```markdown
+  ### @{{agent_name}} -- Issue Complete
+  **Status**: ready-to-merge
+  **PR**: #<pr-number>
+
+  **Pipeline Cost Summary**:
+  <cost table from the script above, or "Cost data not available (non-headless mode)" if none>
+
+  **Next**: Awaiting human merge
+  ```
 - This is the end of the pipeline — a human decides to merge
 
 ### 6. Report and set idle status

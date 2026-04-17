@@ -299,7 +299,7 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
     const runner = buildRunnerForAgent(baseRunner, config, agent.agent);
     const statusFile = join(statusDir, agent.role);
     const logFile = join(logDir, `${agent.role}.log`);
-    const logFd = openSync(logFile, 'a');
+    const logFd = openSync(logFile, 'w');
 
     const child = spawn('bash', [
       AGENT_LOOP_SCRIPT, agent.cwd,

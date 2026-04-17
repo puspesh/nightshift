@@ -41,7 +41,8 @@ while true; do
   CYCLE_START=$(date +%s)
 
   if [ -n "$TRACK_COST" ]; then
-    # Cost tracking mode: capture JSON output, stderr goes to parent log
+    # Cost tracking mode: capture JSON to temp file for cost parsing,
+    # and also extract the human-readable result to stderr (which is the log file).
     CYCLE_OUTPUT=$(mktemp)
     $RUNNER --output-format json -p "$PROMPT" >"$CYCLE_OUTPUT" &
     CHILD_PID=$!
@@ -50,6 +51,20 @@ while true; do
 
     CYCLE_END=$(date +%s)
     DURATION=$(( CYCLE_END - CYCLE_START ))
+
+    # Extract the human-readable result from JSON and write it to stderr (log file).
+    # The JSON has a "result" field with the agent's conversation output.
+    # stderr of this script is wired to the log file by start.ts, so writing
+    # to stderr here lands in the log. stdout is left alone (not the log fd).
+    if [ -f "$CYCLE_OUTPUT" ] && [ -s "$CYCLE_OUTPUT" ]; then
+      node -e "
+        const fs = require('fs');
+        try {
+          const data = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+          if (data.result) process.stderr.write(data.result + '\n');
+        } catch (e) { process.stderr.write('log-extract: ' + e.message + '\n'); }
+      " "$CYCLE_OUTPUT"
+    fi
 
     # Read breadcrumb to get which issue this cycle worked on.
     # Breadcrumb path is deterministic: <team-dir>/last-issue/<agent-name>

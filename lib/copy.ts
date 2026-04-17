@@ -153,6 +153,9 @@ export function removeExtensionFiles(repoRoot: string, team: string): string[] {
 
 /**
  * Get the path to a team's preset scaffold directory.
+ * Takes a resolved presetDir path (not a team name) to support custom
+ * --from paths in `ns init`, unlike getPresetAgentsDir/getPresetDefaultsDir
+ * which resolve internally via getPresetDir(team).
  */
 export function getPresetScaffoldDir(presetDir: string): string {
   return join(presetDir, 'scaffold');

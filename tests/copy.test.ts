@@ -16,7 +16,6 @@ import {
   removeRepoMd,
   getPresetDefaultsDir,
   copyScaffoldFiles,
-  getPresetDir,
 } from '../lib/copy.js';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';

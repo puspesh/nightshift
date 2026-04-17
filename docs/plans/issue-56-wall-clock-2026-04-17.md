@@ -2,7 +2,7 @@
 
 > Issue: #56
 > Date: 2026-04-17
-> Status: draft
+> Status: revised
 
 ## Overview
 
@@ -10,19 +10,20 @@ Add a `wall_clock_basic` decoration to the Agentville starting world that displa
 
 ## Requirements
 
-- New catalog item: `wall_clock_basic` (type: `decoration`, price: 0, not listed in shop)
+- New catalog item: `wall_clock_basic` (type: `decoration`, price: 0, `hidden: true` — excluded from shop)
+- Add `hidden` boolean field to `CatalogItem` interface to support bundled-only items
 - Bundled into starting world inventory via `bootstrapWorld()`
-- Placed on a wall in the starting room at a sensible default position
+- Placed on a wall in the starting room at a sensible default position (y: 1, lower wall row)
 - Prop renders live clock face in HH:MM format, updating every minute
 - Uses user's local timezone from `stats.timezone` in world.json
 - Un-placing keeps it in inventory; re-placing works like any decoration
 
 ## Architecture Changes
 
-- **`lib/agentville/catalog.ts`** — Add `wall_clock_basic` catalog entry
-- **`lib/agentville/persistence.ts`** — Add clock to `bootstrapWorld()` starter inventory
-- **`lib/agentville/server/server.ts`** — Pass `stats.timezone` in world API response; handle clock prop rendering hint
-- **`lib/agentville/server/frontend.ts`** — Add canvas-drawn clock overlay for `wall_clock_basic` props (live time rendering)
+- **`lib/agentville/catalog.ts`** — Add `hidden` field to `CatalogItem` interface; add `wall_clock_basic` catalog entry with `hidden: true`
+- **`lib/agentville/server/server.ts`** — Update shop API endpoints (`/api/catalog`, `/api/catalog/:type`) to filter out `hidden` items; include `timezone` in `/api/world` response
+- **`lib/agentville/persistence.ts`** — Add clock to `bootstrapWorld()` starter inventory at position `(10, 1)`
+- **`lib/agentville/server/frontend.ts`** — Add canvas-drawn clock overlay for `wall_clock_basic` props (live time rendering) using shared `formatClockTime` logic at render layer order 16
 
 ## Implementation Steps
 
@@ -31,26 +32,31 @@ Add a `wall_clock_basic` decoration to the Agentville starting world that displa
 #### Tests First
 - **Test file**: `tests/agentville-catalog.test.ts` (new)
 - **Test cases**:
-  - `wall_clock_basic exists in catalog`: assert `getCatalogItem('wall_clock_basic')` returns a decoration with price 0, w: 1, h: 1
-  - `wall_clock_basic is not listed in shop`: assert `getCatalogByType('decoration')` includes it but its price is 0 (shop UI filters by price > 0)
+  - `wall_clock_basic exists in catalog`: assert `getCatalogItem('wall_clock_basic')` returns a decoration with price 0, w: 1, h: 1, `hidden: true`
+  - `wall_clock_basic excluded from shop results`: assert `getShopCatalog('decoration')` (or equivalent filtered call) does NOT include `wall_clock_basic` — hidden items must be filtered out
+  - `non-hidden items still appear in shop`: assert `getShopCatalog('decoration')` includes at least one non-hidden decoration (sanity check the filter doesn't exclude everything)
   - `wall_clock_basic has no multiplierBonus`: assert multiplierBonus is 0 (a free starter item shouldn't boost earnings)
 
 - **Test file**: `tests/agentville-persistence.test.ts` (existing)
 - **Test cases**:
   - `bootstrapWorld includes wall_clock_basic in inventory`: assert inventory contains an item with `catalogId: 'wall_clock_basic'`, `type: 'decoration'`, `placed: true`
-  - `bootstrapWorld places clock on north wall`: assert `placedAt` is `{ roomId: 'room_0', x: 10, y: 0 }` (top wall, right of center)
+  - `bootstrapWorld places clock on wall row`: assert `placedAt` is `{ roomId: 'room_0', x: 10, y: 1 }` (lower wall row, visually centered on wall band)
   - `clock has stable starter ID`: assert clock item id is `'starter_clock_1'` (predictable ID for sprite mapping)
 
 #### Implementation Steps
 
-1. **Add `wall_clock_basic` to catalog** (`lib/agentville/catalog.ts`)
-   - Action: Add entry to `CATALOG` array in the decorations section:
-     ```
-     { catalogId: 'wall_clock_basic', name: 'Wall Clock', type: 'decoration',
-       price: 0, rarity: 'common', multiplierBonus: 0, w: 1, h: 1,
-       description: 'A simple wall clock showing the current time.' }
-     ```
-   - Why: Issue requires `wall_clock_basic` as a decoration type. Price 0 means it won't appear as purchasable in the shop (shop filters `price > 0`). No multiplier bonus — it's a utility decoration, not an earnings booster.
+1. **Add `hidden` field to `CatalogItem` and update shop endpoints** (`lib/agentville/catalog.ts`, `lib/agentville/server/server.ts`)
+   - Action:
+     - In `catalog.ts`, add `hidden?: boolean` to the `CatalogItem` interface.
+     - Add `wall_clock_basic` entry to `CATALOG` array in the decorations section:
+       ```
+       { catalogId: 'wall_clock_basic', name: 'Wall Clock', type: 'decoration',
+         price: 0, rarity: 'common', multiplierBonus: 0, w: 1, h: 1,
+         hidden: true,
+         description: 'A simple wall clock showing the current time.' }
+       ```
+     - In `server.ts`, update both shop API endpoints (`GET /api/catalog` ~line 1199 and `GET /api/catalog/:type` ~line 1210) to filter out hidden items: add `.filter(i => !i.hidden)` to the catalog results before returning them.
+   - Why: The shop API currently returns ALL catalog items with no filtering. Without the `hidden` flag, users would see a free clock in the shop and could "buy" duplicates for 0 coins, violating the "bundled starter only" requirement. The `hidden` field is a generic mechanism — useful for any future bundled/promotional items.
    - Dependencies: none
 
 2. **Add clock to `bootstrapWorld()` starter inventory** (`lib/agentville/persistence.ts`)
@@ -61,10 +67,10 @@ Add a `wall_clock_basic` decoration to the Agentville starting world that displa
        catalogId: 'wall_clock_basic',
        type: 'decoration',
        placed: true,
-       placedAt: { roomId: 'room_0', x: 10, y: 0 },
+       placedAt: { roomId: 'room_0', x: 10, y: 1 },
      }
      ```
-   - Why: The clock must be present in the starting world for new users. Position `(10, 0)` places it on the north wall, roughly centered in the 20-wide room. Using y=0 signals "wall-mounted" — the top row of the room.
+   - Why: The clock must be present in the starting world for new users. Position `(10, 1)` places it on the lower wall row — visually centered on the north wall band rather than at the very top edge (y=0). Both y=0 and y=1 are "main_wall" tiles, but y=1 is more natural for a wall-mounted object.
    - Dependencies: Step 1 (catalog entry must exist for sprite mapping)
 
 ### Phase 2: Live clock rendering (frontend)
@@ -85,26 +91,27 @@ Add a `wall_clock_basic` decoration to the Agentville starting world that displa
 #### Implementation Steps
 
 1. **Extract `formatClockTime` utility** (`lib/agentville/clock.ts` — new file)
-   - Action: Create a small pure function:
+   - Action: Create a small pure function that will be used by BOTH tests and the frontend:
      ```typescript
      export function formatClockTime(timezone: string, now?: Date): string {
        const date = now ?? new Date();
-       const h = date.toLocaleString('en-US', { hour: '2-digit', hour12: false, timeZone: timezone });
-       const m = date.toLocaleString('en-US', { minute: '2-digit', timeZone: timezone });
-       return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+       return date.toLocaleTimeString('en-GB', {
+         hour: '2-digit', minute: '2-digit', hour12: false,
+         timeZone: timezone
+       });
      }
      ```
-   - Why: Isolating time formatting into a pure, testable function keeps the rendering code simple and makes timezone logic independently verifiable.
+   - Why: Single source of truth for time formatting. This function will be inlined into the frontend `<script>` block (Step 4) so the same logic runs client-side. Unit tests validate it server-side, and the frontend uses the identical code path — no divergence between tested and rendered logic.
    - Dependencies: none
 
-2. **Include `timezone` in world API response** (`lib/agentville/server/server.ts`)
-   - Action: In the `GET /api/worlds/agentville` handler (around line 875-938), after merging inventory props into `worldData`, also inject:
+2. **Include `timezone` in `/api/world` response** (`lib/agentville/server/server.ts`)
+   - Action: In the `GET /api/world` handler (~line 875-938), after merging inventory props into `worldData`, inject the timezone:
      ```typescript
      if (this.gameState?.stats?.timezone) {
        (worldData as any).timezone = this.gameState.stats.timezone;
      }
      ```
-   - Why: The frontend needs the user's timezone to render the clock. The world API response is the natural transport — it already carries all data the frontend needs to render the scene.
+   - Why: The frontend needs the user's timezone to render the clock. Note: `timezone` is already available via `/api/game-state` (part of `AgentvilleWorld.stats`), but including it in the world response avoids a separate fetch — the frontend already calls `/api/world` to render the scene. This is a convenience duplication, not a new data source.
    - Dependencies: none
 
 3. **Add clock sprite fallback mapping** (`lib/agentville/server/server.ts`)
@@ -118,26 +125,31 @@ Add a `wall_clock_basic` decoration to the Agentville starting world that displa
 
 4. **Render live clock text overlay on canvas** (`lib/agentville/server/frontend.ts`)
    - Action: In the frontend JavaScript (the inline `<script>` block), after the engine initializes and the world loads:
+     - Inline the `formatClockTime` function (identical to `lib/agentville/clock.ts`) into the `<script>` block so both server tests and client rendering use the same logic
      - Store the `timezone` from the world API response
      - Find the clock prop by `catalogId === 'wall_clock_basic'` in the props array
-     - Add a `RenderLayer` to the renderer (via `engine.addLayer()`) at order 6 (just above props at order 5) that:
-       - Every frame, draws the current HH:MM text centered on the clock prop's tile position
-       - Uses `ctx.fillText()` with a small pixel font
-       - Only recomputes the time string every 60 seconds (cache with minute check)
+     - Add a `RenderLayer` to the renderer (via `engine.addLayer()`) at **order 16** (just above `renderAbove` at order 15) so the clock text renders on top of all prop sprites
+     - Only recompute the time string every 60 seconds (cache with minute check)
      - Approximate rendering code:
        ```javascript
+       // Inline from lib/agentville/clock.ts — keep in sync
+       function formatClockTime(timezone, now) {
+         const date = now || new Date();
+         return date.toLocaleTimeString('en-GB', {
+           hour: '2-digit', minute: '2-digit', hour12: false,
+           timeZone: timezone
+         });
+       }
+
        let cachedTime = '';
        let lastMinute = -1;
        engine.addLayer({
-         order: 6,
+         order: 16,
          render(ctx, delta) {
            const now = new Date();
            const minute = now.getMinutes();
            if (minute !== lastMinute) {
-             cachedTime = new Date().toLocaleTimeString('en-GB', {
-               hour: '2-digit', minute: '2-digit', hour12: false,
-               timeZone: worldTimezone
-             });
+             cachedTime = formatClockTime(worldTimezone, now);
              lastMinute = minute;
            }
            // Draw at clock prop position
@@ -153,8 +165,8 @@ Add a `wall_clock_basic` decoration to the Agentville starting world that displa
          }
        });
        ```
-   - Why: Using the engine's `RenderLayer` system is the existing pattern for adding visual overlays (Scene=0, Props=5, Citizens=10, Particles=20). Order 6 draws just above the prop sprite so the time text appears on the clock face. Caching per-minute avoids unnecessary string allocation every frame.
-   - Dependencies: Steps 2, 3
+   - Why: The actual render layer system uses order 5 (`renderBelow`) and order 15 (`renderAbove`). Using order 16 places the clock text above ALL prop sprites, ensuring it's never visually obscured by furniture. The `formatClockTime` function is inlined from `clock.ts` to maintain a single source of truth — the unit tests validate the same formatting logic that runs in the browser. A comment marks the inline for sync.
+   - Dependencies: Steps 1, 2, 3
 
 5. **Create clock sprite asset** (`worlds/agentville/world_assets/props/wall_clock.png`)
    - Action: Create a 32x32 pixel-art clock face sprite. Simple round clock with frame, tick marks at 12/3/6/9. No hands (the live text replaces analog display). Background should be light/white to contrast with dark time text.
@@ -168,7 +180,7 @@ Add a `wall_clock_basic` decoration to the Agentville starting world that displa
 - **Test cases**:
   - `existing world without clock gets clock added on load`: assert that when `loadWorld()` returns a world missing `wall_clock_basic` in inventory, a migration helper adds it
   - `existing world WITH clock is not duplicated`: assert no duplicate clock items after migration
-  - `migrated clock is placed at default position`: assert placedAt matches the bootstrap default
+  - `migrated clock is placed at default position`: assert placedAt is `{ roomId: 'room_0', x: 10, y: 1 }` matching the bootstrap default
 
 #### Implementation Steps
 
@@ -195,19 +207,50 @@ Add a `wall_clock_basic` decoration to the Agentville starting world that displa
 
 ## Assumptions
 
-1. **Price 0 hides from shop** — I'm assuming the shop UI filters items with `price > 0` so that `wall_clock_basic` doesn't appear as purchasable. If the shop shows all catalog items regardless of price, we may need a `hidden: true` or `bundled: true` flag on the catalog item. **Reviewer should validate shop filtering logic.**
-2. **y=0 is valid wall position** — The starting room grid is 20x11. Placing at `y: 0` puts the clock on the topmost row which represents the "north wall". If the tile map has deadspace at y=0 (some rooms use the first row as a wall boundary), we may need `y: 1` instead. **Reviewer should check base-world.json tile layout.**
+1. ~~**Price 0 hides from shop**~~ **RESOLVED**: Shop API returns all items unfiltered. Plan now adds `hidden: boolean` field to `CatalogItem` and filters hidden items in shop endpoints.
+2. ~~**y=0 is valid wall position**~~ **RESOLVED**: Changed to `y: 1` (lower wall row) — more visually natural for a wall-mounted object, centered on the wall band rather than at the top edge.
 3. **`toLocaleTimeString` available in browser** — The frontend runs in a Chromium browser via Playwright/electron. `toLocaleTimeString` with `timeZone` option is widely supported. No polyfill needed.
 4. **Clock sprite can be basic placeholder** — Since the live rendering draws digital time, the sprite just needs to be a simple clock frame. A more polished sprite can come in a future clock-skins feature (explicitly out of scope per issue).
 5. **No schema version bump needed** — Adding an item to inventory doesn't change the schema structure. The `ensureStarterItems` migration is data-level, not schema-level.
+6. **`formatClockTime` inlined in frontend** — The same function exists in `lib/agentville/clock.ts` (tested server-side) and is copy-inlined into the frontend `<script>` block. A `// keep in sync` comment marks the duplication. If time formatting ever needs updating, both locations must change together.
 
 ## Risks & Mitigations
 
 - **Risk**: Existing users with custom inventory layouts may get a clock placed at a position that overlaps other items.
-  - Mitigation: The `ensureStarterItems` migration places the clock at `(10, 0)` — a wall position unlikely to conflict with floor-placed items. If overlap occurs, users can un-place and re-place it.
+  - Mitigation: The `ensureStarterItems` migration places the clock at `(10, 1)` — a wall position unlikely to conflict with floor-placed items. If overlap occurs, users can un-place and re-place it.
 
 - **Risk**: `toLocaleTimeString` timezone formatting inconsistencies across environments (Node.js SSR vs browser).
-  - Mitigation: The clock only renders client-side in the canvas. The `formatClockTime` utility (tested with known timestamps and timezones) is a safety net if we ever need server-side time.
+  - Mitigation: The `formatClockTime` function is tested server-side in `clock.test.ts` and inlined identically in the frontend. Both use the same `toLocaleTimeString('en-GB', ...)` call. If a divergence is found, the unit tests catch it at the logic level and E2E tests catch rendering issues.
 
 - **Risk**: The 5px monospace font may be illegible at certain zoom levels or canvas scales.
   - Mitigation: Font size is expressed in canvas (non-scaled) pixels. At the default 2x scale, 5px canvas = 10px screen — legible for HH:MM. Can be tuned during implementation.
+
+- **Risk**: `formatClockTime` duplication between `clock.ts` and frontend inline may drift.
+  - Mitigation: Comment in frontend marks the inline as `// keep in sync with lib/agentville/clock.ts`. The function is trivial (3 lines). If it grows complex, refactor to a shared module in a follow-up.
+
+## Revision Notes
+
+**Revision 1** (2026-04-17) — Addressing reviewer feedback from @ns-dev-reviewer.
+
+### CRITICAL — Shop filtering (fixed)
+
+- **Problem**: Plan assumed shop filters `price > 0`. Reviewer verified shop API (`/api/catalog`, `/api/catalog/:type`) returns ALL catalog items with no filtering. Users would see a free clock in the shop and buy duplicates.
+- **Fix**: Added `hidden?: boolean` field to `CatalogItem` interface. Set `hidden: true` on `wall_clock_basic`. Updated Phase 1 Step 1 to modify both `catalog.ts` (schema + entry) and `server.ts` (shop endpoint filtering). Updated tests to assert hidden items are excluded from shop results.
+
+### WARNING — Render layer ordering (fixed)
+
+- **Problem**: Plan stated layer ordering as "Scene=0, Props=5, Citizens=10, Particles=20" and proposed order 6 for the clock. Actual codebase uses only two layers: order 5 (`renderBelow`) and order 15 (`renderAbove`). Order 6 would place clock text between the two prop layers, potentially behind furniture sprites.
+- **Fix**: Changed clock layer to **order 16** (above `renderAbove` at 15). Updated Phase 2 Step 4 with correct layer values and reasoning.
+
+### WARNING — Unused `formatClockTime` utility (fixed)
+
+- **Problem**: Phase 2 created `formatClockTime()` server-side in `clock.ts` but the frontend used different inline formatting code via `toLocaleTimeString`. The utility was dead code — tests passed but didn't validate actual rendering behavior.
+- **Fix**: Frontend now inlines the identical `formatClockTime` function from `clock.ts` into the `<script>` block. Both use `toLocaleTimeString('en-GB', ...)` with the same options. A `// keep in sync` comment marks the duplication. Added this as a new risk with mitigation.
+
+### SUGGESTION — Timezone source (noted)
+
+- Noted that `timezone` is already available via `/api/game-state`. Plan retains the `/api/world` injection for ergonomics (avoids a separate fetch), with a comment documenting the existing source.
+
+### SUGGESTION — Clock position y: 1 (adopted)
+
+- Changed placement from `y: 0` to `y: 1` — the lower wall row is more visually natural for a wall-mounted object.

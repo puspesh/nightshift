@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, statSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -177,6 +177,55 @@ describe('formatSummary', () => {
   it('returns type for unknown event types', () => {
     const result = formatSummary('unknown:type', 'nightshift/coder', {});
     assert.equal(result, 'unknown:type');
+  });
+});
+
+describe('In-memory buffer', () => {
+  it('loadRecent serves from memory without re-reading disk', () => {
+    const log = new EventLogPersistence(tmp);
+    for (let i = 1; i <= 10; i++) {
+      log.append({ timestamp: i * 100, agentKey: `a${i}`, type: 'work:completed', summary: `s${i}` });
+    }
+
+    // Delete the file to prove loadRecent uses the buffer, not disk
+    unlinkSync(join(tmp, 'events.log'));
+
+    const recent = log.loadRecent(5);
+    assert.equal(recent.length, 5);
+    assert.equal(recent[0].id, 6);
+    assert.equal(recent[4].id, 10);
+  });
+
+  it('buffer is seeded from existing file on construction', () => {
+    const log1 = new EventLogPersistence(tmp);
+    for (let i = 1; i <= 5; i++) {
+      log1.append({ timestamp: i * 100, agentKey: `a${i}`, type: 'work:completed', summary: `s${i}` });
+    }
+
+    // New instance should have the buffer seeded from disk
+    const log2 = new EventLogPersistence(tmp);
+    // Delete file to prove it uses the buffer
+    unlinkSync(join(tmp, 'events.log'));
+
+    const recent = log2.loadRecent(3);
+    assert.equal(recent.length, 3);
+    assert.equal(recent[0].id, 3);
+    assert.equal(recent[2].id, 5);
+  });
+
+  it('loadBefore uses buffer when it has enough entries', () => {
+    const log = new EventLogPersistence(tmp);
+    for (let i = 1; i <= 20; i++) {
+      log.append({ timestamp: i * 100, agentKey: `a${i}`, type: 'work:completed', summary: `s${i}` });
+    }
+
+    // Delete file to prove loadBefore can use the buffer
+    unlinkSync(join(tmp, 'events.log'));
+
+    const entries = log.loadBefore(15, 5);
+    assert.equal(entries.length, 5);
+    assert.equal(entries[0].id, 10);
+    assert.equal(entries[4].id, 14);
   });
 });
 

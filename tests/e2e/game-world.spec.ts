@@ -968,3 +968,27 @@ test('scroll position preserved on new event when scrolled up', async ({ page })
   // Scroll position should be preserved (not jumped to bottom)
   expect(scrollAfter).toBe(scrollBefore);
 });
+
+test('coins:earned drop events appear in event log', async ({ page }) => {
+  // Post enough work:completed events to virtually guarantee at least one drop (10% chance each)
+  for (let i = 0; i < 80; i++) {
+    await postEvent(serverPort, {
+      type: 'work:completed',
+      source: SOURCE,
+      agent: 'drop-tester',
+      data: { description: `drop test task ${i}`, workType: 'pr_merged' },
+    });
+  }
+
+  // Check /api/event-log for coins:earned entries
+  const res = await fetch(`http://localhost:${serverPort}/api/event-log?limit=500`);
+  const json = await res.json() as { entries: Array<{ type: string; summary: string }> };
+  const dropEntries = json.entries.filter((e: { type: string }) => e.type === 'coins:earned');
+
+  // With 80 events at 10% drop chance, probability of zero drops is 0.9^80 ≈ 0.02%
+  expect(dropEntries.length).toBeGreaterThan(0);
+
+  // Verify drop entry has the expected summary format
+  const firstDrop = dropEntries[0];
+  expect(firstDrop.summary).toMatch(/^drop — /);
+});

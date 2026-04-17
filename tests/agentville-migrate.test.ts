@@ -78,8 +78,8 @@ describe('migrateFromMiniverse', () => {
     assert.ok(result);
     assert.equal(result!.inventory.length, 3);
     assert.equal(result!.inventory[0].catalogId, 'desk_basic');
-    assert.equal(result!.inventory[2].catalogId, 'wall_clock_basic');
     assert.equal(result!.inventory[1].catalogId, 'desk_basic');
+    assert.equal(result!.inventory[2].catalogId, 'wall_clock_basic');
     assert.equal(result!.inventory[0].placed, true);
     assert.equal(result!.inventory[1].placed, true);
   });

@@ -524,7 +524,28 @@ test('citizens maintain separation — no tile overlap with 6 agents', async ({ 
 });
 
 // ---------------------------------------------------------------------------
-// Shop UI (tests 10–11)
+// World API integration (tests 10–11)
+// ---------------------------------------------------------------------------
+
+test('world API includes wall_clock_basic in props', async () => {
+  const res = await fetch(`http://localhost:${serverPort}/api/world`);
+  expect(res.ok).toBe(true);
+  const data = await res.json();
+  const clockProp = data.props?.find((p: any) => p.catalogId === 'wall_clock_basic');
+  expect(clockProp).toBeDefined();
+  expect(clockProp.x).toBe(10);
+  expect(clockProp.y).toBe(1);
+});
+
+test('world API includes timezone from game state', async () => {
+  const res = await fetch(`http://localhost:${serverPort}/api/world`);
+  expect(res.ok).toBe(true);
+  const data = await res.json();
+  expect(data.timezone).toBe('UTC');
+});
+
+// ---------------------------------------------------------------------------
+// Shop UI (tests 12–13)
 // ---------------------------------------------------------------------------
 
 test('shop panel opens with catalog and shows correct items', async ({ page }) => {

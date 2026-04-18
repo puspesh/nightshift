@@ -19,11 +19,28 @@ test.beforeAll(async () => {
   const randomPort = 10000 + Math.floor(Math.random() * 50000);
   const publicDir = path.join(projectRoot, 'dist', 'lib', 'agentville', 'server');
 
-  // Ensure universal_assets are accessible from publicDir so engine can load sprites
+  // Ensure world assets are accessible from publicDir so the engine can load sprites and tiles
+  const worldsSource = path.join(projectRoot, 'dist', 'worlds', 'agentville');
   const assetsLink = path.join(publicDir, 'universal_assets');
-  const assetsSource = path.join(projectRoot, 'dist', 'worlds', 'agentville', 'universal_assets');
-  if (!fs.existsSync(assetsLink) && fs.existsSync(assetsSource)) {
-    fs.symlinkSync(assetsSource, assetsLink);
+  if (!fs.existsSync(assetsLink) && fs.existsSync(path.join(worldsSource, 'universal_assets'))) {
+    fs.symlinkSync(path.join(worldsSource, 'universal_assets'), assetsLink);
+  }
+  // Symlink agentville world dir so /api/world discovers world.json and tile/prop assets
+  const worldLink = path.join(publicDir, 'agentville');
+  if (!fs.existsSync(worldLink) && fs.existsSync(worldsSource)) {
+    fs.symlinkSync(worldsSource, worldLink);
+  }
+  // Use base-world.json as the global world.json so the full tilemap renders
+  const globalWorldLink = path.join(publicDir, 'world.json');
+  const baseWorldSource = path.join(worldsSource, 'base-world.json');
+  if (!fs.existsSync(globalWorldLink) && fs.existsSync(baseWorldSource)) {
+    fs.symlinkSync(baseWorldSource, globalWorldLink);
+  }
+  // Symlink world_assets (tiles, props) so tile images load at /worlds/world_assets/...
+  const worldAssetsLink = path.join(publicDir, 'world_assets');
+  const worldAssetsSource = path.join(worldsSource, 'world_assets');
+  if (!fs.existsSync(worldAssetsLink) && fs.existsSync(worldAssetsSource)) {
+    fs.symlinkSync(worldAssetsSource, worldAssetsLink);
   }
 
   const srv = new AgentvilleServer({ port: randomPort, publicDir });

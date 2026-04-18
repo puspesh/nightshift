@@ -19,29 +19,24 @@ test.beforeAll(async () => {
   const randomPort = 10000 + Math.floor(Math.random() * 50000);
   const publicDir = path.join(projectRoot, 'dist', 'lib', 'agentville', 'server');
 
-  // Ensure world assets are accessible from publicDir so the engine can load sprites and tiles
+  // Symlink world assets into publicDir so the engine can load sprites, tiles, and world data
   const worldsSource = path.join(projectRoot, 'dist', 'worlds', 'agentville');
-  const assetsLink = path.join(publicDir, 'universal_assets');
-  if (!fs.existsSync(assetsLink) && fs.existsSync(path.join(worldsSource, 'universal_assets'))) {
-    fs.symlinkSync(path.join(worldsSource, 'universal_assets'), assetsLink);
+
+  const symlinkPairs: [string, string][] = [
+    [path.join(worldsSource, 'universal_assets'), path.join(publicDir, 'universal_assets')],
+    [worldsSource, path.join(publicDir, 'agentville')],
+    [path.join(worldsSource, 'base-world.json'), path.join(publicDir, 'world.json')],
+    [path.join(worldsSource, 'world_assets'), path.join(publicDir, 'world_assets')],
+  ];
+
+  for (const [target, link] of symlinkPairs) {
+    if (!fs.existsSync(link) && fs.existsSync(target)) {
+      fs.symlinkSync(target, link);
+    }
   }
-  // Symlink agentville world dir so /api/world discovers world.json and tile/prop assets
-  const worldLink = path.join(publicDir, 'agentville');
-  if (!fs.existsSync(worldLink) && fs.existsSync(worldsSource)) {
-    fs.symlinkSync(worldsSource, worldLink);
-  }
-  // Use base-world.json as the global world.json so the full tilemap renders
-  const globalWorldLink = path.join(publicDir, 'world.json');
-  const baseWorldSource = path.join(worldsSource, 'base-world.json');
-  if (!fs.existsSync(globalWorldLink) && fs.existsSync(baseWorldSource)) {
-    fs.symlinkSync(baseWorldSource, globalWorldLink);
-  }
-  // Symlink world_assets (tiles, props) so tile images load at /worlds/world_assets/...
-  const worldAssetsLink = path.join(publicDir, 'world_assets');
-  const worldAssetsSource = path.join(worldsSource, 'world_assets');
-  if (!fs.existsSync(worldAssetsLink) && fs.existsSync(worldAssetsSource)) {
-    fs.symlinkSync(worldAssetsSource, worldAssetsLink);
-  }
+
+  // Store link paths for cleanup in afterAll
+  (globalThis as any).__e2eSymlinks = symlinkPairs.map(([, link]) => link);
 
   const srv = new AgentvilleServer({ port: randomPort, publicDir });
   serverPort = await srv.start();
@@ -54,6 +49,10 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   server?.stop();
+  // Clean up symlinks created in beforeAll to avoid CI workspace pollution
+  for (const link of ((globalThis as any).__e2eSymlinks ?? [])) {
+    try { if (fs.lstatSync(link).isSymbolicLink()) fs.unlinkSync(link); } catch {}
+  }
 });
 
 // ---------------------------------------------------------------------------

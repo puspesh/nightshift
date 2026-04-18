@@ -93,7 +93,7 @@ git checkout {{home_branch}}
        LABEL=$(basename "$(dirname "$img")" | sed 's/game-world-//;s/-chromium//')
        cp "$img" "$SCREENSHOT_DIR/${LABEL}.png"
      done
-     git add "$SCREENSHOT_DIR"
+     git add -f "$SCREENSHOT_DIR"
      git commit -m "test(issue-<number>): add e2e screenshots"
      git push origin "$BRANCH"
      # Build markdown image links (blob URLs with ?raw=true work for both private and public repos)

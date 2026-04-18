@@ -73,19 +73,41 @@ git checkout {{home_branch}}
    - Run all relevant tests (unit, integration, and/or E2E as configured)
    - If the PR adds new features, check if additional tests are needed
 
-   **UI / E2E screenshot requirement** — when running Playwright, Cypress, or any browser-based tests:
-   - Take screenshots of key UI states exercised by the tests (landing page, form submissions, modals, error states, etc.)
-   - For new features: capture before/after or the main user flow (multiple screenshots are encouraged)
-   - For bug fixes: capture the fixed behavior
-   - Save screenshots to a temp directory: `/tmp/ns-screenshots-<issue-number>/`
-   - Upload each screenshot and collect the URLs for the issue comment in step 5:
+   **UI / E2E screenshot requirement** — when e2e tests exist (Playwright, Cypress, or any browser-based tests):
+   - You MUST take screenshots and post them to the issue for human visual verification
+   - Run e2e tests with screenshots enabled (see `ns-{{team_name}}-test-config.md` for the exact command):
      ```bash
-     # Upload screenshots to the issue (repeat per file)
-     for img in /tmp/ns-screenshots-<number>/*.png; do
-       gh issue comment <number> --body "![screenshot](${img})" < /dev/null
-     done
+     mkdir -p /tmp/ns-screenshots-<number>
+     npx playwright test --screenshot on --output /tmp/ns-screenshots-<number>/
      ```
-     Note: `gh` supports attaching images — if direct upload isn't available, use `gh api` to upload as an issue comment attachment or embed via a gist.
+   - After tests complete, also read each screenshot with the Read tool to verify the UI looks correct yourself
+   - For new features: ensure screenshots capture the main feature being tested
+   - For bug fixes: ensure screenshots capture the fixed behavior
+   - Commit the screenshots to the feature branch and build GitHub URLs:
+     ```bash
+     REPO_SLUG=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+     BRANCH=$(git branch --show-current)
+     SCREENSHOT_DIR="screenshots/issue-<number>"
+     mkdir -p "$SCREENSHOT_DIR"
+     for img in $(find /tmp/ns-screenshots-<number>/ -name "*.png" 2>/dev/null); do
+       LABEL=$(basename "$(dirname "$img")" | sed 's/game-world-//;s/-chromium//')
+       cp "$img" "$SCREENSHOT_DIR/${LABEL}.png"
+     done
+     git add -f "$SCREENSHOT_DIR"
+     git commit -m "test(issue-<number>): add e2e screenshots"
+     git push origin "$BRANCH"
+     # Build markdown image links (blob URLs with ?raw=true work for both private and public repos)
+     SCREENSHOT_URLS=""
+     for img in "$SCREENSHOT_DIR"/*.png; do
+       FNAME=$(basename "$img")
+       IMG_URL="https://github.com/${REPO_SLUG}/blob/${BRANCH}/${SCREENSHOT_DIR}/${FNAME}?raw=true"
+       SCREENSHOT_URLS="${SCREENSHOT_URLS}
+     ![${FNAME%.png}](${IMG_URL})"
+     done
+     echo "$SCREENSHOT_URLS"
+     ```
+   - If no screenshots were produced (e.g. no e2e tests in the PR), note "No e2e tests in this PR" in the Screenshots section
+   - Include the screenshot markdown in your issue comment (step 5)
 
 4. **Verify before reporting** (superpowers:verification-before-completion)
    Invoke `superpowers:verification-before-completion` — confirm all test output before claiming pass/fail.
@@ -102,8 +124,8 @@ git checkout {{home_branch}}
    - <suite 1>: pass
    - <suite 2>: pass
 
-   **Screenshots** (if UI/E2E tests were run):
-   <!-- attach screenshots showing tested UI states -->
+   **Screenshots**:
+   <insert gist-hosted screenshot URLs as ![name](raw-url) markdown>
 
    **Next**: Ready to merge (label: `{{team_name}}:ready-to-merge`)
    EOF
@@ -126,22 +148,17 @@ git checkout {{home_branch}}
    - **Error**: <exact error message>
    - **Likely cause**: <your diagnosis>
 
-   **Screenshots** (if UI/E2E tests were run):
-   <!-- attach screenshots showing the failure state / current UI -->
+   **Screenshots**:
+   <insert gist-hosted screenshot URLs as ![name](raw-url) markdown>
 
    **Next**: Sent back to @ns-{{team_name}}-coder for fixes (label: `{{team_name}}:code-revising`)
    EOF
    )"
    ```
 
-   **Posting screenshots**: After the text comment, upload each screenshot as a separate comment so GitHub renders them inline:
+   **Screenshot cleanup** — remove temp directory after committing:
    ```bash
-   if [ -d /tmp/ns-screenshots-<number> ] && ls /tmp/ns-screenshots-<number>/*.png 1>/dev/null 2>&1; then
-     for img in /tmp/ns-screenshots-<number>/*.png; do
-       gh issue comment <number> --body "![$(basename "$img")](${img})"
-     done
-     rm -rf /tmp/ns-screenshots-<number>
-   fi
+   rm -rf /tmp/ns-screenshots-<number>
    ```
 
 6. **Cleanup and release**

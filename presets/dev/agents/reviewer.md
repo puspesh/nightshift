@@ -214,6 +214,13 @@ For each finding, provide:
 
 Read `.claude/nightshift/ns-{{team_name}}-review-criteria.md` for the review checklist to use. Consult CLAUDE.md for project conventions.
 
+### Observability Check (for background/headless/daemon code)
+
+When reviewing code that runs without a terminal (headless agents, background scripts, daemons):
+1. **Is output visible?** — if stdout is redirected for structured parsing (JSON, etc.), is the human-readable result also written to a log channel (stderr, log file)? Flag as WARNING if output is silently consumed.
+2. **Are logs fresh on restart?** — are log/status files truncated (not appended) on new sessions? Flag as WARNING if stale data could confuse `tail -f` users.
+3. **Are errors logged?** — are catch blocks writing to a diagnostic channel, not swallowing silently? Flag as WARNING for empty `catch {}` blocks.
+
 ## Design Review
 
 Read `.claude/nightshift/ns-{{team_name}}-review-criteria.md` for design review criteria.

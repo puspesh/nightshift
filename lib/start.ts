@@ -260,6 +260,44 @@ export function stopHeadlessAgents(repoName: string, team: string): number {
 }
 
 /**
+ * Check whether a team is currently running (via tmux or headless mode).
+ *
+ * Returns true if either:
+ * - A tmux session exists for this repo+team, OR
+ * - Any headless PID files contain a live process
+ */
+export function isTeamRunning(repoName: string, team: string): boolean {
+  // Check tmux session
+  try {
+    execSync(`tmux has-session -t "${getSessionName(repoName, team)}"`, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    return true;
+  } catch {
+    // No tmux session — fall through to headless check
+  }
+
+  // Check headless PID files
+  const pidDir = getHeadlessPidDir(repoName, team);
+  if (!existsSync(pidDir)) return false;
+
+  for (const file of readdirSync(pidDir)) {
+    if (!file.endsWith('.pid')) continue;
+    const pidStr = readFileSync(join(pidDir, file), 'utf-8').trim();
+    const pid = parseInt(pidStr, 10);
+    if (isNaN(pid)) continue;
+    try {
+      process.kill(pid, 0); // check if alive (signal 0 = no signal, just check)
+      return true;
+    } catch {
+      // Process is dead — continue checking others
+    }
+  }
+
+  return false;
+}
+
+/**
  * Launch agents as background processes without tmux.
  */
 async function startHeadlessSession(team: string, options?: StartOptions): Promise<void> {
@@ -299,7 +337,7 @@ async function startHeadlessSession(team: string, options?: StartOptions): Promi
     const runner = buildRunnerForAgent(baseRunner, config, agent.agent);
     const statusFile = join(statusDir, agent.role);
     const logFile = join(logDir, `${agent.role}.log`);
-    const logFd = openSync(logFile, 'a');
+    const logFd = openSync(logFile, 'w');
 
     const child = spawn('bash', [
       AGENT_LOOP_SCRIPT, agent.cwd,

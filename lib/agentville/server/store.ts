@@ -108,6 +108,15 @@ export class AgentStore {
         agent.task = null;
         changed = true;
       }
+
+      // Remove stale subagents that have been offline for 2+ minutes.
+      // These are ephemeral and should not linger in the UI.
+      // Event API path creates keys like "nightshift/sub-<timestamp>",
+      // Claude hook path creates keys like "<agentId>-sub-<hash>".
+      if (agent.state === 'offline' && (id.includes('/sub-') || id.includes('-sub-')) && elapsed > 120_000) {
+        this.agents.delete(id);
+        changed = true;
+      }
     }
 
     if (changed) this.notify();

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AgentStore } from './store.js';
 import { EventLog, type WorldEvent } from './events.js';
+import { EventLogPersistence, isSignificant, formatSummary, type LogEntry } from './event-log-persistence.js';
 import { getFrontendHtml } from './frontend.js';
 import type { AgentvilleWorld } from '../schema.js';
 import type { AgentvilleEvent } from '../event-types.js';
@@ -38,12 +39,18 @@ export class AgentvilleServer {
   private publicDir: string | null;
   private gameState: AgentvilleWorld | null = null;
   private mutationCallbacks: Array<() => void> = [];
+  /** Event API: track spawned child keys per parent agent key for cleanup */
+  private spawnedChildren: Map<string, Set<string>> = new Map();
+  private eventLogPersistence: EventLogPersistence | null = null;
 
   constructor(config: AgentvilleServerConfig = {}) {
     this.port = config.port ?? 4321;
     this.publicDir = config.publicDir ?? null;
     this.store = new AgentStore(config.offlineTimeout ?? 30000);
     this.events = new EventLog();
+    if (this.publicDir) {
+      this.eventLogPersistence = new EventLogPersistence(this.publicDir);
+    }
 
     this.httpServer = createServer((req, res) => this.handleHttp(req, res));
     this.wss = new WebSocketServer({ server: this.httpServer });
@@ -125,6 +132,15 @@ export class AgentvilleServer {
     }
   }
 
+  /** Remove a subagent from both the store and game state (desk + cosmetic). */
+  private removeSubagent(key: string): void {
+    this.store.remove(key);
+    if (this.gameState?.agents[key]) {
+      delete this.gameState.agents[key];
+      this.triggerSave();
+    }
+  }
+
   private broadcast() {
     const msg = JSON.stringify({ type: 'agents', agents: this.store.getPublicList() });
     for (const ws of this.clients) {
@@ -135,7 +151,10 @@ export class AgentvilleServer {
   }
 
   /** Send a targeted event notification to all connected WebSocket clients. */
-  private broadcastWs(message: { type: string; payload: Record<string, unknown>; timestamp: number }): void {
+  private broadcastWs(message:
+    | { type: string; payload: Record<string, unknown>; timestamp: number }
+    | { type: 'log:entry'; entry: LogEntry }
+  ): void {
     const msg = JSON.stringify(message);
     for (const ws of this.clients) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
@@ -211,6 +230,18 @@ export class AgentvilleServer {
             },
             timestamp: Date.now(),
           });
+          // Log rare drops as separate event log entries
+          if (this.eventLogPersistence && result.drop) {
+            const dropLabel = result.drop.type === 'item' ? result.drop.catalogId : `${result.drop.amount} coins`;
+            const dropEntry = this.eventLogPersistence.append({
+              timestamp: Date.now(),
+              agentKey,
+              type: 'coins:earned',
+              summary: `drop — ${dropLabel}`,
+              data: { drop: result.drop },
+            });
+            this.broadcastWs({ type: 'log:entry', entry: dropEntry });
+          }
         }
         this.broadcastWs({ type: 'work:completed', payload: { agent: agentKey, ...data }, timestamp: Date.now() });
         break;
@@ -220,14 +251,34 @@ export class AgentvilleServer {
         const childKey = `${event.source}/${data.child ?? event.agent + '-sub'}`;
         const childName = (data.task as string) ? `Agent (${truncate(data.task as string, 20)})` : `Sub-agent of ${event.agent}`;
         this.store.heartbeat({ agent: childKey, name: childName, state: 'working', task: (data.task as string) ?? 'Running' });
+        // Track child under parent for cleanup on spawn-ended / session end
+        if (!this.spawnedChildren.has(agentKey)) this.spawnedChildren.set(agentKey, new Set());
+        this.spawnedChildren.get(agentKey)!.add(childKey);
         this.broadcastWs({ type: 'agent:registered', payload: { agent: childKey, parent: agentKey }, timestamp: Date.now() });
         break;
       }
 
       case 'agent:spawn-ended': {
-        const childKey = `${event.source}/${data.child ?? event.agent + '-sub'}`;
-        this.store.heartbeat({ agent: childKey, state: 'offline', task: null });
-        this.broadcastWs({ type: 'state:update', payload: { agent: childKey, state: 'offline' }, timestamp: Date.now() });
+        // Try exact match first, then fall back to oldest child of this parent (FIFO)
+        const exactChildKey = `${event.source}/${data.child ?? event.agent + '-sub'}`;
+        const children = this.spawnedChildren.get(agentKey);
+        let matchedKey = exactChildKey;
+        if (children) {
+          if (children.has(exactChildKey)) {
+            children.delete(exactChildKey);
+          } else {
+            // Exact key didn't match (e.g., spawn used timestamp, end didn't) — take oldest (FIFO)
+            const first = [...children][0];
+            if (first) {
+              matchedKey = first;
+              children.delete(first);
+            }
+          }
+          // Eagerly clean up empty Sets to prevent memory leaks over many cycles
+          if (children.size === 0) this.spawnedChildren.delete(agentKey);
+        }
+        this.removeSubagent(matchedKey);
+        this.broadcastWs({ type: 'state:update', payload: { agent: matchedKey, state: 'offline' }, timestamp: Date.now() });
         break;
       }
 
@@ -240,6 +291,16 @@ export class AgentvilleServer {
           task: null,
           metadata: reason ? { idleReason: reason } : undefined,
         });
+        // Clean up any spawned children when session ends
+        if (reason === 'session_ended') {
+          const children = this.spawnedChildren.get(agentKey);
+          if (children) {
+            for (const childKey of children) {
+              this.removeSubagent(childKey);
+            }
+            this.spawnedChildren.delete(agentKey);
+          }
+        }
         this.broadcastWs({ type: 'state:update', payload: { agent: agentKey, state: idleState, reason }, timestamp: Date.now() });
         break;
       }
@@ -254,6 +315,20 @@ export class AgentvilleServer {
         break;
       }
     }
+
+    // Persist significant events to the event log and broadcast to sidebar
+    if (this.eventLogPersistence && isSignificant(event.type)) {
+      const summary = formatSummary(event.type, agentKey, data);
+      const logEntry = this.eventLogPersistence.append({
+        timestamp: Date.now(),
+        agentKey,
+        type: event.type,
+        summary,
+        data,
+      });
+      this.broadcastWs({ type: 'log:entry', entry: logEntry });
+    }
+
   }
 
   // --- Interactive protocol ---
@@ -705,7 +780,7 @@ export class AgentvilleServer {
       }
 
       case 'SubagentStop': {
-        // Find and offline the sub-agent
+        // Find and remove the sub-agent from the store
         const subs = this.subagentKeepAlives.get(agentId);
         if (subs) {
           // If we have a subagentId, match it; otherwise pop the most recent
@@ -716,10 +791,10 @@ export class AgentvilleServer {
               if (id === prefix) { matchedSubId = id; break; }
             }
           }
-          if (!matchedSubId) matchedSubId = [...subs].pop();
+          if (!matchedSubId) matchedSubId = [...subs][0];
           if (matchedSubId) {
             this.stopKeepalive(matchedSubId);
-            this.store.heartbeat({ agent: matchedSubId, name: matchedSubId, state: 'offline', task: null });
+            this.removeSubagent(matchedSubId);
             subs.delete(matchedSubId);
           }
         }
@@ -731,12 +806,12 @@ export class AgentvilleServer {
         this.stopKeepalive(agentId);
         this.store.heartbeat({ agent: agentId, name: agentName, state: 'offline', task: null });
         this.events.push(agentId, { type: 'status', state: 'offline' });
-        // Clean up any sub-agents
+        // Clean up any sub-agents — remove from store entirely
         const subs = this.subagentKeepAlives.get(agentId);
         if (subs) {
           for (const subId of subs) {
             this.stopKeepalive(subId);
-            this.store.heartbeat({ agent: subId, name: subId, state: 'offline', task: null });
+            this.removeSubagent(subId);
           }
           this.subagentKeepAlives.delete(agentId);
         }
@@ -1183,6 +1258,25 @@ export class AgentvilleServer {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ channels }));
+      return;
+    }
+
+    // --- Persistent Event Log API ---
+    if (req.method === 'GET' && url.pathname === '/api/event-log') {
+      if (!this.eventLogPersistence) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ entries: [] }));
+        return;
+      }
+      const before = url.searchParams.get('before');
+      const limitParam = url.searchParams.get('limit');
+      const limit = Math.min(Math.max(parseInt(limitParam ?? '', 10) || 200, 1), 500);
+      const beforeId = before ? parseInt(before, 10) : undefined;
+      const entries = (beforeId !== undefined && !isNaN(beforeId))
+        ? this.eventLogPersistence.loadBefore(beforeId, limit)
+        : this.eventLogPersistence.loadRecent(limit);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ entries }));
       return;
     }
 

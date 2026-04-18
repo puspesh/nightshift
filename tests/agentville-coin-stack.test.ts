@@ -180,4 +180,49 @@ describe('CoinStackSystem', () => {
       assert.equal(system.order, 18);
     });
   });
+
+  describe('sprite loading', () => {
+    it('reports not loaded before loadSprite is called', () => {
+      assert.equal(system.isSpriteLoaded(), false);
+    });
+
+    it('falls back to canvas primitives when sprite not loaded', () => {
+      system.addStack('agent-1', 100, 200, 3);
+      system.update(0.016);
+      assert.equal(system.getStacks().size, 1);
+    });
+  });
+
+  describe('fountain scatter', () => {
+    it('creates particles when spawnFountain is called', () => {
+      system.spawnFountain(100, 200, 5);
+      const particles = system._getParticles();
+      assert.equal(particles.length, 5);
+    });
+
+    it('particles settle after physics completes', () => {
+      system.spawnFountain(100, 200, 3);
+      for (let i = 0; i < 60; i++) system.update(0.05);
+      const particles = system._getParticles();
+      for (const p of particles) {
+        assert.ok(p.settled, 'particle should be settled');
+      }
+    });
+
+    it('settled particles with agentId merge into stack', () => {
+      system.spawnFountain(100, 200, 3, 'agent-1');
+      for (let i = 0; i < 60; i++) system.update(0.05);
+      const stacks = system.getStacks();
+      assert.equal(stacks.has('agent-1'), true);
+      assert.equal(stacks.get('agent-1')!.totalCount, 3);
+      assert.equal(system._getParticles().length, 0);
+    });
+
+    it('particles without agentId remain after settling', () => {
+      system.spawnFountain(100, 200, 3);
+      for (let i = 0; i < 60; i++) system.update(0.05);
+      // No agentId → no merge, particles stay settled
+      assert.equal(system._getParticles().length, 3);
+    });
+  });
 });

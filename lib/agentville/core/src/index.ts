@@ -503,7 +503,8 @@ export class Agentville {
     if (!citizen) return; // Agent not rendered — skip silently, coins are in wallet
     // Offset one tile to the right of the agent's position (beside the desk)
     const offsetX = this.scene.config.tileWidth;
-    this.coinStacks.addStack(agentId, citizen.x + offsetX, citizen.y, amount);
+    const coinCount = Math.min(Math.ceil(amount / 20), 8);
+    this.coinStacks.spawnFountain(citizen.x + offsetX, citizen.y, coinCount, agentId);
   }
 
   /** Trigger collection of all visible coin stacks (fly-to-HUD animation) */
@@ -519,6 +520,11 @@ export class Agentville {
   /** Register callback for when coin stacks finish collecting */
   onCoinCollect(callback: (info: CoinStackInfo) => void): void {
     this.coinStacks.onCollect(callback);
+  }
+
+  /** Load the coin spritesheet for animated coin rendering */
+  loadCoinSprite(src: string): Promise<void> {
+    return this.coinStacks.loadSprite(src);
   }
 
   /** Get current coin stack state (debug/test only) */

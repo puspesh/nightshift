@@ -525,7 +525,7 @@ h1 {
   <div id="hud">
     <div id="hud-left">
       <div class="hud-item hud-coins">
-        <span class="hud-icon">&#x1FA99;</span>
+        <span class="hud-icon"><img src="/universal_assets/coin-icon.png" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated" alt="coins"></span>
         <span class="hud-value" id="hud-coins">0</span>
       </div>
       <div class="hud-item hud-rate">
@@ -881,7 +881,7 @@ loadEventLog();
 // --- Agent card rendering ---
 function renderCard(agent) {
   const role = getRole(agent.agent);
-  let card = document.querySelector('[data-agent="' + CSS.escape(agent.agent) + '"]');
+  let card = panel.querySelector('[data-agent="' + CSS.escape(agent.agent) + '"]');
   if (!card) {
     card = document.createElement('div');
     card.className = 'agent-card';
@@ -1429,6 +1429,7 @@ async function startLegacyWorld(prefetched) {
 
   await mv.start();
   window.__av = mv;
+  mv.loadCoinSprite('/universal_assets/coin-spin.png').catch(() => {});
   resizeEffectsOverlay();
 
   // Coin stack fly-to target: HUD coins element position in canvas-space

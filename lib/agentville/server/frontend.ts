@@ -1429,10 +1429,7 @@ async function startLegacyWorld(prefetched) {
 
   await mv.start();
   window.__av = mv;
-  mv.loadCoinSprite(basePath + '/universal_assets/coin-spin.png').catch(() => {});
-  // Update HUD coin icon to use correct asset path
-  const hudCoinImg = document.querySelector('.hud-coins .hud-icon img');
-  if (hudCoinImg) hudCoinImg.src = basePath + '/universal_assets/coin-icon.png';
+  mv.loadCoinSprite('/universal_assets/coin-spin.png').catch(() => {});
   resizeEffectsOverlay();
 
   // Coin stack fly-to target: HUD coins element position in canvas-space

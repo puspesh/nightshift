@@ -224,5 +224,22 @@ describe('CoinStackSystem', () => {
       // No agentId → no merge, particles stay settled
       assert.equal(system._getParticles().length, 3);
     });
+
+    it('rapid successive spawns for same agent merge correctly', () => {
+      // First fountain
+      system.spawnFountain(100, 200, 3, 'agent-1');
+      // Advance partway — first batch still in flight
+      system.update(0.3);
+      // Second fountain before first settles
+      system.spawnFountain(100, 200, 2, 'agent-1');
+      assert.equal(system._getParticles().length, 5);
+      // Settle all particles
+      for (let i = 0; i < 120; i++) system.update(0.05);
+      // All 5 should merge into one stack
+      const stacks = system.getStacks();
+      assert.equal(stacks.has('agent-1'), true);
+      assert.equal(stacks.get('agent-1')!.totalCount, 5);
+      assert.equal(system._getParticles().length, 0);
+    });
   });
 });

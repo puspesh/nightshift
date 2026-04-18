@@ -1433,19 +1433,23 @@ async function startLegacyWorld(prefetched) {
   resizeEffectsOverlay();
 
   // Coin stack fly-to target: HUD coins element position in canvas-space
-  const hudCoinsEl = document.getElementById('hud-coins');
-  if (hudCoinsEl) {
-    const hudRect = hudCoinsEl.getBoundingClientRect();
-    const canvasRect = container.getBoundingClientRect();
-    const scale = mv.getScale();
-    mv.setCoinCollectTarget(
-      (hudRect.left - canvasRect.left) / scale,
-      (hudRect.top - canvasRect.top) / scale,
-    );
+  function updateCoinCollectTarget() {
+    const hudCoinsEl = document.getElementById('hud-coins');
+    if (hudCoinsEl && window.__av) {
+      const hudRect = hudCoinsEl.getBoundingClientRect();
+      const canvasRect = container.getBoundingClientRect();
+      const scale = window.__av.getScale();
+      window.__av.setCoinCollectTarget(
+        (hudRect.left - canvasRect.left) / scale,
+        (hudRect.top - canvasRect.top) / scale,
+      );
+    }
   }
+  updateCoinCollectTarget();
+  window.addEventListener('resize', updateCoinCollectTarget);
 
-  // Auto-collect coin stacks on any user interaction
-  document.addEventListener('click', () => {
+  // Auto-collect coin stacks when clicking the game canvas
+  container.addEventListener('click', () => {
     if (window.__av) window.__av.collectAllStacks();
   });
 

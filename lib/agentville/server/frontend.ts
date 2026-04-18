@@ -374,6 +374,95 @@ h1 {
   font-weight: 400;
 }
 
+/* --- Game + Sidebar Layout --- */
+#game-layout {
+  display: flex;
+  width: 100%;
+  max-width: calc(720px + 280px);
+  gap: 0;
+}
+#game-layout #canvas-container {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Event Log Sidebar --- */
+#event-log-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.2s ease;
+  overflow: hidden;
+  align-self: stretch;
+}
+#event-log-sidebar.collapsed {
+  width: 32px;
+}
+#event-log-sidebar.collapsed #event-log-entries,
+#event-log-sidebar.collapsed #event-log-header span {
+  display: none;
+}
+#event-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid #30363d;
+  flex-shrink: 0;
+}
+#event-log-sidebar.collapsed #event-log-header {
+  justify-content: center;
+  padding: 12px 4px;
+}
+#event-log-header span {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8b949e;
+}
+#event-log-toggle {
+  background: none;
+  border: none;
+  color: #8b949e;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+#event-log-toggle:hover { color: #c9d1d9; }
+#event-log-entries {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.log-entry {
+  font-size: 12px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  padding: 4px 0;
+  border-bottom: 1px solid #21262d;
+  color: #8b949e;
+  line-height: 1.4;
+}
+.log-entry-time { color: #484f58; }
+.log-entry-agent { color: #58a6ff; }
+.log-entry-error { color: #f85149; }
+.log-entry-drop { color: #f0c040; }
+@media (max-width: 1024px) {
+  #game-layout { flex-direction: column; }
+  #event-log-sidebar {
+    width: 100%;
+    max-height: 200px;
+    border-left: 1px solid #30363d;
+    border-radius: 0 0 8px 8px;
+  }
+  #event-log-sidebar.collapsed { width: 100%; max-height: 32px; }
+}
+
 /* Placement mode */
 #placement-overlay {
   display: none;
@@ -431,6 +520,7 @@ h1 {
 <body>
 <h1>nightshift</h1>
 
+<div id="game-layout">
 <div id="canvas-container">
   <div id="hud">
     <div id="hud-left">
@@ -471,6 +561,15 @@ h1 {
     <div class="placement-hint">Click to place item &mdash; ESC to cancel</div>
   </div>
 </div>
+<!-- Event Log Sidebar (inside game-layout flex row) -->
+<div id="event-log-sidebar">
+  <div id="event-log-header">
+    <span>Activity</span>
+    <button id="event-log-toggle">&#x25C0;</button>
+  </div>
+  <div id="event-log-entries"></div>
+</div>
+</div><!-- /game-layout -->
 <div id="status-panel"></div>
 <div id="connection-status">Connecting...</div>
 
@@ -650,6 +749,134 @@ function showToast(message, type) {
     setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
+
+// --- Event Log Sidebar ---
+const LOG_DOM_CAP = 500;
+const SCROLL_BOTTOM_THRESHOLD = 20;
+const SCROLL_TOP_TRIGGER = 40;
+
+const logSidebar = document.getElementById('event-log-sidebar');
+const logEntries = document.getElementById('event-log-entries');
+const logToggle = document.getElementById('event-log-toggle');
+let logReachedStart = false; // true when no more older entries to load
+let logLoadingOlder = false; // debounce for infinite scroll
+
+function formatLogTime(ts) {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return hh + ':' + mm;
+}
+
+function shortAgentName(key) {
+  if (!key) return 'unknown';
+  const parts = key.split('/');
+  return parts[parts.length - 1];
+}
+
+function renderLogEntry(entry) {
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  if (entry.type === 'agent:error') div.classList.add('log-entry-error');
+  if (entry.data && entry.data.drop) div.classList.add('log-entry-drop');
+  div.dataset.id = String(entry.id);
+  div.dataset.agent = entry.agentKey || '';
+  div.innerHTML =
+    '<span class="log-entry-time">[' + formatLogTime(entry.timestamp) + ']</span> ' +
+    '<span class="log-entry-agent">' + esc(shortAgentName(entry.agentKey)) + '</span>: ' +
+    esc(entry.summary);
+  return div;
+}
+
+function isLogAtBottom() {
+  return logEntries.scrollTop + logEntries.clientHeight >= logEntries.scrollHeight - SCROLL_BOTTOM_THRESHOLD;
+}
+
+function appendLogEntry(entry) {
+  const atBottom = isLogAtBottom();
+  const div = renderLogEntry(entry);
+  logEntries.appendChild(div);
+
+  // Cap DOM entries
+  while (logEntries.children.length > LOG_DOM_CAP) {
+    logEntries.removeChild(logEntries.firstChild);
+  }
+
+  if (atBottom) {
+    logEntries.scrollTop = logEntries.scrollHeight;
+  }
+}
+
+async function loadEventLog() {
+  try {
+    const res = await fetch('/api/event-log?limit=200');
+    if (!res.ok) return;
+    const data = await res.json();
+    const entries = data.entries || [];
+    logEntries.innerHTML = '';
+    for (const entry of entries) {
+      logEntries.appendChild(renderLogEntry(entry));
+    }
+    // Scroll to bottom initially
+    logEntries.scrollTop = logEntries.scrollHeight;
+    if (entries.length < 200) logReachedStart = true;
+  } catch { /* ignore */ }
+}
+
+async function loadOlderEntries() {
+  if (logReachedStart || logLoadingOlder) return;
+  const firstEntry = logEntries.querySelector('.log-entry');
+  if (!firstEntry) return;
+  const beforeId = firstEntry.dataset.id;
+  if (!beforeId) return;
+
+  logLoadingOlder = true;
+  try {
+    const res = await fetch('/api/event-log?before=' + beforeId + '&limit=50');
+    if (!res.ok) return;
+    const data = await res.json();
+    const entries = data.entries || [];
+    if (entries.length < 50) logReachedStart = true;
+    if (entries.length === 0) return;
+
+    // Preserve scroll position
+    const prevHeight = logEntries.scrollHeight;
+    const prevTop = logEntries.scrollTop;
+
+    for (let i = entries.length - 1; i >= 0; i--) {
+      logEntries.insertBefore(renderLogEntry(entries[i]), logEntries.firstChild);
+    }
+
+    logEntries.scrollTop = prevTop + (logEntries.scrollHeight - prevHeight);
+  } catch { /* ignore */ } finally {
+    logLoadingOlder = false;
+  }
+}
+
+// Infinite scroll — load older when scrolled to top
+logEntries.addEventListener('scroll', () => {
+  if (logEntries.scrollTop < SCROLL_TOP_TRIGGER) {
+    loadOlderEntries();
+  }
+});
+
+// Collapse/expand toggle
+function initSidebarState() {
+  const collapsed = localStorage.getItem('event-log-collapsed') === '1';
+  if (collapsed) {
+    logSidebar.classList.add('collapsed');
+    logToggle.innerHTML = '&#x25B6;';
+  }
+}
+
+logToggle.addEventListener('click', () => {
+  const isCollapsed = logSidebar.classList.toggle('collapsed');
+  logToggle.innerHTML = isCollapsed ? '&#x25B6;' : '&#x25C0;';
+  localStorage.setItem('event-log-collapsed', isCollapsed ? '1' : '0');
+});
+
+initSidebarState();
+loadEventLog();
 
 // --- Agent card rendering ---
 function renderCard(agent) {
@@ -1336,6 +1563,13 @@ function connect() {
 
         case 'work:completed': {
           // Already handled by coins:earned for HUD, but can show agent card update
+          break;
+        }
+
+        case 'log:entry': {
+          if (msg.entry) {
+            appendLogEntry(msg.entry);
+          }
           break;
         }
 

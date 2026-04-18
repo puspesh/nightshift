@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
-import { getSessionName, buildAgentListFromConfig, loadTeamConfig, parseRunner, getHeadlessPidDir, writeAgentPid, stopHeadlessAgents, checkTeamInitialized } from '../lib/start.js';
+import { getSessionName, buildAgentListFromConfig, loadTeamConfig, parseRunner, getHeadlessPidDir, writeAgentPid, stopHeadlessAgents, checkTeamInitialized, isTeamRunning } from '../lib/start.js';
 import { resolveAgentConfig } from '../lib/agent-config.js';
 import { parseTeamConfig, parseTeamConfigFromString } from '../lib/team-config.js';
 import { dirname } from 'node:path';
@@ -137,6 +137,53 @@ describe('headless PID management', () => {
       assert.equal(stopped, 0);
       // File should still be cleaned up
       assert.ok(!existsSync(join(pidDir, 'broken.pid')));
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('isTeamRunning', () => {
+  it('returns false when no tmux and no PID dir', () => {
+    const repoName = `test-running-none-${Date.now()}`;
+    const result = isTeamRunning(repoName, 'dev');
+    assert.equal(result, false);
+  });
+
+  it('returns true when headless PIDs exist with live processes', () => {
+    const repoName = `test-running-alive-${Date.now()}`;
+    const repoDir = join(homedir(), '.nightshift', repoName);
+    try {
+      // Use current process PID — guaranteed alive
+      writeAgentPid(repoName, 'dev', 'producer', process.pid);
+      const result = isTeamRunning(repoName, 'dev');
+      assert.equal(result, true);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns false when headless PIDs exist but processes are dead', () => {
+    const repoName = `test-running-dead-${Date.now()}`;
+    const repoDir = join(homedir(), '.nightshift', repoName);
+    try {
+      // Use a PID that almost certainly doesn't exist
+      writeAgentPid(repoName, 'dev', 'reviewer', 2147483647);
+      const result = isTeamRunning(repoName, 'dev');
+      assert.equal(result, false);
+    } finally {
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns false when PID dir exists but is empty', () => {
+    const repoName = `test-running-empty-${Date.now()}`;
+    const repoDir = join(homedir(), '.nightshift', repoName);
+    try {
+      const pidDir = getHeadlessPidDir(repoName, 'dev');
+      mkdirSync(pidDir, { recursive: true });
+      const result = isTeamRunning(repoName, 'dev');
+      assert.equal(result, false);
     } finally {
       rmSync(repoDir, { recursive: true, force: true });
     }

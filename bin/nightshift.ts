@@ -84,7 +84,8 @@ function printVersion(): void {
 async function list(): Promise<void> {
   const { detectRepoRoot, detectRepoName } = await import('../lib/detect.js');
   const { discoverTeams } = await import('../lib/worktrees.js');
-  const { loadTeamConfig, buildAgentListFromConfig } = await import('../lib/start.js');
+  const { loadTeamConfig, buildAgentListFromConfig, isTeamRunning } = await import('../lib/start.js');
+  const chalk = (await import('chalk')).default;
 
   try {
     const repoRoot = detectRepoRoot();
@@ -101,15 +102,19 @@ async function list(): Promise<void> {
     console.log(`Nightshift teams in ${repoName}:`);
     console.log('');
     for (const team of teams) {
+      const running = isTeamRunning(repoName, team);
+      const status = running
+        ? chalk.green('running')
+        : chalk.dim('stopped');
       const config = loadTeamConfig(team, repoRoot);
       if (config) {
         const agents = buildAgentListFromConfig(config, repoRoot, repoName);
-        console.log(`  ${team} (${agents.length} agents)`);
+        console.log(`  ${team} (${agents.length} agents) — ${status}`);
         for (const a of agents) {
           console.log(`    ${a.role.padEnd(12)} → @${a.agent}`);
         }
       } else {
-        console.log(`  ${team} (no team.yaml found)`);
+        console.log(`  ${team} (no team.yaml found) — ${status}`);
       }
     }
     console.log('');

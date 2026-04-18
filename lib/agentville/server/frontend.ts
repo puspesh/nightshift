@@ -374,22 +374,38 @@ h1 {
   font-weight: 400;
 }
 
+/* --- Game + Sidebar Layout --- */
+#game-layout {
+  display: flex;
+  width: 100%;
+  max-width: calc(720px + 280px);
+  gap: 0;
+}
+#game-layout #canvas-container {
+  flex: 1;
+  min-width: 0;
+}
+
 /* --- Event Log Sidebar --- */
 #event-log-sidebar {
-  position: fixed;
-  right: 0;
-  top: 0;
-  height: 100vh;
   width: 280px;
+  flex-shrink: 0;
   background: #0d1117;
-  border-left: 1px solid #30363d;
+  border: 1px solid #30363d;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
   display: flex;
   flex-direction: column;
-  z-index: 15;
-  transition: transform 0.2s ease;
+  transition: width 0.2s ease;
+  overflow: hidden;
+  align-self: stretch;
 }
 #event-log-sidebar.collapsed {
-  transform: translateX(calc(100% - 32px));
+  width: 32px;
+}
+#event-log-sidebar.collapsed #event-log-entries,
+#event-log-sidebar.collapsed #event-log-header span {
+  display: none;
 }
 #event-log-header {
   display: flex;
@@ -398,6 +414,10 @@ h1 {
   padding: 12px;
   border-bottom: 1px solid #30363d;
   flex-shrink: 0;
+}
+#event-log-sidebar.collapsed #event-log-header {
+  justify-content: center;
+  padding: 12px 4px;
 }
 #event-log-header span {
   font-size: 12px;
@@ -432,14 +452,15 @@ h1 {
 .log-entry-agent { color: #58a6ff; }
 .log-entry-error { color: #f85149; }
 .log-entry-drop { color: #f0c040; }
-body.event-log-open {
-  padding-right: 280px;
-}
 @media (max-width: 1024px) {
-  #event-log-sidebar { transform: translateX(calc(100% - 32px)); }
-  #event-log-sidebar.collapsed { transform: translateX(calc(100% - 32px)); }
-  #event-log-sidebar.expanded { transform: translateX(0); }
-  body.event-log-open { padding-right: 0; }
+  #game-layout { flex-direction: column; }
+  #event-log-sidebar {
+    width: 100%;
+    max-height: 200px;
+    border-left: 1px solid #30363d;
+    border-radius: 0 0 8px 8px;
+  }
+  #event-log-sidebar.collapsed { width: 100%; max-height: 32px; }
 }
 
 /* Placement mode */
@@ -499,6 +520,7 @@ body.event-log-open {
 <body>
 <h1>nightshift</h1>
 
+<div id="game-layout">
 <div id="canvas-container">
   <div id="hud">
     <div id="hud-left">
@@ -539,6 +561,15 @@ body.event-log-open {
     <div class="placement-hint">Click to place item &mdash; ESC to cancel</div>
   </div>
 </div>
+<!-- Event Log Sidebar (inside game-layout flex row) -->
+<div id="event-log-sidebar">
+  <div id="event-log-header">
+    <span>Activity</span>
+    <button id="event-log-toggle">&#x25C0;</button>
+  </div>
+  <div id="event-log-entries"></div>
+</div>
+</div><!-- /game-layout -->
 <div id="status-panel"></div>
 <div id="connection-status">Connecting...</div>
 
@@ -571,15 +602,6 @@ body.event-log-open {
 
 <!-- Toast container -->
 <div id="toast-container"></div>
-
-<!-- Event Log Sidebar -->
-<div id="event-log-sidebar">
-  <div id="event-log-header">
-    <span>Activity</span>
-    <button id="event-log-toggle">&#x25C0;</button>
-  </div>
-  <div id="event-log-entries"></div>
-</div>
 
 <script type="module">
 import { Agentville, PropSystem, createStandardSpriteConfig } from '/agentville-core.js';
@@ -843,20 +865,13 @@ function initSidebarState() {
   const collapsed = localStorage.getItem('event-log-collapsed') === '1';
   if (collapsed) {
     logSidebar.classList.add('collapsed');
-    logSidebar.classList.remove('expanded');
     logToggle.innerHTML = '&#x25B6;';
-  } else {
-    logSidebar.classList.add('expanded');
-    logSidebar.classList.remove('collapsed');
-    document.body.classList.add('event-log-open');
   }
 }
 
 logToggle.addEventListener('click', () => {
   const isCollapsed = logSidebar.classList.toggle('collapsed');
-  logSidebar.classList.toggle('expanded', !isCollapsed);
   logToggle.innerHTML = isCollapsed ? '&#x25B6;' : '&#x25C0;';
-  document.body.classList.toggle('event-log-open', !isCollapsed);
   localStorage.setItem('event-log-collapsed', isCollapsed ? '1' : '0');
 });
 

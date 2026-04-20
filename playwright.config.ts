@@ -7,6 +7,7 @@ export default defineConfig({
   use: {
     headless: true,
     viewport: { width: 1280, height: 720 },
+    screenshot: 'on',
   },
   projects: [
     {

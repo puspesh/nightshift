@@ -179,6 +179,7 @@ export async function registerAgentvilleAgents(url: string, agents: AgentEntry[]
         color: resolved.color,
         state: 'idle',
         task: 'Initializing',
+        metadata: {},
       },
     };
 

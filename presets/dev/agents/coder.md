@@ -254,6 +254,14 @@ don't blindly implement every suggestion. Verify feedback is correct before acti
 Read `.claude/nightshift/ns-{{team_name}}-review-criteria.md` for quality standards to follow during implementation.
 Consult CLAUDE.md for project structure, dependency graph, and key rules.
 
+## Observability Rules
+
+When writing code that runs in background/headless/daemon mode:
+
+1. **Never swallow output** — if you redirect stdout for machine parsing (e.g., JSON cost tracking), extract and echo the human-readable content to stderr so it still reaches the log file. A process that runs successfully but produces no visible output is a bug.
+2. **Truncate on fresh start** — log files, status files, and session artifacts should be truncated (not appended) when a new session starts. Users running `tail -f` after a restart must see only current-session output.
+3. **No silent catch blocks** — always log errors, even in best-effort paths. Use a prefix tag (e.g., `cost-tracking:`, `log-extract:`) for filterability.
+
 ## Error Handling
 
 If anything fails during a cycle (checkout conflict, test failures you can't fix, push rejection):

@@ -23,6 +23,9 @@
 - **Error handling**: Promises without error handling (`.catch` or try/catch)
 - **Unused code**: Unused imports, variables, or dead code paths
 - **Magic values**: Magic numbers or strings — use named constants
+- **Observability**: When capturing structured output (JSON, XML) for machine parsing, always also write human-readable output to a log or monitoring channel. Never let a structured-output mode silently swallow the only user-visible output. If stdout is redirected for parsing, extract and echo the meaningful content to stderr (or vice versa).
+- **Session state on restart**: When a "start" or "init" command creates log files, status files, or session artifacts, truncate or rotate them rather than appending to stale data from previous runs. Users running `tail -f` on logs after a restart should see fresh output, not leftover content from a prior session.
+- **Silent error swallowing**: Empty `catch {}` blocks hide failures. Always log the error to stderr or a diagnostic channel, even if the operation is best-effort. Use a prefix tag (e.g., `log-extract:`, `cost-tracking:`) so errors are filterable.
 
 ## SUGGESTION (consider improving)
 

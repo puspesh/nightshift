@@ -525,7 +525,7 @@ h1 {
   <div id="hud">
     <div id="hud-left">
       <div class="hud-item hud-coins">
-        <span class="hud-icon">&#x1FA99;</span>
+        <span class="hud-icon"><img src="/universal_assets/coin-icon.png" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated" alt="coins"></span>
         <span class="hud-value" id="hud-coins">0</span>
       </div>
       <div class="hud-item hud-rate">
@@ -881,7 +881,7 @@ loadEventLog();
 // --- Agent card rendering ---
 function renderCard(agent) {
   const role = getRole(agent.agent);
-  let card = document.querySelector('[data-agent="' + CSS.escape(agent.agent) + '"]');
+  let card = panel.querySelector('[data-agent="' + CSS.escape(agent.agent) + '"]');
   if (!card) {
     card = document.createElement('div');
     card.className = 'agent-card';
@@ -1004,6 +1004,7 @@ const SHOP_CATEGORIES = [
 let shopActiveTab = 'desk';
 
 async function openShop() {
+  if (window.__av) window.__av.collectAllStacks();
   const panel = document.getElementById('shop-panel');
   const backdrop = document.getElementById('shop-backdrop');
   panel.classList.add('open');
@@ -1114,6 +1115,7 @@ function renderShopItems() {
 let placementItem = null;
 
 async function openInventory() {
+  if (window.__av) window.__av.collectAllStacks();
   const panel = document.getElementById('inv-panel');
   const backdrop = document.getElementById('inv-backdrop');
   panel.classList.add('open');
@@ -1427,7 +1429,32 @@ async function startLegacyWorld(prefetched) {
 
   await mv.start();
   window.__av = mv;
+  mv.loadCoinSprite('/universal_assets/coin-spin.png').catch(() => {});
   resizeEffectsOverlay();
+
+  // Coin stack fly-to target: HUD coins element position in canvas-space
+  function updateCoinCollectTarget() {
+    const hudCoinsEl = document.getElementById('hud-coins');
+    if (hudCoinsEl && window.__av) {
+      const hudRect = hudCoinsEl.getBoundingClientRect();
+      const canvasRect = container.getBoundingClientRect();
+      const scale = window.__av.getScale();
+      window.__av.setCoinCollectTarget(
+        (hudRect.left - canvasRect.left) / scale,
+        (hudRect.top - canvasRect.top) / scale,
+      );
+    }
+  }
+  updateCoinCollectTarget();
+  window.addEventListener('resize', updateCoinCollectTarget);
+
+  // Auto-collect coin stacks when clicking the game canvas
+  container.addEventListener('click', () => {
+    if (window.__av) window.__av.collectAllStacks();
+  });
+
+  // TODO(#55): add sparkle/pulse at HUD coin counter on collect
+  // mv.onCoinCollect(() => { ... });
 
   mv.addLayer({ order: 5, render: (ctx) => props.renderBelow(ctx) });
   mv.addLayer({ order: 15, render: (ctx) => props.renderAbove(ctx) });
@@ -1507,6 +1534,10 @@ function connect() {
             }
             // Update HUD
             updateHudCoins(total, true);
+            // Visual coin stack on agent desk
+            if (window.__av && p.agentKey && earned > 0) {
+              window.__av.earnCoinVisual(p.agentKey, earned);
+            }
             // Track for coins/hr
             earningsHistory.push({ coins: earned, time: Date.now() });
             if (earningsHistory.length > 200) earningsHistory = earningsHistory.slice(-100);

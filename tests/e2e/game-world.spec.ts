@@ -151,7 +151,7 @@ async function waitForCitizen(
 /** CSS.escape-safe selector for data-agent attribute with slashes. */
 function cardSelector(agent: string): string {
   // data-agent values contain slashes, e.g. "test/agent-a"
-  return `[data-agent="${agentKey(agent)}"]`;
+  return `#status-panel [data-agent="${agentKey(agent)}"]`;
 }
 
 // ---------------------------------------------------------------------------

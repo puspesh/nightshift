@@ -1048,14 +1048,18 @@ export class AgentvilleServer {
       return;
     }
 
-    // Serve universal assets (citizen sprites)
+    // Serve universal assets (citizen sprites, coin spritesheet)
     if (req.method === 'GET' && url.pathname.startsWith('/universal_assets/')) {
       const publicDir = this.publicDir ?? '.';
       const safePath = url.pathname.slice(1).replace(/\.\./g, '');
       const filePath = path.join(publicDir, safePath);
-      if (existsSync(filePath)) {
-        res.writeHead(200, { 'Content-Type': 'image/png' });
-        res.end(readFileSync(filePath));
+      // Fallback: check worlds/agentville/ subdirectory (works without symlinks)
+      const fallbackPath = path.join(publicDir, 'agentville', safePath);
+      const resolved = existsSync(filePath) ? filePath : existsSync(fallbackPath) ? fallbackPath : null;
+      if (resolved) {
+        const ext = path.extname(resolved).toLowerCase();
+        res.writeHead(200, { 'Content-Type': ext === '.json' ? 'application/json' : 'image/png' });
+        res.end(readFileSync(resolved));
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Asset not found' }));

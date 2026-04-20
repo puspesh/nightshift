@@ -263,6 +263,68 @@ describe('expandAgentInstances', () => {
   });
 });
 
+// --- Integration tests: presets/content/team.yaml ---
+
+describe('presets/content/team.yaml', () => {
+  it('parses without errors', () => {
+    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
+    assert.equal(config.name, 'content');
+    assert.equal(config.description, 'Content creation pipeline');
+  });
+
+  it('validates with zero errors', () => {
+    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
+    const result = validateTeamConfig(config);
+    assert.equal(result.valid, true, `Validation errors: ${result.errors.map(e => e.message).join(', ')}`);
+  });
+
+  it('has required wip stage with meta', () => {
+    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
+    const wipStage = config.stages.find(s => s.name === 'wip');
+    assert.ok(wipStage, 'wip stage should exist');
+    assert.equal(wipStage.meta, true, 'wip stage should have meta: true');
+  });
+
+  it('has all 4 agents', () => {
+    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
+    const roles = getAgentRoles(config);
+    assert.deepEqual(roles, ['producer', 'researcher', 'writer', 'reviewer']);
+  });
+
+  it('agent watches reference valid stages', () => {
+    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
+    const stageNames = config.stages.map(s => s.name);
+    for (const [role, agent] of Object.entries(config.agents)) {
+      for (const watch of agent.watches) {
+        assert.ok(
+          watch === 'unlabeled' || stageNames.includes(watch),
+          `Agent "${role}" watches unknown stage "${watch}"`,
+        );
+      }
+    }
+  });
+
+  it('agent transitions reference valid stages', () => {
+    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
+    const stageNames = config.stages.map(s => s.name);
+    for (const [role, agent] of Object.entries(config.agents)) {
+      if (agent.transitions) {
+        for (const [action, target] of Object.entries(agent.transitions)) {
+          assert.ok(
+            stageNames.includes(target),
+            `Agent "${role}" transition "${action}" targets unknown stage "${target}"`,
+          );
+        }
+      }
+    }
+  });
+
+  it('has 9 stages', () => {
+    const config = parseTeamConfig(join(PRESETS_DIR, 'content', 'team.yaml'));
+    assert.equal(config.stages.length, 9);
+  });
+});
+
 // --- Integration tests: presets/dev/team.yaml ---
 
 describe('presets/dev/team.yaml', () => {

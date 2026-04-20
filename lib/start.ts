@@ -168,63 +168,30 @@ const DEFAULT_VIZ_PORT = 4321;
 const AGENT_LOOP_SCRIPT = join(__dirname, '..', 'bin', 'ns-agent-loop.sh');
 
 /**
- * Set up visualization server, hooks, and world config.
+ * Set up visualization server, hooks, and agent registration.
  * Shared between tmux and headless modes.
  *
- * The global world.json (copied from base-world.json on first run) is never
- * overwritten — it persists across starts. Desks/items come from game state
- * inventory and are merged at serve time by the /api/world endpoint.
+ * Agentville is an optional separate package. If not installed, visualization
+ * is silently skipped and nightshift works in CLI-only mode.
  */
 async function setupVisualization(
   team: string, agents: AgentEntry[], repoRoot: string,
   repoName: string, citizenOverrides: CitizenOverrides, vizPort: number,
 ): Promise<string | null> {
-  let vizUrl: string | null = null;
   try {
-    const vizDataDir = join(homedir(), '.nightshift', 'agentville');
-    const baseWorldDir = join(__dirname, '..', 'worlds', 'agentville');
+    const result = startAgentville(vizPort);
+    if (!result) return null;
 
-    // Copy base world to global location (only if not already present)
-    const globalWorldJson = join(vizDataDir, 'world.json');
-    mkdirSync(vizDataDir, { recursive: true });
-    if (!existsSync(globalWorldJson) && existsSync(join(baseWorldDir, 'base-world.json'))) {
-      execSync(`cp "${join(baseWorldDir, 'base-world.json')}" "${globalWorldJson}"`, { stdio: 'pipe' });
-    }
-
-    // Always sync assets (new versions may have updated sprites/tiles)
-    if (existsSync(baseWorldDir)) {
-      execSync(`cp -R "${baseWorldDir}/world_assets" "${vizDataDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
-      execSync(`cp -R "${baseWorldDir}/universal_assets" "${vizDataDir}/" 2>/dev/null || true`, { stdio: 'pipe' });
-    }
-
-    const coreDir = join(__dirname, 'agentville', 'core');
-    mkdirSync(join(vizDataDir, '..', 'core'), { recursive: true });
-    if (existsSync(join(coreDir, 'agentville-core.js'))) {
-      execSync(`cp "${coreDir}/agentville-core.js" "${join(vizDataDir, '..', 'core')}/" 2>/dev/null || true`, { stdio: 'pipe' });
-    }
-
-    // Singleton: startAgentville() piggybacks on an existing instance if one is running.
-    const result = startAgentville(vizPort, vizDataDir);
-    if (!result) {
-      console.warn(chalk.yellow('  Warning: Could not start visualization server. Run `bun run build` first.'));
-      throw new Error('Server start failed');
-    }
     const healthy = await waitForAgentville(result.url, 10000);
-    if (!healthy) {
-      console.warn(chalk.yellow('  Warning: Visualization server did not become healthy'));
-      throw new Error('Server health check failed');
-    }
+    if (!healthy) return null;
 
     await registerAgentvilleAgents(result.url, agents, team, citizenOverrides);
-    vizUrl = result.url;
-
     installHooks(repoName, team, agents, result.url);
-  } catch (err) {
-    if (!vizUrl) {
-      console.warn(chalk.yellow(`  Warning: Visualization failed to start: ${(err as Error).message}`));
-    }
+    return result.url;
+  } catch {
+    // Agentville not installed or failed to start — continue without visualization
+    return null;
   }
-  return vizUrl;
 }
 
 // --- Headless PID management ---
@@ -257,6 +224,44 @@ export function stopHeadlessAgents(repoName: string, team: string): number {
     try { unlinkSync(join(dir, file)); } catch { /* ignore */ }
   }
   return stopped;
+}
+
+/**
+ * Check whether a team is currently running (via tmux or headless mode).
+ *
+ * Returns true if either:
+ * - A tmux session exists for this repo+team, OR
+ * - Any headless PID files contain a live process
+ */
+export function isTeamRunning(repoName: string, team: string): boolean {
+  // Check tmux session
+  try {
+    execSync(`tmux has-session -t "${getSessionName(repoName, team)}"`, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    return true;
+  } catch {
+    // No tmux session — fall through to headless check
+  }
+
+  // Check headless PID files
+  const pidDir = getHeadlessPidDir(repoName, team);
+  if (!existsSync(pidDir)) return false;
+
+  for (const file of readdirSync(pidDir)) {
+    if (!file.endsWith('.pid')) continue;
+    const pidStr = readFileSync(join(pidDir, file), 'utf-8').trim();
+    const pid = parseInt(pidStr, 10);
+    if (isNaN(pid)) continue;
+    try {
+      process.kill(pid, 0); // check if alive (signal 0 = no signal, just check)
+      return true;
+    } catch {
+      // Process is dead — continue checking others
+    }
+  }
+
+  return false;
 }
 
 /**

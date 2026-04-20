@@ -45,6 +45,7 @@ describe('createWorktrees + removeWorktrees', () => {
     // Clone it to get a working repo with a remote
     clonedRepo = join(tmp, 'repo');
     execSync(`git clone "${bareRepo}" "${clonedRepo}"`, { stdio: 'pipe' });
+    execSync('git config user.email "test@test.com" && git config user.name "Test"', { cwd: clonedRepo, stdio: 'pipe' });
     execSync('git commit --allow-empty -m "init"', {
       cwd: clonedRepo,
       stdio: 'pipe',

@@ -14,5 +14,5 @@
     "sourceMap": true
   },
   "include": ["lib/**/*.ts", "bin/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["lib/agentville/core/**", "tests/e2e/**"]
+  "exclude": ["tests/e2e/**"]
 }

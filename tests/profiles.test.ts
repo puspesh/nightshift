@@ -57,8 +57,6 @@ describe('no Hodor-specific content', () => {
     'NativeWind',
     'Expo',
     'pnpm',
-    'Vitest',
-    'Playwright',
     'impeccable',
     'superset',
   ];

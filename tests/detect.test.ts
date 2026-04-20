@@ -22,6 +22,7 @@ beforeEach(() => {
   origCwd = process.cwd();
   tmp = mkdtempSync(join(tmpdir(), 'nightshift-test-'));
   execSync('git init', { cwd: tmp, stdio: 'pipe' });
+  execSync('git config user.email "test@test.com" && git config user.name "Test"', { cwd: tmp, stdio: 'pipe' });
   execSync('git commit --allow-empty -m "init"', { cwd: tmp, stdio: 'pipe' });
   process.chdir(tmp);
 });
@@ -193,6 +194,7 @@ describe('detectRemote', () => {
     const cloneDir = mkdtempSync(join(tmpdir(), 'nightshift-clone-'));
     const clonedRepo = join(cloneDir, 'repo');
     execSync(`git clone "${bareRepo}" "${clonedRepo}"`, { stdio: 'pipe' });
+    execSync('git config user.email "test@test.com" && git config user.name "Test"', { cwd: clonedRepo, stdio: 'pipe' });
     execSync('git commit --allow-empty -m "init"', {
       cwd: clonedRepo,
       stdio: 'pipe',

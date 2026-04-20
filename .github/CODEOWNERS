@@ -1,0 +1,7 @@
+# Default owner for everything
+* @puspesh
+
+# Sensitive paths require maintainer review
+presets/ @puspesh
+.github/workflows/ @puspesh
+package.json @puspesh

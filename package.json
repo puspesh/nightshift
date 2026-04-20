@@ -4,26 +4,25 @@
   "description": "Coordinating AI agents for your development pipeline. Set up 5 agents (producer, planner, reviewer, coder, tester) in any repository.",
   "type": "module",
   "scripts": {
-    "build": "vite build --config lib/agentville/core/vite.config.ts && tsc -p tsconfig.build.json && mkdir -p dist/lib/agentville/core && cp lib/agentville/core/dist/agentville-core.js dist/lib/agentville/core/ && cp lib/agentville/core/agentville-core.d.ts dist/lib/agentville/core/ && cp -r presets dist/ && cp -r worlds dist/ && cp -r defaults dist/ && cp -r bin dist/",
-    "build:core": "vite build --config lib/agentville/core/vite.config.ts",
-    "pretest": "tsc",
-    "test": "node --test 'dist/tests/*.test.js'",
+    "build": "tsc -p tsconfig.build.json && cp -r presets dist/ && cp -r bin dist/ && chmod +x dist/bin/nightshift.js",
+    "pretest": "tsc && cp -r presets dist/ && cp -r bin dist/ && chmod +x dist/bin/nightshift.js",
+    "test": "node --test dist/tests/*.test.js",
     "typecheck": "tsc --noEmit",
-    "measure": "bash scripts/measure-build.sh",
-    "test:e2e": "playwright test"
+    "measure": "bash scripts/measure-build.sh"
   },
   "bin": {
-    "nightshift": "./dist/bin/nightshift.js",
-    "agentville": "./dist/bin/agentville.js"
+    "nightshift": "./dist/bin/nightshift.js"
   },
+  "bugs": {
+    "url": "https://github.com/nightshift-agents/nightshift/issues"
+  },
+  "homepage": "https://github.com/nightshift-agents/nightshift#readme",
   "files": [
     "bin/ns-status.sh",
     "dist/",
     "presets/",
-    "defaults/",
     "examples/",
-    "docs/",
-    "worlds/",
+    "docs/*.md",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -53,15 +52,11 @@
   "dependencies": {
     "chalk": "^5.3.0",
     "prompts": "^2.4.2",
-    "ws": "^8.16.0",
     "yaml": "^2.8.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
     "@types/node": "^25.5.0",
     "@types/prompts": "^2.4.9",
-    "@types/ws": "^8.5.10",
-    "typescript": "^5.9.3",
-    "vite": "6"
+    "typescript": "^5.9.3"
   }
 }

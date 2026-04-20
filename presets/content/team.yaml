@@ -1,0 +1,62 @@
+name: content
+description: Content creation pipeline
+
+stages:
+  - name: request
+    color: "a2eeef"
+  - name: researching
+    color: "1d76db"
+  - name: writing
+    color: "1d76db"
+  - name: review
+    color: "5319e7"
+  - name: revising
+    color: "fbca04"
+  - name: approved
+    color: "0e8a16"
+  - name: published
+    color: "ededed"
+  - name: wip
+    color: "ededed"
+    meta: true
+  - name: blocked
+    color: "d93f0b"
+    meta: true
+
+agents:
+  producer:
+    description: Orchestrates content pipeline, maintains calendar
+    watches: [request, unlabeled]
+    transitions:
+      triage: researching
+      publish: published
+    tools: [Read, Bash, Grep, Glob, Write, Edit, WebSearch]
+    model: sonnet
+    worktree: false
+
+  researcher:
+    description: Deep-dive research for content topics
+    watches: [researching]
+    transitions:
+      success: writing
+      error: blocked
+    tools: [Read, Bash, Grep, Glob, WebSearch, WebFetch]
+    model: sonnet
+
+  writer:
+    description: Turns research into polished drafts
+    watches: [writing, revising]
+    transitions:
+      success: review
+      error: blocked
+    tools: [Read, Bash, Grep, Glob, Write, Edit, Skill]
+    model: opus
+
+  reviewer:
+    description: Quality gate for content drafts
+    watches: [review]
+    transitions:
+      approve: approved
+      revise: revising
+    tools: [Read, Bash, Grep, Glob, Write, Edit, Skill]
+    model: opus

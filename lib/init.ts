@@ -6,7 +6,7 @@ import prompts from 'prompts';
 import { detectRepoRoot, detectRepoName, detectMainBranch, detectPackageManager, detectLanguage, detectScripts, validateTeamName, detectRemote, type DetectedScripts } from './detect.js';
 import { createLabelsFromConfig } from './labels.js';
 import { createWorktrees, getTeamDir } from './worktrees.js';
-import { copyExtensionFiles, getPresetDir, getGlobalAgentsDir } from './copy.js';
+import { copyExtensionFiles, copyScaffoldFiles, getPresetDir, getGlobalAgentsDir } from './copy.js';
 import { parseTeamConfig, validateTeamConfig, expandAgentInstances, getAgentRoles, getScalableAgents } from './team-config.js';
 import type { TeamConfig } from './team-config.js';
 import { generateAgentFile, buildTemplateVars } from './generate-agent.js';
@@ -631,6 +631,19 @@ export async function init(args: string[]): Promise<void> {
     console.log(
       `  ${chalk.dim(`  ${skipped.length} files skipped (already exist)`)}`
     );
+  }
+
+  // 11b. Copy scaffold files to repo root (if preset has a scaffold/ directory)
+  const scaffold = copyScaffoldFiles(repoRoot, presetDir);
+  if (scaffold.copied.length > 0 || scaffold.skipped.length > 0) {
+    console.log(
+      `  ${chalk.green('v')} ${scaffold.copied.length} scaffold files created in repo root`
+    );
+    if (scaffold.skipped.length > 0) {
+      console.log(
+        `  ${chalk.dim(`  ${scaffold.skipped.length} scaffold files skipped (already exist)`)}`
+      );
+    }
   }
 
   // 12. Create labels from team.yaml stages

@@ -54,6 +54,7 @@ export class Agentville {
   /** Agent IDs currently being spawned (to avoid duplicate async addCitizen calls) */
   private spawningAgents: Set<string> = new Set();
   private autoSpawnIndex = 0;
+  private ySortEnabled = false;
 
   constructor(config: AgentvilleConfig) {
     this.config = config;
@@ -276,6 +277,66 @@ export class Agentville {
 
   addLayer(layer: { order: number; render(ctx: CanvasRenderingContext2D, delta: number): void }) {
     this.renderer.addLayer(layer);
+  }
+
+  /**
+   * Replace fixed citizen layers with a Y-sorted layer that interleaves
+   * citizens and external drawables (e.g. above-layer props) by depth.
+   */
+  enableYSortedRendering(
+    getExtraItems: () => { sortY: number; draw(ctx: CanvasRenderingContext2D): void }[],
+    getAnchorBottomY?: (anchorName: string) => number | undefined,
+  ): void {
+    if (this.ySortEnabled) return;
+    this.ySortEnabled = true;
+
+    // Remove old citizen sub-layers from renderer
+    for (const layer of this.citizenLayer.getLayers()) {
+      this.renderer.removeLayer(layer);
+    }
+
+    const tileHeight = this.scene.config.tileHeight;
+    // Reusable array to avoid per-frame allocations
+    const items: { sortY: number; draw(ctx: CanvasRenderingContext2D): void }[] = [];
+
+    this.renderer.addLayer({
+      order: 14,
+      render: (ctx: CanvasRenderingContext2D, _delta: number) => {
+        items.length = 0;
+
+        // Collect visible citizens
+        for (const citizen of this.citizens) {
+          if (!citizen.visible) continue;
+
+          let sortY = citizen.y + tileHeight;
+
+          // Anchored + stationary: sort at anchor prop's depth (minus epsilon so citizen draws before prop)
+          if (citizen.isAnchored() && !citizen.isMoving() && getAnchorBottomY) {
+            const anchor = citizen.getCurrentAnchor();
+            if (anchor) {
+              const anchorY = getAnchorBottomY(anchor);
+              if (anchorY !== undefined) sortY = anchorY - 0.001;
+            }
+          }
+
+          const c = citizen; // capture for closure
+          const sy = sortY;
+          items.push({ sortY: sy, draw: (ctx) => c.draw(ctx) });
+        }
+
+        // Collect external drawables (above-layer props)
+        const extras = getExtraItems();
+        for (let i = 0; i < extras.length; i++) {
+          items.push(extras[i]);
+        }
+
+        // Sort by depth and draw
+        items.sort((a, b) => a.sortY - b.sortY);
+        for (const item of items) {
+          item.draw(ctx);
+        }
+      },
+    });
   }
 
   on(event: AgentvilleEvent, handler: (data: unknown) => void) {

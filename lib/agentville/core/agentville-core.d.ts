@@ -398,6 +398,14 @@ export declare class Agentville {
         order: number;
         render(ctx: CanvasRenderingContext2D, delta: number): void;
     }): void;
+    /**
+     * Replace fixed citizen layers with a Y-sorted layer that interleaves
+     * citizens and external drawables (e.g. above-layer props) by depth.
+     */
+    enableYSortedRendering(
+        getExtraItems: () => { sortY: number; draw(ctx: CanvasRenderingContext2D): void }[],
+        getAnchorBottomY?: (anchorName: string) => number | undefined,
+    ): void;
     on(event: AgentvilleEvent, handler: (data: unknown) => void): void;
     off(event: AgentvilleEvent, handler: (data: unknown) => void): void;
     private emit;
@@ -572,6 +580,7 @@ export declare class PropSystem {
     handleMouseMove(wx: number, wy: number): void;
     handleMouseUp(): void;
     handleKey(e: KeyboardEvent): boolean;
+    getPropForAnchor(anchorName: string): { piece: LoadedPiece; anchor: Anchor } | null;
     pieceAt(wx: number, wy: number): LoadedPiece | null;
     private snap;
 }

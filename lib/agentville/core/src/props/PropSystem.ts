@@ -408,6 +408,15 @@ export class PropSystem {
 
   // --- Helpers ---
 
+  getPropForAnchor(anchorName: string): { piece: LoadedPiece; anchor: Anchor } | null {
+    for (const p of this.pieces) {
+      for (const a of p.anchors) {
+        if (a.name === anchorName) return { piece: p, anchor: a };
+      }
+    }
+    return null;
+  }
+
   pieceAt(wx: number, wy: number): LoadedPiece | null {
     const T = this.tileSize;
     for (let i = this.pieces.length - 1; i >= 0; i--) {

@@ -200,5 +200,23 @@ describe('persistence', () => {
       assert.ok(clock);
       assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 10, y: 1 });
     });
+
+    it('clamps clock x to room width for narrow rooms', () => {
+      const world = makeWorld({
+        inventory: [],
+        world: {
+          floors: [{
+            id: 'floor_0',
+            name: 'Ground Floor',
+            rooms: [{ id: 'room_0', name: 'Small Office', width: 8, height: 6, style: 'basic' }],
+          }],
+        },
+      });
+      ensureStarterItems(world);
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock);
+      // width 8 → maxX = 7, so clock should be at x:7 not x:10
+      assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 7, y: 1 });
+    });
   });
 });

@@ -14,12 +14,17 @@ export function ensureStarterItems(world: AgentvilleWorld): boolean {
   // Ensure wall_clock_basic
   const hasClock = world.inventory.some(i => i.catalogId === 'wall_clock_basic');
   if (!hasClock) {
+    // Clamp x to room width so narrow migrated worlds don't get an out-of-bounds placement
+    const room = world.world.floors[0]?.rooms.find(r => r.id === 'room_0');
+    const maxX = room ? room.width - 1 : 19;
+    const clockX = Math.min(10, maxX);
+
     world.inventory.push({
       id: 'starter_clock_1',
       catalogId: 'wall_clock_basic',
       type: 'decoration',
       placed: true,
-      placedAt: { roomId: 'room_0', x: 10, y: 1 },
+      placedAt: { roomId: 'room_0', x: clockX, y: 1 },
     });
     changed = true;
   }

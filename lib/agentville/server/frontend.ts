@@ -399,6 +399,7 @@ h1 {
   transition: width 0.2s ease;
   overflow: hidden;
   align-self: stretch;
+  max-height: var(--world-height);
 }
 #event-log-sidebar.collapsed {
   width: 32px;
@@ -1330,6 +1331,9 @@ async function startLegacyWorld(prefetched) {
   const gridCols = worldData.gridCols || 16;
   const gridRows = worldData.gridRows || 12;
   const tileSize = 32;
+
+  // Set sidebar max-height to match the canvas display height (scale 2×)
+  document.getElementById('game-layout').style.setProperty('--world-height', (gridRows * tileSize * 2) + 'px');
 
   // Use the worldId from the API response to construct the correct asset path.
   // When worldId is set (legacy repo/team path), use it. Otherwise root-level world.json.

@@ -985,19 +985,24 @@ export class AgentvilleServer {
                 }] : [],
               };
             });
-          // Add chair props alongside each desk
+          // Add chair props alongside each desk — center chair on the
+          // citizen's anchor tile so sprite and citizen align visually
+          const chairW = 1.1;
           const chairProps = inventoryProps
             .filter(p => p.catalogId.startsWith('desk_'))
-            .map((p, i) => ({
-              id: `chair_${p.id}`,
-              x: p.x + 1,
-              y: p.y + 1,
-              w: 1.1,
-              h: 1.9,
-              layer: 'above' as const,
-              fromInventory: true,
-              anchors: [] as { name: string; ox: number; oy: number; type: string }[],
-            }));
+            .map((p, i) => {
+              const anchorTileX = Math.round(p.x + 1); // same rounding as getLocations
+              return {
+                id: `chair_${p.id}`,
+                x: anchorTileX + 0.5 - chairW / 2, // center on tile center (where sprite renders)
+                y: p.y + 1,
+                w: chairW,
+                h: 1.9,
+                layer: 'above' as const,
+                fromInventory: true,
+                anchors: [] as { name: string; ox: number; oy: number; type: string }[],
+              };
+            });
 
           worldData.props = [...existingProps, ...inventoryProps, ...chairProps];
 

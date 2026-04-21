@@ -11,7 +11,7 @@
  * Press Ctrl-C to stop.  The world state is saved to ~/.agentville/ as usual.
  */
 
-import { existsSync, mkdirSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, symlinkSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -234,8 +234,8 @@ class MockEventGenerator {
 
     const roll = Math.random();
 
-    if (roll < 0.08) {
-      // 8% chance: go idle briefly
+    if (roll < 0.20) {
+      // 20% chance: go idle briefly
       this.agentStates.set(agent.id, 'idle');
       await this.post({
         type: 'agent:heartbeat',
@@ -244,7 +244,7 @@ class MockEventGenerator {
         data: { state: 'idle', task: null },
       });
 
-      const idleDuration = randBetween(5000, 15000);
+      const idleDuration = randBetween(8000, 20000);
       const timer = setTimeout(() => {
         if (!this.running) return;
         // Come back to working
@@ -265,8 +265,38 @@ class MockEventGenerator {
       return;
     }
 
-    if (roll < 0.12) {
-      // 4% chance: brief error
+    if (roll < 0.35) {
+      // 15% chance: sleeping
+      this.agentStates.set(agent.id, 'sleeping');
+      await this.post({
+        type: 'agent:heartbeat',
+        source: 'nightshift',
+        agent: agent.id,
+        data: { state: 'sleeping', task: null },
+      });
+
+      const sleepDuration = randBetween(10000, 25000);
+      const timer = setTimeout(() => {
+        if (!this.running) return;
+        this.agentStates.set(agent.id, 'working');
+        this.post({
+          type: 'agent:heartbeat',
+          source: 'nightshift',
+          agent: agent.id,
+          data: {
+            state: 'working',
+            task: pick(agent.tasks),
+            energy: 0.9 + Math.random() * 0.1,
+          },
+        });
+        this.scheduleAgentLoop(agent);
+      }, sleepDuration);
+      this.timers.push(timer);
+      return;
+    }
+
+    if (roll < 0.42) {
+      // 7% chance: brief error
       await this.post({
         type: 'agent:error',
         source: 'nightshift',
@@ -478,7 +508,32 @@ async function main() {
   }
 
   // Start server
-  const server = new AgentvilleServer({ port: PORT, publicDir: devDir });
+  const server = new AgentvilleServer({
+    port: PORT,
+    publicDir: devDir,
+    devMode: true,
+    async onRoute(req, res, url) {
+      if (req.method === 'POST' && url.pathname === '/api/world/save') {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        const body = JSON.parse(Buffer.concat(chunks).toString());
+        try {
+          const raw = readFileSync(baseWorldJson, 'utf-8');
+          const world = JSON.parse(raw);
+          if (body.props) world.props = body.props;
+          if (body.wanderPoints) world.wanderPoints = body.wanderPoints;
+          writeFileSync(baseWorldJson, JSON.stringify(world, null, 2) + '\n');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (err: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return true;
+      }
+      return false;
+    },
+  });
   server.setGameState(gameState);
   server.onMutation(() => {
     const state = server.getGameState();

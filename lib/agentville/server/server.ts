@@ -19,6 +19,10 @@ export interface AgentvilleServerConfig {
   offlineTimeout?: number;
   /** Directory for generated assets (e.g. './public') */
   publicDir?: string;
+  /** Enable dev-only features (zone overlay, edit mode) in the frontend */
+  devMode?: boolean;
+  /** Optional pre-route handler. Return true if handled. */
+  onRoute?: (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean> | boolean;
 }
 
 export class AgentvilleServer {
@@ -37,6 +41,8 @@ export class AgentvilleServer {
   /** Webhook callbacks: agent ID → callback URL */
   private webhooks: Map<string, string> = new Map();
   private publicDir: string | null;
+  private devMode: boolean;
+  private onRoute: AgentvilleServerConfig['onRoute'];
   private gameState: AgentvilleWorld | null = null;
   private mutationCallbacks: Array<() => void> = [];
   /** Event API: track spawned child keys per parent agent key for cleanup */
@@ -46,6 +52,8 @@ export class AgentvilleServer {
   constructor(config: AgentvilleServerConfig = {}) {
     this.port = config.port ?? 4321;
     this.publicDir = config.publicDir ?? null;
+    this.devMode = config.devMode ?? false;
+    this.onRoute = config.onRoute;
     this.store = new AgentStore(config.offlineTimeout ?? 30000);
     this.events = new EventLog();
     if (this.publicDir) {
@@ -887,10 +895,16 @@ export class AgentvilleServer {
       return;
     }
 
+    // Custom route handler (dev mode extensions)
+    if (this.onRoute) {
+      const handled = await this.onRoute(req, res, url);
+      if (handled) return;
+    }
+
     // Routes
     if (req.method === 'GET' && url.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(getFrontendHtml());
+      res.end(getFrontendHtml(this.devMode));
       return;
     }
 

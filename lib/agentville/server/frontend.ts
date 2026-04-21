@@ -44,11 +44,7 @@ h1 {
 }
 
 #status-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  width: 100%;
-  max-width: 720px;
+  display: none;
 }
 
 .agent-card {
@@ -410,22 +406,86 @@ h1 {
 }
 #event-log-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px;
   border-bottom: 1px solid #30363d;
   flex-shrink: 0;
+  padding: 0;
+}
+#sidebar-tabs {
+  display: flex;
+  flex: 1;
+}
+.sidebar-tab {
+  flex: 1;
+  padding: 10px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #484f58;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  text-align: center;
+}
+.sidebar-tab:hover { color: #8b949e; }
+.sidebar-tab.active {
+  color: #c9d1d9;
+  border-bottom-color: #58a6ff;
+}
+#event-log-sidebar.collapsed #sidebar-tabs {
+  display: none;
 }
 #event-log-sidebar.collapsed #event-log-header {
   justify-content: center;
   padding: 12px 4px;
 }
-#event-log-header span {
+#sidebar-agents-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+#sidebar-agents-list::-webkit-scrollbar { width: 6px; }
+#sidebar-agents-list::-webkit-scrollbar-track { background: #0d1117; }
+#sidebar-agents-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+#sidebar-agents-list::-webkit-scrollbar-thumb:hover { background: #484f58; }
+.sidebar-agent-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-bottom: 1px solid #21262d;
+}
+.sidebar-agent-card:last-child { border-bottom: none; }
+.sidebar-agent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sidebar-agent-info { flex: 1; min-width: 0; }
+.sidebar-agent-name {
   font-size: 12px;
   font-weight: 600;
+  color: #c9d1d9;
+}
+.sidebar-agent-status {
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #8b949e;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.sidebar-agent-task {
+  font-size: 11px;
+  color: #484f58;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #event-log-toggle {
   background: none;
@@ -440,6 +500,21 @@ h1 {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+#event-log-entries::-webkit-scrollbar {
+  width: 6px;
+}
+#event-log-entries::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+#event-log-entries::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+#event-log-entries::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
 }
 .log-entry {
   font-size: 12px;
@@ -565,10 +640,14 @@ h1 {
 <!-- Event Log Sidebar (inside game-layout flex row) -->
 <div id="event-log-sidebar">
   <div id="event-log-header">
-    <span>Activity</span>
+    <div id="sidebar-tabs">
+      <button class="sidebar-tab active" data-tab="activity">Activity</button>
+      <button class="sidebar-tab" data-tab="agents">Agents</button>
+    </div>
     <button id="event-log-toggle">&#x25C0;</button>
   </div>
   <div id="event-log-entries"></div>
+  <div id="sidebar-agents-list" style="display:none"></div>
 </div>
 </div><!-- /game-layout -->
 <div id="status-panel"></div>
@@ -612,11 +691,26 @@ const STATE_LABELS = {
   sleeping: 'Sleeping', error: 'Error', offline: 'Offline', speaking: 'Speaking',
 };
 
-const panel = document.getElementById('status-panel');
+const panel = document.getElementById('sidebar-agents-list');
 const connStatus = document.getElementById('connection-status');
 const container = document.getElementById('canvas-container');
 const tooltip = document.getElementById('tooltip');
 const agents = new Map();
+
+// --- Sidebar tab switching ---
+const sidebarTabs = document.querySelectorAll('.sidebar-tab');
+const logEntriesEl = document.getElementById('event-log-entries');
+const agentsListEl = document.getElementById('sidebar-agents-list');
+
+sidebarTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    sidebarTabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const which = tab.dataset.tab;
+    logEntriesEl.style.display = which === 'activity' ? '' : 'none';
+    agentsListEl.style.display = which === 'agents' ? '' : 'none';
+  });
+});
 
 // --- Game state ---
 let gameState = null;
@@ -879,25 +973,33 @@ logToggle.addEventListener('click', () => {
 initSidebarState();
 loadEventLog();
 
-// --- Agent card rendering ---
+// --- Agent card rendering (sidebar) ---
 function renderCard(agent) {
   const role = getRole(agent.agent);
   let card = panel.querySelector('[data-agent="' + CSS.escape(agent.agent) + '"]');
   if (!card) {
     card = document.createElement('div');
-    card.className = 'agent-card';
+    card.className = 'sidebar-agent-card';
     card.dataset.agent = agent.agent;
     card.dataset.role = role;
-    card.innerHTML = '<div class="name">' + esc(agent.name || role) + '</div><div class="status"></div><div class="task"></div>';
+    card.innerHTML = '<div class="sidebar-agent-dot"></div>'
+      + '<div class="sidebar-agent-info">'
+      + '<div class="sidebar-agent-name"></div>'
+      + '<div class="sidebar-agent-status"></div>'
+      + '<div class="sidebar-agent-task"></div>'
+      + '</div>';
     panel.appendChild(card);
   }
   const agentColor = agent.color || '#8b949e';
-  card.style.borderLeft = '3px solid ' + agentColor;
-  card.querySelector('.name').style.color = agentColor;
   const state = agent.state || 'offline';
-  card.querySelector('.status').textContent = STATE_LABELS[state] || state;
-  card.querySelector('.status').className = 'status status-' + state;
-  card.querySelector('.task').textContent = agent.task || '';
+  const dot = card.querySelector('.sidebar-agent-dot');
+  dot.style.background = agentColor;
+  card.querySelector('.sidebar-agent-name').textContent = agent.name || role;
+  card.querySelector('.sidebar-agent-name').style.color = agentColor;
+  const statusEl = card.querySelector('.sidebar-agent-status');
+  statusEl.textContent = STATE_LABELS[state] || state;
+  statusEl.className = 'sidebar-agent-status status-' + state;
+  card.querySelector('.sidebar-agent-task').textContent = agent.task || '';
 }
 
 // --- Effects overlay (stars, zzz, error sparks) ---
@@ -924,7 +1026,7 @@ function renderEffects(timestamp) {
     if (!agent) continue;
 
     // Try to find citizen position from engine (approximate from card index)
-    const cards = panel.querySelectorAll('.agent-card');
+    const cards = panel.querySelectorAll('.sidebar-agent-card');
     let idx = 0;
     for (const card of cards) {
       if (card.dataset.agent === agentKey) break;

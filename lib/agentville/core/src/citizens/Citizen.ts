@@ -507,7 +507,7 @@ export class Citizen {
   /** Y offset applied when the character is sitting (working/sleeping) */
   getSittingOffset(): number {
     return (this.state === 'working' || this.state === 'sleeping')
-      ? this.tileHeight * 1.0
+      ? this.tileHeight * 1.2
       : 0;
   }
 

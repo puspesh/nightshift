@@ -28,6 +28,9 @@ export interface PropPiece {
 
 export type PropLayout = PropPiece[];
 
+/** Minimum overlap (0–1) a prop must have on a tile in each axis to block it */
+export const BLOCKING_OVERLAP_THRESHOLD = 0.6;
+
 export const ANCHOR_COLORS: Record<AnchorType, string> = {
   work: '#4ade80',
   rest: '#818cf8',
@@ -192,11 +195,11 @@ export class PropSystem {
 
   getBlockedTiles(): Set<string> {
     const blocked = new Set<string>();
-    // Only block tiles the prop substantially covers (≥60% overlap in each axis).
-    // Props placed at fractional positions create marginal overlaps on edge tiles
-    // (e.g., a desk at x=4.5 barely touches x=4 with 0.5 overlap). Without a
-    // threshold these marginal tiles form false walls that block pathfinding.
-    const threshold = 0.6;
+    // Only block tiles the prop substantially covers. Props placed at fractional
+    // positions create marginal overlaps on edge tiles (e.g., a desk at x=4.5
+    // barely touches x=4 with 0.5 overlap). Without a threshold these marginal
+    // tiles form false walls that block pathfinding.
+    const threshold = BLOCKING_OVERLAP_THRESHOLD;
     for (const p of this.pieces) {
       const x0 = Math.floor(p.x);
       const y0 = Math.floor(p.y);

@@ -968,25 +968,34 @@ export class AgentvilleServer {
             .filter(item => item.placed && item.placedAt)
             .map(item => {
               const catalog = getCatalogItem(item.catalogId);
+              const w = catalog?.w ?? 1;
+              const h = catalog?.h ?? 1;
+              // For desks: center the desk sprite on the anchor tile so desk,
+              // chair, and citizen all align visually on the same tile center
+              let x = item.placedAt!.x;
+              const anchorOx = 1;
+              if (item.type === 'desk') {
+                const anchorTileX = Math.round(x + anchorOx);
+                x = anchorTileX + 0.5 - w / 2; // center desk on anchor tile
+              }
               return {
                 id: item.id,
                 catalogId: item.catalogId,
-                x: item.placedAt!.x,
+                x,
                 y: item.placedAt!.y,
-                w: catalog?.w ?? 1,
-                h: catalog?.h ?? 1,
+                w,
+                h,
                 layer: 'below' as const,
                 fromInventory: true,
                 anchors: item.type === 'desk' ? [{
                   name: 'desk_' + item.id,
-                  ox: 1,
-                  oy: (catalog?.h ?? 3) - 1,
+                  ox: anchorOx,
+                  oy: h - 1,
                   type: 'work',
                 }] : [],
               };
             });
-          // Add chair props alongside each desk — center chair on the
-          // citizen's anchor tile so sprite and citizen align visually
+          // Add chair props alongside each desk — center on anchor tile
           const chairW = 1.1;
           const chairProps = inventoryProps
             .filter(p => p.catalogId.startsWith('desk_'))
@@ -994,7 +1003,7 @@ export class AgentvilleServer {
               const anchorTileX = Math.round(p.x + 1); // same rounding as getLocations
               return {
                 id: `chair_${p.id}`,
-                x: anchorTileX + 0.5 - chairW / 2, // center on tile center (where sprite renders)
+                x: anchorTileX + 0.5 - chairW / 2,
                 y: p.y + 1,
                 w: chairW,
                 h: 1.9,

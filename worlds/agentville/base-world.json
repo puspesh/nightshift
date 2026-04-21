@@ -253,7 +253,14 @@
       "w": 2,
       "h": 1,
       "layer": "below",
-      "anchors": [{ "name": "kitchen_counter_sink_0", "ox": 1, "oy": 1, "type": "utility" }]
+      "anchors": [
+        {
+          "name": "kitchen_counter_sink_0",
+          "ox": 1,
+          "oy": 1,
+          "type": "utility"
+        }
+      ]
     },
     {
       "id": "kitchen_counter_plain",
@@ -262,7 +269,14 @@
       "w": 2,
       "h": 1,
       "layer": "below",
-      "anchors": [{ "name": "kitchen_counter_plain_0", "ox": 1, "oy": 1, "type": "utility" }]
+      "anchors": [
+        {
+          "name": "kitchen_counter_plain_0",
+          "ox": 1,
+          "oy": 1,
+          "type": "utility"
+        }
+      ]
     },
     {
       "id": "fridge_stainless",
@@ -280,10 +294,38 @@
       "h": 1,
       "layer": "below"
     },
-    { "id": "window_large_vertical", "x": 5.5,   "y": 0, "w": 2.3, "h": 2, "layer": "below" },
-    { "id": "window_large_vertical", "x": 7.75,  "y": 0, "w": 2.3, "h": 2, "layer": "below" },
-    { "id": "window_large_vertical", "x": 14.25, "y": 0, "w": 2.3, "h": 2, "layer": "below" },
-    { "id": "window_large_vertical", "x": 16.5,  "y": 0, "w": 2.3, "h": 2, "layer": "below" },
+    {
+      "id": "window_large_vertical",
+      "x": 5.5,
+      "y": 0,
+      "w": 2.3,
+      "h": 2,
+      "layer": "below"
+    },
+    {
+      "id": "window_large_vertical",
+      "x": 7.75,
+      "y": 0,
+      "w": 2.3,
+      "h": 2,
+      "layer": "below"
+    },
+    {
+      "id": "window_large_vertical",
+      "x": 14.25,
+      "y": 0,
+      "w": 2.3,
+      "h": 2,
+      "layer": "below"
+    },
+    {
+      "id": "window_large_vertical",
+      "x": 16.5,
+      "y": 0,
+      "w": 2.3,
+      "h": 2,
+      "layer": "below"
+    },
     {
       "id": "rug_patterned",
       "x": 0.5,
@@ -294,74 +336,143 @@
     },
     {
       "id": "yellow_armchair",
-      "x": 1,
-      "y": 5.5,
+      "x": 0,
+      "y": 5.25,
       "w": 2,
       "h": 2,
       "layer": "below",
-      "anchors": [{ "name": "armchair_top", "ox": 1, "oy": 1, "type": "rest" }]
+      "anchors": [
+        {
+          "name": "armchair_top",
+          "ox": 1,
+          "oy": 1,
+          "type": "rest"
+        }
+      ]
     },
     {
       "id": "yellow_armchair",
-      "x": 0,
-      "y": 8.5,
+      "x": 2.5,
+      "y": 5.25,
       "w": 2,
       "h": 2,
       "layer": "below",
-      "anchors": [{ "name": "armchair_right", "ox": 1, "oy": 1, "type": "rest" }]
+      "anchors": [
+        {
+          "name": "armchair_right",
+          "ox": 1,
+          "oy": 1,
+          "type": "rest"
+        }
+      ]
     },
     {
       "id": "orange_ottoman",
-      "x": 2.5,
-      "y": 7.5,
+      "x": 3,
+      "y": 9.25,
       "w": 1,
       "h": 1,
       "layer": "below",
-      "anchors": [{ "name": "ottoman_1", "ox": 0.5, "oy": 0.5, "type": "rest" }]
+      "anchors": [
+        {
+          "name": "ottoman_1",
+          "ox": 0.5,
+          "oy": 0.5,
+          "type": "rest"
+        }
+      ]
     },
     {
       "id": "orange_ottoman",
-      "x": 2.5,
-      "y": 8.5,
+      "x": 0.25,
+      "y": 9.25,
       "w": 1,
       "h": 1,
       "layer": "above",
-      "anchors": [{ "name": "ottoman_2", "ox": 0.5, "oy": 0.5, "type": "rest" }]
+      "anchors": [
+        {
+          "name": "ottoman_2",
+          "ox": 0.5,
+          "oy": 0.5,
+          "type": "rest"
+        }
+      ]
     },
     {
       "id": "stool_aqua",
-      "x": 1.25,
-      "y": 5,
+      "x": 1.5,
+      "y": 7.75,
       "w": 1,
       "h": 1,
       "layer": "below",
-      "anchors": [{ "name": "stool_kitchen", "ox": 0.5, "oy": 1, "type": "social" }]
+      "anchors": [
+        {
+          "name": "stool_kitchen",
+          "ox": 0.5,
+          "oy": 1,
+          "type": "social"
+        }
+      ]
     },
     {
       "id": "wood_cushion_chair",
-      "x": 2,
-      "y": 5,
+      "x": 4.75,
+      "y": 7.25,
       "w": 1.9,
       "h": 2,
       "layer": "below",
-      "anchors": [{ "name": "cushion_chair_0", "ox": 0.5, "oy": 1, "type": "rest" }]
+      "anchors": [
+        {
+          "name": "cushion_chair_0",
+          "ox": 0.5,
+          "oy": 1,
+          "type": "rest"
+        }
+      ]
     },
     {
       "id": "coffee_table_low",
-      "x": 1,
-      "y": 6.5,
+      "x": 4.75,
+      "y": 9.5,
       "w": 2,
       "h": 1,
       "layer": "below",
-      "anchors": [{ "name": "coffee_table_lounge", "ox": 1.5, "oy": 1, "type": "social" }]
+      "anchors": [
+        {
+          "name": "coffee_table_lounge",
+          "ox": 1.5,
+          "oy": 1,
+          "type": "social"
+        }
+      ]
     }
   ],
   "wanderPoints": [
-    { "name": "lounge_rug", "x": 2.5, "y": 8 },
-    { "name": "kitchen_entry", "x": 2, "y": 4 },
-    { "name": "kitchen_stool", "x": 2, "y": 5 },
-    { "name": "hallway_center", "x": 10, "y": 9 },
-    { "name": "hallway_right", "x": 16, "y": 9 }
+    {
+      "name": "lounge_rug",
+      "x": 2.25,
+      "y": 5
+    },
+    {
+      "name": "kitchen_entry",
+      "x": 2,
+      "y": 4
+    },
+    {
+      "name": "kitchen_stool",
+      "x": 2.25,
+      "y": 8
+    },
+    {
+      "name": "hallway_center",
+      "x": 10,
+      "y": 9
+    },
+    {
+      "name": "hallway_right",
+      "x": 16,
+      "y": 9
+    }
   ],
   "propImages": {
     "desk_corner_right": "world_assets/props/prop_1_desk_corner_right.png",

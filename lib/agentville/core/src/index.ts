@@ -288,7 +288,6 @@ export class Agentville {
    */
   enableYSortedRendering(
     getExtraItems: () => { sortY: number; draw(ctx: CanvasRenderingContext2D): void }[],
-    getAnchorBottomY?: (anchorName: string) => number | undefined,
   ): void {
     if (this.ySortEnabled) return;
     this.ySortEnabled = true;
@@ -311,18 +310,13 @@ export class Agentville {
         for (const citizen of this.citizens) {
           if (!citizen.visible) continue;
 
-          let sortY = citizen.y + tileHeight;
+          // Sitting citizens sort at their tile top (always before co-located furniture).
+          // Walking/standing citizens sort at their feet (natural depth).
+          const sortY = (citizen.isAnchored() && !citizen.isMoving())
+            ? citizen.y
+            : citizen.y + tileHeight;
 
-          // Anchored + stationary: sort at anchor prop's depth (minus epsilon so citizen draws before prop)
-          if (citizen.isAnchored() && !citizen.isMoving() && getAnchorBottomY) {
-            const anchor = citizen.getCurrentAnchor();
-            if (anchor) {
-              const anchorY = getAnchorBottomY(anchor);
-              if (anchorY !== undefined) sortY = anchorY - 0.001;
-            }
-          }
-
-          const c = citizen; // capture for closure
+          const c = citizen;
           const sy = sortY;
           items.push({ sortY: sy, draw: (ctx) => c.draw(ctx) });
         }

@@ -1618,28 +1618,20 @@ async function startLegacyWorld(prefetched) {
 
   // Y-sorted interleaving: citizens and above-layer props sort by depth each frame
   const T = props.getTileSize();
-  mv.enableYSortedRendering(
-    () => {
-      const items = [];
-      for (const p of props.pieces) {
-        if (p.layer !== 'above') continue;
-        items.push({
-          sortY: (p.y + p.h) * T,
-          draw(ctx) {
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(p.img, p.x * T, p.y * T, p.w * T, p.h * T);
-          },
-        });
-      }
-      return items;
-    },
-    (anchorName) => {
-      const result = props.getPropForAnchor(anchorName);
-      if (!result) return undefined;
-      // Match prop's own sortY so citizen draws just before (behind) its prop
-      return (result.piece.y + result.piece.h) * T;
-    },
-  );
+  mv.enableYSortedRendering(() => {
+    const items = [];
+    for (const p of props.pieces) {
+      if (p.layer !== 'above') continue;
+      items.push({
+        sortY: (p.y + p.h) * T,
+        draw(ctx) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(p.img, p.x * T, p.y * T, p.w * T, p.h * T);
+        },
+      });
+    }
+    return items;
+  });
 
   // --- Wall clock live time overlay (order 16, above all props) ---
   {

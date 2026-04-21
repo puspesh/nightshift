@@ -340,7 +340,7 @@
       "y": 5.25,
       "w": 2,
       "h": 2,
-      "layer": "below",
+      "layer": "above",
       "anchors": [
         {
           "name": "armchair_top",
@@ -356,7 +356,7 @@
       "y": 5.25,
       "w": 2,
       "h": 2,
-      "layer": "below",
+      "layer": "above",
       "anchors": [
         {
           "name": "armchair_right",
@@ -372,7 +372,7 @@
       "y": 9.25,
       "w": 1,
       "h": 1,
-      "layer": "below",
+      "layer": "above",
       "anchors": [
         {
           "name": "ottoman_1",
@@ -420,7 +420,7 @@
       "y": 7.25,
       "w": 1.9,
       "h": 2,
-      "layer": "below",
+      "layer": "above",
       "anchors": [
         {
           "name": "cushion_chair_0",
@@ -436,7 +436,7 @@
       "y": 9.5,
       "w": 2,
       "h": 1,
-      "layer": "below",
+      "layer": "above",
       "anchors": [
         {
           "name": "coffee_table_lounge",

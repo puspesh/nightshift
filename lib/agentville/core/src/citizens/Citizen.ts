@@ -516,6 +516,7 @@ export class Citizen {
     if (this.isMoving()) return 0;
     if (this.state !== 'working' && this.state !== 'sleeping') return 0;
     if (this.currentAnchorType !== 'work' && this.currentAnchorType !== 'rest') return 0;
+    if (this.state === 'sleeping') return 0;
     return this.tileHeight * 1.2;
   }
 

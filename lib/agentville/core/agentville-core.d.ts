@@ -404,7 +404,6 @@ export declare class Agentville {
      */
     enableYSortedRendering(
         getExtraItems: () => { sortY: number; draw(ctx: CanvasRenderingContext2D): void }[],
-        getAnchorBottomY?: (anchorName: string) => number | undefined,
     ): void;
     on(event: AgentvilleEvent, handler: (data: unknown) => void): void;
     off(event: AgentvilleEvent, handler: (data: unknown) => void): void;

@@ -53,6 +53,8 @@ export class Agentville {
   private reservation = new TileReservation();
   /** Agent IDs currently being spawned (to avoid duplicate async addCitizen calls) */
   private spawningAgents: Set<string> = new Set();
+  /** Anchor names claimed as home positions during async spawn (prevents race conditions) */
+  private pendingHomeAnchors: Set<string> = new Set();
   private autoSpawnIndex = 0;
 
   constructor(config: AgentvilleConfig) {
@@ -424,13 +426,14 @@ export class Agentville {
     const rows = grid.length;
     const cols = grid[0]?.length ?? 0;
 
-    // Reset: walls on edges, deadspace tiles, floor inside
+    // Reset: walls on edges, wall tiles, deadspace tiles; floor inside
     const floor = this.scene.config.layers[0];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const isEdge = r === 0 || r === rows - 1 || c === 0 || c === cols - 1;
         const isDead = floor?.[r]?.[c] === '';
-        grid[r][c] = !isEdge && !isDead;
+        const isWall = (floor?.[r]?.[c] ?? '').includes('wall');
+        grid[r][c] = !isEdge && !isDead && !isWall;
       }
     }
 
@@ -703,14 +706,18 @@ export class Agentville {
     const sprite = sprites[this.autoSpawnIndex % sprites.length];
     this.autoSpawnIndex++;
 
-    // Assign a work anchor as home position so the citizen has a desk
+    // Assign a work anchor as home position so the citizen has a desk.
+    // Check both existing citizens' homes AND pending (async) spawn claims.
     const otherHomes = this.getOtherHomeAnchors('');
     const workAnchors = this.typedLocations
-      .filter(l => l.type === 'work' && !otherHomes.has(l.name))
+      .filter(l => l.type === 'work'
+        && !otherHomes.has(l.name)
+        && !this.pendingHomeAnchors.has(l.name))
       .sort(() => Math.random() - 0.5);
     const homeAnchor: TypedLocation | null = workAnchors.find(l =>
       this.reservation.isAvailable(l.x, l.y, agent.id)
     ) ?? null;
+    if (homeAnchor) this.pendingHomeAnchors.add(homeAnchor.name);
 
     // Pick a wander point to spawn at (citizen will walk to desk when state changes)
     const wanderPoints = this.typedLocations.filter(l => l.type === 'wander');
@@ -768,7 +775,10 @@ export class Agentville {
         }
       })
       .catch((err) => { console.warn(`[agentville] Auto-spawn failed for "${agent.id}":`, err); })
-      .finally(() => { this.spawningAgents.delete(agent.id); });
+      .finally(() => {
+        this.spawningAgents.delete(agent.id);
+        if (homeAnchor) this.pendingHomeAnchors.delete(homeAnchor.name);
+      });
   }
 
   /** Returns anchor names assigned as home positions to other citizens */
@@ -788,15 +798,15 @@ export class Agentville {
 
     if (this.typedLocations.length > 0) {
       if (to === 'working') {
-        // Go to assigned home anchor — but only if it's actually a work-type location
+        // 1. Prefer home desk if it's a work anchor and the tile is free
         const home = citizen.getHomePosition();
         const homeLoc = this.typedLocations.find(l => l.name === home);
         const reachedHome = homeLoc?.type === 'work'
           && citizen.goToAnchor(home, this.typedLocations, this.scene.pathfinder, this.reservation);
         if (!reachedHome) {
-          // Fallback: any unassigned work anchor
-          if (!citizen.goToAnchorType('work', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes)) {
-            // Last resort: walk to a random tile in the work zone
+          // 2. Any work anchor with a free tile (reservation = ground truth, not home names)
+          if (!citizen.goToAnchorType('work', this.typedLocations, this.scene.pathfinder, this.reservation)) {
+            // 3. Last resort: walk to a random tile in the work zone
             const zones = this.computeZones();
             citizen.walkToRandomTile(this.scene.pathfinder, this.reservation, zones.work);
           }

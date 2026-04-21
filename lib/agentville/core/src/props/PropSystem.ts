@@ -192,13 +192,22 @@ export class PropSystem {
 
   getBlockedTiles(): Set<string> {
     const blocked = new Set<string>();
+    // Only block tiles the prop substantially covers (≥60% overlap in each axis).
+    // Props placed at fractional positions create marginal overlaps on edge tiles
+    // (e.g., a desk at x=4.5 barely touches x=4 with 0.5 overlap). Without a
+    // threshold these marginal tiles form false walls that block pathfinding.
+    const threshold = 0.6;
     for (const p of this.pieces) {
       const x0 = Math.floor(p.x);
       const y0 = Math.floor(p.y);
       const x1 = Math.ceil(p.x + p.w);
       const y1 = Math.ceil(p.y + p.h);
       for (let y = y0; y < y1; y++) {
+        const overlapY = Math.min(p.y + p.h, y + 1) - Math.max(p.y, y);
+        if (overlapY < threshold) continue;
         for (let x = x0; x < x1; x++) {
+          const overlapX = Math.min(p.x + p.w, x + 1) - Math.max(p.x, x);
+          if (overlapX < threshold) continue;
           blocked.add(`${x},${y}`);
         }
       }

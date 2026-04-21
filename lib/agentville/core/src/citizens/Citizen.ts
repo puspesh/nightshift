@@ -268,7 +268,7 @@ export class Citizen {
           const homeLoc = typedLocations.find(l => l.name === home);
           const homeIsWork = homeLoc?.type === 'work';
           reached = (homeIsWork && this.goToAnchor(home, typedLocations, pathfinder, reservation))
-            || this.goToAnchorType('work', typedLocations, pathfinder, reservation, excludeNames);
+            || this.goToAnchorType('work', typedLocations, pathfinder, reservation);
         } else if (newState === 'sleeping') {
           reached = this.goToAnchorType('rest', typedLocations, pathfinder, reservation, excludeNames);
         }
@@ -507,7 +507,7 @@ export class Citizen {
   /** Y offset applied when the character is sitting (working/sleeping) */
   getSittingOffset(): number {
     return (this.state === 'working' || this.state === 'sleeping')
-      ? this.tileHeight * 1.2
+      ? this.tileHeight * 1.0
       : 0;
   }
 

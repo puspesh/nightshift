@@ -980,7 +980,7 @@ export class AgentvilleServer {
                 anchors: item.type === 'desk' ? [{
                   name: 'desk_' + item.id,
                   ox: 1,
-                  oy: 1.5,
+                  oy: (catalog?.h ?? 3) - 1,
                   type: 'work',
                 }] : [],
               };

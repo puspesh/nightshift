@@ -410,6 +410,7 @@ export declare class Agentville {
         rows: number;
     };
     getFloorLayer(): string[][];
+    getWalkableGrid(): boolean[][];
     setTile(col: number, row: number, tileKey: string): void;
     getTiles(): Record<string, string>;
     getTileImages(): Map<string, HTMLImageElement>;

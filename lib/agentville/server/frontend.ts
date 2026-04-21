@@ -662,6 +662,7 @@ h1 {
       </div>
       <div id="dev-toolbar">
         <button class="dev-btn" id="dev-zones-btn" title="Toggle zone overlay (Z)">Zones</button>
+        <button class="dev-btn" id="dev-walk-btn" title="Toggle walkable overlay (W)">Walk</button>
         <button class="dev-btn" id="dev-edit-btn" title="Edit mode (E)">Edit</button>
         <button class="dev-btn" id="dev-save-btn" style="display:none" title="Save world">Save</button>
       </div>
@@ -1840,6 +1841,7 @@ if (DEV_MODE) {
   const ZONE_COLORS = { work: '#4ade80', rest: '#818cf8', utility: '#22d3ee' };
   const ZONE_LABELS = { work: 'Office', rest: 'Lounge', utility: 'Kitchen' };
   let showZones = false;
+  let showWalkable = false;
   let editMode = false;
   let selectedProp = null; // index into worldData.props
   let selectedWander = null; // index into worldData.wanderPoints
@@ -1848,6 +1850,7 @@ if (DEV_MODE) {
   let worldDirty = false;
 
   const zonesBtn = document.getElementById('dev-zones-btn');
+  const walkBtn = document.getElementById('dev-walk-btn');
   const editBtn = document.getElementById('dev-edit-btn');
   const saveBtn = document.getElementById('dev-save-btn');
 
@@ -2055,6 +2058,42 @@ if (DEV_MODE) {
         }
       },
     });
+
+    // Walkable overlay layer (order 18 — above zones)
+    mv.addLayer({
+      order: 18,
+      render(ctx) {
+        if (!showWalkable) return;
+        const grid = mv.getWalkableGrid();
+        if (!grid) return;
+        for (let r = 0; r < grid.length; r++) {
+          for (let c = 0; c < (grid[r]?.length ?? 0); c++) {
+            ctx.fillStyle = grid[r][c]
+              ? 'rgba(255, 255, 100, 0.3)'
+              : 'rgba(255, 50, 50, 0.4)';
+            ctx.fillRect(c * ts, r * ts, ts, ts);
+            // Draw cell border for clarity
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(c * ts, r * ts, ts, ts);
+          }
+        }
+        // Show citizen tile positions as cyan circles + state label
+        for (const c of mv.getCitizens()) {
+          if (!c.visible) continue;
+          const tp = c.getTilePosition();
+          ctx.strokeStyle = 'cyan';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(tp.x * ts + ts / 2, tp.y * ts + ts / 2, ts / 3, 0, Math.PI * 2);
+          ctx.stroke();
+          // State label
+          ctx.font = '5px monospace';
+          ctx.fillStyle = 'cyan';
+          ctx.fillText(c.state, tp.x * ts + 2, tp.y * ts + ts - 2);
+        }
+      },
+    });
   }
 
   // --- Mouse interaction for edit mode ---
@@ -2171,6 +2210,11 @@ if (DEV_MODE) {
     zonesBtn.classList.toggle('active', showZones);
   });
 
+  walkBtn.addEventListener('click', () => {
+    showWalkable = !showWalkable;
+    walkBtn.classList.toggle('active', showWalkable);
+  });
+
   editBtn.addEventListener('click', () => {
     editMode = !editMode;
     editBtn.classList.toggle('active', editMode);
@@ -2215,6 +2259,8 @@ if (DEV_MODE) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.key === 'z' || e.key === 'Z') {
       zonesBtn.click();
+    } else if (e.key === 'w' || e.key === 'W') {
+      walkBtn.click();
     } else if (e.key === 'e' || e.key === 'E') {
       editBtn.click();
     } else if (e.key === 'Escape' && editMode) {

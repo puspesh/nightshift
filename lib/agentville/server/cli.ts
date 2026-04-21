@@ -88,7 +88,8 @@ gameState.stats.lastActiveDate = streakResult.lastActiveDate;
 saveWorld(agentvilleDir, gameState);
 
 // --- Create and configure server ---
-const server = new AgentvilleServer({ port, publicDir });
+const devMode = args.includes('--dev');
+const server = new AgentvilleServer({ port, publicDir, devMode });
 server.setGameState(gameState);
 
 // Wire mutation callback to persist on changes

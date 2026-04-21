@@ -109,6 +109,7 @@ export class Citizen {
   private idleBehaviorTimer = 0;
   private idleBehaviorInterval = 5 + Math.random() * 5;
   private currentAnchor: string | null = null;
+  private currentAnchorType: AnchorType | null = null;
 
   // NPC auto-behavior
   readonly isNpc: boolean;
@@ -353,6 +354,7 @@ export class Citizen {
         reservation.reserve(loc.x, loc.y, this.agentId);
       }
       this.currentAnchor = loc.name;
+      this.currentAnchorType = loc.type;
       return true;
     }
 
@@ -363,6 +365,7 @@ export class Citizen {
         reservation.reserve(loc.x, loc.y, this.agentId);
       }
       this.currentAnchor = loc.name;
+      this.currentAnchorType = loc.type;
       this.walkTo(path);
       return true;
     }
@@ -396,6 +399,7 @@ export class Citizen {
           reservation.reserve(loc.x, loc.y, this.agentId);
         }
         this.currentAnchor = loc.name;
+        this.currentAnchorType = type;
         return true;
       }
 
@@ -406,6 +410,7 @@ export class Citizen {
           reservation.reserve(loc.x, loc.y, this.agentId);
         }
         this.currentAnchor = loc.name;
+        this.currentAnchorType = type;
         this.walkTo(path);
         return true;
       }
@@ -470,6 +475,8 @@ export class Citizen {
 
   /** Pick a random walkable tile and walk there, optionally constrained to a zone */
   walkToRandomTile(pathfinder: Pathfinder, reservation?: TileReservation, zone?: ZoneBounds | null) {
+    this.currentAnchor = null;
+    this.currentAnchorType = null;
     const tile = this.getTilePosition();
     let walkable = pathfinder.getWalkableTiles();
     if (walkable.length === 0) return;
@@ -504,11 +511,12 @@ export class Citizen {
     }
   }
 
-  /** Y offset applied when the character is sitting (working/sleeping) */
+  /** Y offset applied when the character is sitting at a chair (work/rest anchor) */
   getSittingOffset(): number {
-    return (this.state === 'working' || this.state === 'sleeping')
-      ? this.tileHeight * 1.2
-      : 0;
+    if (this.isMoving()) return 0;
+    if (this.state !== 'working' && this.state !== 'sleeping') return 0;
+    if (this.currentAnchorType !== 'work' && this.currentAnchorType !== 'rest') return 0;
+    return this.tileHeight * 1.2;
   }
 
   /** Whether this citizen is anchored (sitting) and should not be pushed by separation */

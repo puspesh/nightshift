@@ -396,6 +396,10 @@ export class Agentville {
     return this.scene.config.layers[0];
   }
 
+  getWalkableGrid(): boolean[][] {
+    return this.scene.config.walkable;
+  }
+
   setTile(col: number, row: number, tileKey: string) {
     const layer = this.scene.config.layers[0];
     if (row >= 0 && row < layer.length && col >= 0 && col < layer[0].length) {

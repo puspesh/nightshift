@@ -10,7 +10,8 @@
     "test": "node --test 'dist/tests/*.test.js'",
     "typecheck": "tsc --noEmit",
     "measure": "bash scripts/measure-build.sh",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "dev:agentville": "npx tsx scripts/agentville-dev.ts"
   },
   "bin": {
     "nightshift": "./dist/bin/nightshift.js",

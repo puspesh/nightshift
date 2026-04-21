@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { AgentvilleServer } from './server.js';
-import { loadWorld, saveWorld, bootstrapWorld } from '../persistence.js';
+import { loadWorld, saveWorld, bootstrapWorld, ensureStarterItems } from '../persistence.js';
 import { migrateFromMiniverse, cleanupOldPidFiles } from '../migrate.js';
 import { evaluateStreak } from '../streak.js';
 import type { AgentvilleWorld } from '../schema.js';
@@ -74,6 +74,11 @@ if (!gameState) {
   gameState = bootstrapWorld(timezone);
   saveWorld(agentvilleDir, gameState);
   console.log('  Bootstrapped new Agentville world');
+}
+
+// Ensure starter items (migration for existing worlds)
+if (ensureStarterItems(gameState)) {
+  saveWorld(agentvilleDir, gameState);
 }
 
 // Evaluate streak

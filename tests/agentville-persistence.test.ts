@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadWorld, saveWorld, bootstrapWorld } from '../lib/agentville/persistence.js';
+import { loadWorld, saveWorld, bootstrapWorld, ensureStarterItems } from '../lib/agentville/persistence.js';
 import type { AgentvilleWorld } from '../lib/agentville/schema.js';
 
 let tmp: string;
@@ -106,17 +106,33 @@ describe('persistence', () => {
   });
 
   describe('bootstrapWorld', () => {
-    it('creates correct structure with 2 desks', () => {
+    it('creates correct structure with 2 desks and wall clock', () => {
       const world = bootstrapWorld('America/Chicago');
       assert.equal(world.schemaVersion, 1);
       assert.equal(world.coins, 0);
-      assert.equal(world.inventory.length, 2);
+      assert.equal(world.inventory.length, 3);
       assert.equal(world.inventory[0].catalogId, 'desk_basic');
       assert.equal(world.inventory[1].catalogId, 'desk_basic');
       assert.equal(world.inventory[0].placed, true);
       assert.equal(world.inventory[1].placed, true);
       assert.deepEqual(world.inventory[0].placedAt, { roomId: 'room_0', x: 7, y: 4 });
       assert.deepEqual(world.inventory[1].placedAt, { roomId: 'room_0', x: 13, y: 4 });
+    });
+
+    it('includes wall_clock_basic in inventory', () => {
+      const world = bootstrapWorld('UTC');
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock, 'wall_clock_basic should be in inventory');
+      assert.equal(clock.type, 'decoration');
+      assert.equal(clock.placed, true);
+      assert.equal(clock.id, 'starter_clock_1');
+    });
+
+    it('places clock on wall row at correct position', () => {
+      const world = bootstrapWorld('UTC');
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock);
+      assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 10, y: 1 });
     });
 
     it('creates 1 floor and 1 room (20x11)', () => {
@@ -144,6 +160,63 @@ describe('persistence', () => {
       assert.equal(world.stats.totalCoinsSpent, 0);
       assert.equal(world.stats.totalWorkCompleted, 0);
       assert.equal(world.stats.streakDays, 0);
+    });
+  });
+
+  describe('ensureStarterItems', () => {
+    it('adds clock to existing world without one', () => {
+      const world = makeWorld({
+        inventory: [
+          {
+            id: 'starter_desk_1',
+            catalogId: 'desk_basic',
+            type: 'desk',
+            placed: true,
+            placedAt: { roomId: 'room_0', x: 7, y: 4 },
+          },
+        ],
+      });
+      const changed = ensureStarterItems(world);
+      assert.equal(changed, true);
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock, 'clock should be added');
+      assert.equal(clock.id, 'starter_clock_1');
+      assert.equal(clock.placed, true);
+      assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 10, y: 1 });
+    });
+
+    it('does not duplicate clock if already present', () => {
+      const world = bootstrapWorld('UTC');
+      const changed = ensureStarterItems(world);
+      assert.equal(changed, false);
+      const clocks = world.inventory.filter(i => i.catalogId === 'wall_clock_basic');
+      assert.equal(clocks.length, 1);
+    });
+
+    it('migrated clock is placed at default position', () => {
+      const world = makeWorld({ inventory: [] });
+      ensureStarterItems(world);
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock);
+      assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 10, y: 1 });
+    });
+
+    it('clamps clock x to room width for narrow rooms', () => {
+      const world = makeWorld({
+        inventory: [],
+        world: {
+          floors: [{
+            id: 'floor_0',
+            name: 'Ground Floor',
+            rooms: [{ id: 'room_0', name: 'Small Office', width: 8, height: 6, style: 'basic' }],
+          }],
+        },
+      });
+      ensureStarterItems(world);
+      const clock = world.inventory.find(i => i.catalogId === 'wall_clock_basic');
+      assert.ok(clock);
+      // width 8 → maxX = 7, so clock should be at x:7 not x:10
+      assert.deepEqual(clock.placedAt, { roomId: 'room_0', x: 7, y: 1 });
     });
   });
 });

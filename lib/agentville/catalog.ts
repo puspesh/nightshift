@@ -9,6 +9,7 @@ export interface CatalogItem {
   description: string;
   w?: number;  // prop width in tiles (default: 1)
   h?: number;  // prop height in tiles (default: 1)
+  hidden?: boolean;  // if true, excluded from shop (bundled/starter items)
 }
 
 const CATALOG: CatalogItem[] = [
@@ -37,6 +38,9 @@ const CATALOG: CatalogItem[] = [
   // Facilities — fun
   { catalogId: 'facility_ping_pong', name: 'Ping Pong Table', type: 'facility', price: 1000, rarity: 'common', category: 'fun', w: 3, h: 2, description: 'Settle code disputes the old-fashioned way.' },
   { catalogId: 'facility_game_room', name: 'Game Room', type: 'facility', price: 3000, rarity: 'rare', category: 'fun', w: 3, h: 3, description: 'Arcade cabinets and bean bags.' },
+
+  // Decorations — bundled (starter items, hidden from shop)
+  { catalogId: 'wall_clock_basic', name: 'Wall Clock', type: 'decoration', price: 0, rarity: 'common', multiplierBonus: 0, w: 1, h: 1, hidden: true, description: 'A simple wall clock showing the current time.' },
 
   // Decorations — common (+1%)
   { catalogId: 'deco_plant', name: 'Potted Plant', type: 'decoration', price: 100, rarity: 'common', multiplierBonus: 0.01, description: 'A touch of green for the office.' },
@@ -115,6 +119,10 @@ export function getCatalogItem(id: string): CatalogItem | undefined {
 
 export function getCatalogByType(type: string): CatalogItem[] {
   return CATALOG.filter((item) => item.type === type);
+}
+
+export function getShopCatalog(type: string): CatalogItem[] {
+  return CATALOG.filter((item) => item.type === type && !item.hidden);
 }
 
 export function getBaseRate(workType: string): number {

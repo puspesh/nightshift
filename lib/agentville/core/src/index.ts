@@ -703,7 +703,16 @@ export class Agentville {
     const sprite = sprites[this.autoSpawnIndex % sprites.length];
     this.autoSpawnIndex++;
 
-    // Pick an unreserved wander point as the spawn position
+    // Assign a work anchor as home position so the citizen has a desk
+    const otherHomes = this.getOtherHomeAnchors('');
+    const workAnchors = this.typedLocations
+      .filter(l => l.type === 'work' && !otherHomes.has(l.name))
+      .sort(() => Math.random() - 0.5);
+    const homeAnchor: TypedLocation | null = workAnchors.find(l =>
+      this.reservation.isAvailable(l.x, l.y, agent.id)
+    ) ?? null;
+
+    // Pick a wander point to spawn at (citizen will walk to desk when state changes)
     const wanderPoints = this.typedLocations.filter(l => l.type === 'wander');
     const shuffled = [...wanderPoints].sort(() => Math.random() - 0.5);
     let spawnLoc: TypedLocation | null = shuffled.find(l => this.reservation.isAvailable(l.x, l.y, agent.id))
@@ -751,7 +760,12 @@ export class Agentville {
     this.spawningAgents.add(agent.id);
     this.addCitizen({ agentId: agent.id, name: agent.name, sprite, position: spawnPosition })
       .then((citizen) => {
+        if (homeAnchor) citizen.setHomePosition(homeAnchor.name);
         citizen.updateState(agent.state, agent.task, agent.energy);
+        // If already working at spawn, trigger transition to walk to desk
+        if (agent.state === 'working') {
+          this.handleStateTransition(citizen, 'idle', 'working');
+        }
       })
       .catch((err) => { console.warn(`[agentville] Auto-spawn failed for "${agent.id}":`, err); })
       .finally(() => { this.spawningAgents.delete(agent.id); });
@@ -774,9 +788,12 @@ export class Agentville {
 
     if (this.typedLocations.length > 0) {
       if (to === 'working') {
-        // Go to assigned home anchor specifically
+        // Go to assigned home anchor — but only if it's actually a work-type location
         const home = citizen.getHomePosition();
-        if (!citizen.goToAnchor(home, this.typedLocations, this.scene.pathfinder, this.reservation)) {
+        const homeLoc = this.typedLocations.find(l => l.name === home);
+        const reachedHome = homeLoc?.type === 'work'
+          && citizen.goToAnchor(home, this.typedLocations, this.scene.pathfinder, this.reservation);
+        if (!reachedHome) {
           // Fallback: any unassigned work anchor
           if (!citizen.goToAnchorType('work', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes)) {
             // Last resort: walk to a random tile in the work zone

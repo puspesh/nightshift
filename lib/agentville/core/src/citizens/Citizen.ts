@@ -265,7 +265,9 @@ export class Citizen {
       if (typedLocations && typedLocations.length > 0) {
         if (newState === 'working') {
           const home = this.getHomePosition();
-          reached = this.goToAnchor(home, typedLocations, pathfinder, reservation)
+          const homeLoc = typedLocations.find(l => l.name === home);
+          const homeIsWork = homeLoc?.type === 'work';
+          reached = (homeIsWork && this.goToAnchor(home, typedLocations, pathfinder, reservation))
             || this.goToAnchorType('work', typedLocations, pathfinder, reservation, excludeNames);
         } else if (newState === 'sleeping') {
           reached = this.goToAnchorType('rest', typedLocations, pathfinder, reservation, excludeNames);

@@ -4,7 +4,7 @@
  *
  * Phase 6: Full game layer — live HUD, shop, inventory, placement, animations, toasts.
  */
-export function getFrontendHtml(): string {
+export function getFrontendHtml(devMode = false): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -44,11 +44,7 @@ h1 {
 }
 
 #status-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  width: 100%;
-  max-width: 720px;
+  display: none;
 }
 
 .agent-card {
@@ -410,22 +406,86 @@ h1 {
 }
 #event-log-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px;
   border-bottom: 1px solid #30363d;
   flex-shrink: 0;
+  padding: 0;
+}
+#sidebar-tabs {
+  display: flex;
+  flex: 1;
+}
+.sidebar-tab {
+  flex: 1;
+  padding: 10px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #484f58;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  text-align: center;
+}
+.sidebar-tab:hover { color: #8b949e; }
+.sidebar-tab.active {
+  color: #c9d1d9;
+  border-bottom-color: #58a6ff;
+}
+#event-log-sidebar.collapsed #sidebar-tabs {
+  display: none;
 }
 #event-log-sidebar.collapsed #event-log-header {
   justify-content: center;
   padding: 12px 4px;
 }
-#event-log-header span {
+#sidebar-agents-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+#sidebar-agents-list::-webkit-scrollbar { width: 6px; }
+#sidebar-agents-list::-webkit-scrollbar-track { background: #0d1117; }
+#sidebar-agents-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+#sidebar-agents-list::-webkit-scrollbar-thumb:hover { background: #484f58; }
+.sidebar-agent-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-bottom: 1px solid #21262d;
+}
+.sidebar-agent-card:last-child { border-bottom: none; }
+.sidebar-agent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sidebar-agent-info { flex: 1; min-width: 0; }
+.sidebar-agent-name {
   font-size: 12px;
   font-weight: 600;
+  color: #c9d1d9;
+}
+.sidebar-agent-status {
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #8b949e;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.sidebar-agent-task {
+  font-size: 11px;
+  color: #484f58;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #event-log-toggle {
   background: none;
@@ -440,6 +500,21 @@ h1 {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+#event-log-entries::-webkit-scrollbar {
+  width: 6px;
+}
+#event-log-entries::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+#event-log-entries::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+#event-log-entries::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
 }
 .log-entry {
   font-size: 12px;
@@ -516,6 +591,36 @@ h1 {
   0% { opacity: 1; transform: translateY(0) rotate(0deg); }
   100% { opacity: 0; transform: translateY(-10px) rotate(90deg); }
 }
+
+/* --- Dev Mode: Edit & Zone Overlay --- */
+.dev-btn {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #8b949e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: background 0.15s, color 0.15s;
+}
+.dev-btn:hover { background: #30363d; color: #c9d1d9; }
+.dev-btn.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+#dev-toolbar {
+  display: none;
+  gap: 6px;
+  align-items: center;
+  margin-left: 12px;
+}
+#dev-toolbar::before {
+  content: '|';
+  color: #30363d;
+  margin-right: 2px;
+}
+.edit-mode #canvas-container { cursor: crosshair; }
+.edit-mode #canvas-container.dragging { cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -555,6 +660,12 @@ h1 {
         <span class="hud-icon">&#x1F4E6;</span>
         <span>Inventory</span>
       </div>
+      <div id="dev-toolbar">
+        <button class="dev-btn" id="dev-zones-btn" title="Toggle zone overlay (Z)">Zones</button>
+        <button class="dev-btn" id="dev-walk-btn" title="Toggle walkable overlay (W)">Walk</button>
+        <button class="dev-btn" id="dev-edit-btn" title="Edit mode (E)">Edit</button>
+        <button class="dev-btn" id="dev-save-btn" style="display:none" title="Save world">Save</button>
+      </div>
     </div>
   </div>
   <canvas id="effects-overlay"></canvas>
@@ -565,10 +676,14 @@ h1 {
 <!-- Event Log Sidebar (inside game-layout flex row) -->
 <div id="event-log-sidebar">
   <div id="event-log-header">
-    <span>Activity</span>
+    <div id="sidebar-tabs">
+      <button class="sidebar-tab active" data-tab="activity">Activity</button>
+      <button class="sidebar-tab" data-tab="agents">Agents</button>
+    </div>
     <button id="event-log-toggle">&#x25C0;</button>
   </div>
   <div id="event-log-entries"></div>
+  <div id="sidebar-agents-list" style="display:none"></div>
 </div>
 </div><!-- /game-layout -->
 <div id="status-panel"></div>
@@ -607,16 +722,33 @@ h1 {
 <script type="module">
 import { Agentville, PropSystem, createStandardSpriteConfig } from '/agentville-core.js';
 
+const DEV_MODE = ${devMode};
+
 const STATE_LABELS = {
   working: 'Working', idle: 'Idle', thinking: 'Thinking',
   sleeping: 'Sleeping', error: 'Error', offline: 'Offline', speaking: 'Speaking',
 };
 
-const panel = document.getElementById('status-panel');
+const panel = document.getElementById('sidebar-agents-list');
 const connStatus = document.getElementById('connection-status');
 const container = document.getElementById('canvas-container');
 const tooltip = document.getElementById('tooltip');
 const agents = new Map();
+
+// --- Sidebar tab switching ---
+const sidebarTabs = document.querySelectorAll('.sidebar-tab');
+const logEntriesEl = document.getElementById('event-log-entries');
+const agentsListEl = document.getElementById('sidebar-agents-list');
+
+sidebarTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    sidebarTabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const which = tab.dataset.tab;
+    logEntriesEl.style.display = which === 'activity' ? '' : 'none';
+    agentsListEl.style.display = which === 'agents' ? '' : 'none';
+  });
+});
 
 // --- Game state ---
 let gameState = null;
@@ -879,25 +1011,35 @@ logToggle.addEventListener('click', () => {
 initSidebarState();
 loadEventLog();
 
-// --- Agent card rendering ---
+// --- Agent card rendering (sidebar) ---
 function renderCard(agent) {
+  // Skip sub-agents — they show as star count in the HUD instead
+  if (agent.agent && agent.agent.includes('/sub-')) return;
   const role = getRole(agent.agent);
   let card = panel.querySelector('[data-agent="' + CSS.escape(agent.agent) + '"]');
   if (!card) {
     card = document.createElement('div');
-    card.className = 'agent-card';
+    card.className = 'sidebar-agent-card';
     card.dataset.agent = agent.agent;
     card.dataset.role = role;
-    card.innerHTML = '<div class="name">' + esc(agent.name || role) + '</div><div class="status"></div><div class="task"></div>';
+    card.innerHTML = '<div class="sidebar-agent-dot"></div>'
+      + '<div class="sidebar-agent-info">'
+      + '<div class="sidebar-agent-name"></div>'
+      + '<div class="sidebar-agent-status"></div>'
+      + '<div class="sidebar-agent-task"></div>'
+      + '</div>';
     panel.appendChild(card);
   }
   const agentColor = agent.color || '#8b949e';
-  card.style.borderLeft = '3px solid ' + agentColor;
-  card.querySelector('.name').style.color = agentColor;
   const state = agent.state || 'offline';
-  card.querySelector('.status').textContent = STATE_LABELS[state] || state;
-  card.querySelector('.status').className = 'status status-' + state;
-  card.querySelector('.task').textContent = agent.task || '';
+  const dot = card.querySelector('.sidebar-agent-dot');
+  dot.style.background = agentColor;
+  card.querySelector('.sidebar-agent-name').textContent = agent.name || role;
+  card.querySelector('.sidebar-agent-name').style.color = agentColor;
+  const statusEl = card.querySelector('.sidebar-agent-status');
+  statusEl.textContent = STATE_LABELS[state] || state;
+  statusEl.className = 'sidebar-agent-status status-' + state;
+  card.querySelector('.sidebar-agent-task').textContent = agent.task || '';
 }
 
 // --- Effects overlay (stars, zzz, error sparks) ---
@@ -924,7 +1066,7 @@ function renderEffects(timestamp) {
     if (!agent) continue;
 
     // Try to find citizen position from engine (approximate from card index)
-    const cards = panel.querySelectorAll('.agent-card');
+    const cards = panel.querySelectorAll('.sidebar-agent-card');
     let idx = 0;
     for (const card of cards) {
       if (card.dataset.agent === agentKey) break;
@@ -1431,8 +1573,19 @@ async function startLegacyWorld(prefetched) {
   mv.setTypedLocations(props.getLocations());
   mv.updateWalkability(props.getBlockedTiles());
 
-  await mv.start();
+  try {
+    await mv.start();
+  } catch (err) {
+    console.error('Agentville engine failed to start:', err);
+    container.innerHTML = '<div style="color:red;padding:20px;font-size:14px">Engine failed: ' + err.message + '</div>';
+    return;
+  }
   window.__av = mv;
+  window.__worldData = worldData;
+  window.__props = props;
+  window.__tileSize = tileSize;
+  window.__gridCols = gridCols;
+  window.__gridRows = gridRows;
   mv.loadCoinSprite('/universal_assets/coin-spin.png').catch(() => {});
   resizeEffectsOverlay();
 
@@ -1454,6 +1607,7 @@ async function startLegacyWorld(prefetched) {
 
   // Auto-collect coin stacks when clicking the game canvas
   container.addEventListener('click', () => {
+    if (document.body.classList.contains('edit-mode')) return;
     if (window.__av) window.__av.collectAllStacks();
   });
 
@@ -1511,6 +1665,9 @@ async function startLegacyWorld(prefetched) {
     tooltip.querySelector('.task').textContent = data.task ? 'Task: ' + data.task : 'No active task';
     setTimeout(() => { tooltip.style.display = 'none'; }, 3000);
   });
+
+  // Init dev layers if dev mode is active
+  if (window.__devInitLayers) window.__devInitLayers();
 }
 
 container.addEventListener('mousemove', (e) => {
@@ -1677,7 +1834,453 @@ function connect() {
 // Update coins/hr periodically
 setInterval(updateHudRate, 30000);
 
-startWorld().catch(console.error);
+// --- Dev Mode: Zone Overlay + Edit Mode ---
+if (DEV_MODE) {
+  document.getElementById('dev-toolbar').style.display = 'flex';
+
+  const ZONE_COLORS = { work: '#4ade80', rest: '#818cf8', utility: '#22d3ee' };
+  const ZONE_LABELS = { work: 'Office', rest: 'Lounge', utility: 'Kitchen' };
+  let showZones = false;
+  let showWalkable = false;
+  let editMode = false;
+  let selectedProp = null; // index into worldData.props
+  let selectedWander = null; // index into worldData.wanderPoints
+  let dragOffset = null; // { dx, dy }
+  let isDragging = false;
+  let worldDirty = false;
+
+  const zonesBtn = document.getElementById('dev-zones-btn');
+  const walkBtn = document.getElementById('dev-walk-btn');
+  const editBtn = document.getElementById('dev-edit-btn');
+  const saveBtn = document.getElementById('dev-save-btn');
+
+  // --- Zone computation (reads from engine when available, falls back to prop scan) ---
+  function computeZones() {
+    const mv = window.__av;
+
+    // Prefer engine-computed zones — they match the actual citizen movement logic
+    if (mv && typeof mv.computeZones === 'function') {
+      const engineZones = mv.computeZones();
+      const result = [];
+      if (engineZones.work) {
+        const z = engineZones.work;
+        result.push({
+          type: 'work', x: z.minX, y: z.minY,
+          w: z.maxX - z.minX, h: z.maxY - z.minY,
+          label: ZONE_LABELS['work'] || 'Office',
+          color: ZONE_COLORS['work'],
+        });
+      }
+      if (engineZones.recreation) {
+        // Split recreation into sub-zones by scanning props for rest vs utility
+        const wd = window.__worldData;
+        const hasRest = wd?.props?.some(p => p.anchors?.some(a => a.type === 'rest'));
+        const hasUtility = wd?.props?.some(p => p.anchors?.some(a => a.type === 'utility'));
+        const z = engineZones.recreation;
+        if (hasRest) {
+          result.push({
+            type: 'rest', x: z.minX, y: z.minY,
+            w: z.maxX - z.minX, h: z.maxY - z.minY,
+            label: ZONE_LABELS['rest'] || 'Lounge',
+            color: ZONE_COLORS['rest'],
+          });
+        }
+        if (hasUtility) {
+          // Show utility sub-zone from utility anchors only
+          const utilProps = wd.props.filter(p => p.anchors?.some(a => a.type === 'utility'));
+          if (utilProps.length > 0) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const p of utilProps) {
+              minX = Math.min(minX, p.x);
+              minY = Math.min(minY, p.y);
+              maxX = Math.max(maxX, p.x + (p.w || 1));
+              maxY = Math.max(maxY, p.y + (p.h || 1));
+            }
+            result.push({
+              type: 'utility', x: Math.max(0, minX - 0.5), y: Math.max(0, minY - 0.5),
+              w: maxX - minX + 1, h: maxY - minY + 1,
+              label: ZONE_LABELS['utility'] || 'Kitchen',
+              color: ZONE_COLORS['utility'],
+            });
+          }
+        }
+      }
+      return result;
+    }
+
+    // Fallback: scan props directly (engine not yet initialized)
+    const wd = window.__worldData;
+    if (!wd || !wd.props) return [];
+    const groups = {};
+    for (const prop of wd.props) {
+      if (!prop.anchors) continue;
+      for (const a of prop.anchors) {
+        if (!ZONE_COLORS[a.type]) continue;
+        if (!groups[a.type]) groups[a.type] = [];
+        groups[a.type].push({ x: prop.x, y: prop.y, w: prop.w || 1, h: prop.h || 1 });
+      }
+    }
+    const zones = [];
+    for (const [type, rects] of Object.entries(groups)) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const r of rects) {
+        if (r.x < minX) minX = r.x;
+        if (r.y < minY) minY = r.y;
+        if (r.x + r.w > maxX) maxX = r.x + r.w;
+        if (r.y + r.h > maxY) maxY = r.y + r.h;
+      }
+      const pad = 0.5;
+      zones.push({
+        type,
+        x: Math.max(0, minX - pad),
+        y: Math.max(0, minY - pad),
+        w: maxX - minX + pad * 2,
+        h: maxY - minY + pad * 2,
+        label: ZONE_LABELS[type] || type,
+        color: ZONE_COLORS[type],
+      });
+    }
+    return zones;
+  }
+
+  // --- Zone overlay render layer ---
+  function initDevLayers() {
+    const mv = window.__av;
+    const ts = window.__tileSize;
+    if (!mv || !ts) return;
+
+    // Zone overlay layer (order 17 — above clock)
+    mv.addLayer({
+      order: 17,
+      render(ctx) {
+        if (!showZones && !editMode) return;
+        const zones = computeZones();
+        for (const z of zones) {
+          const x = z.x * ts;
+          const y = z.y * ts;
+          const w = z.w * ts;
+          const h = z.h * ts;
+          // Fill
+          ctx.save();
+          ctx.globalAlpha = 0.12;
+          ctx.fillStyle = z.color;
+          ctx.fillRect(x, y, w, h);
+          // Border
+          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = z.color;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 3]);
+          ctx.strokeRect(x, y, w, h);
+          // Label
+          ctx.globalAlpha = 0.8;
+          ctx.setLineDash([]);
+          ctx.font = '5px sans-serif';
+          ctx.fillStyle = z.color;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          ctx.fillText(z.label, x + 2, y + 1.5);
+          ctx.restore();
+        }
+
+        // Wander points
+        if (editMode) {
+          const wd = window.__worldData;
+          if (wd && wd.wanderPoints) {
+            for (let i = 0; i < wd.wanderPoints.length; i++) {
+              const wp = wd.wanderPoints[i];
+              const wx = wp.x * ts;
+              const wy = wp.y * ts;
+              ctx.save();
+              ctx.globalAlpha = selectedWander === i ? 0.9 : 0.5;
+              ctx.fillStyle = '#888';
+              // Diamond shape
+              ctx.beginPath();
+              ctx.moveTo(wx, wy - 3);
+              ctx.lineTo(wx + 3, wy);
+              ctx.lineTo(wx, wy + 3);
+              ctx.lineTo(wx - 3, wy);
+              ctx.closePath();
+              ctx.fill();
+              if (selectedWander === i) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+              }
+              // Label
+              ctx.globalAlpha = 0.6;
+              ctx.font = '3px sans-serif';
+              ctx.fillStyle = '#ccc';
+              ctx.textAlign = 'center';
+              ctx.fillText(wp.name, wx, wy + 7);
+              ctx.restore();
+            }
+          }
+        }
+
+        // Edit mode: prop outlines
+        if (editMode) {
+          const wd = window.__worldData;
+          if (wd && wd.props) {
+            for (let i = 0; i < wd.props.length; i++) {
+              const p = wd.props[i];
+              const px = p.x * ts;
+              const py = p.y * ts;
+              const pw = (p.w || 1) * ts;
+              const ph = (p.h || 1) * ts;
+              ctx.save();
+              if (selectedProp === i) {
+                ctx.strokeStyle = '#58a6ff';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.9;
+              } else {
+                ctx.strokeStyle = '#c9d1d9';
+                ctx.lineWidth = 0.5;
+                ctx.globalAlpha = 0.3;
+                ctx.setLineDash([3, 2]);
+              }
+              ctx.strokeRect(px, py, pw, ph);
+              // Anchor dot
+              if (selectedProp === i && p.anchors) {
+                for (const a of p.anchors) {
+                  const ax = (p.x + a.ox) * ts;
+                  const ay = (p.y + a.oy) * ts;
+                  ctx.globalAlpha = 0.9;
+                  ctx.setLineDash([]);
+                  ctx.beginPath();
+                  ctx.arc(ax, ay, 2, 0, Math.PI * 2);
+                  ctx.fillStyle = ZONE_COLORS[a.type] || '#fff';
+                  ctx.fill();
+                }
+              }
+              ctx.restore();
+            }
+          }
+        }
+      },
+    });
+
+    // Walkable overlay layer (order 18 — above zones)
+    mv.addLayer({
+      order: 18,
+      render(ctx) {
+        if (!showWalkable) return;
+        const grid = mv.getWalkableGrid();
+        if (!grid) return;
+        for (let r = 0; r < grid.length; r++) {
+          for (let c = 0; c < (grid[r]?.length ?? 0); c++) {
+            ctx.fillStyle = grid[r][c]
+              ? 'rgba(255, 255, 100, 0.3)'
+              : 'rgba(255, 50, 50, 0.4)';
+            ctx.fillRect(c * ts, r * ts, ts, ts);
+            // Draw cell border for clarity
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(c * ts, r * ts, ts, ts);
+          }
+        }
+        // Show citizen tile positions as cyan circles + state label
+        for (const c of mv.getCitizens()) {
+          if (!c.visible) continue;
+          const tp = c.getTilePosition();
+          ctx.strokeStyle = 'cyan';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(tp.x * ts + ts / 2, tp.y * ts + ts / 2, ts / 3, 0, Math.PI * 2);
+          ctx.stroke();
+          // State label
+          ctx.font = '5px monospace';
+          ctx.fillStyle = 'cyan';
+          ctx.fillText(c.state, tp.x * ts + 2, tp.y * ts + ts - 2);
+        }
+      },
+    });
+  }
+
+  // --- Mouse interaction for edit mode ---
+  function canvasToWorld(e) {
+    const ts = window.__tileSize;
+    const scale = window.__av?.getScale() || 2;
+    const rect = container.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) / scale;
+    const cy = (e.clientY - rect.top) / scale;
+    return { wx: cx / ts, wy: cy / ts };
+  }
+
+  function snap(v) {
+    return Math.round(v * 4) / 4; // 0.25 grid snap
+  }
+
+  container.addEventListener('mousedown', (e) => {
+    if (!editMode) return;
+    const { wx, wy } = canvasToWorld(e);
+    const wd = window.__worldData;
+    if (!wd) return;
+
+    // Check wander points first (small hit area)
+    if (wd.wanderPoints) {
+      for (let i = 0; i < wd.wanderPoints.length; i++) {
+        const wp = wd.wanderPoints[i];
+        if (Math.abs(wx - wp.x) < 0.5 && Math.abs(wy - wp.y) < 0.5) {
+          selectedWander = i;
+          selectedProp = null;
+          dragOffset = { dx: wp.x - wx, dy: wp.y - wy };
+          isDragging = true;
+          container.classList.add('dragging');
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+    }
+
+    // Check props (reverse order so topmost is picked first)
+    // Only base-world props are draggable — inventory items (desks/chairs)
+    // are managed via shop placement to keep game state in sync.
+    if (wd.props) {
+      for (let i = wd.props.length - 1; i >= 0; i--) {
+        const p = wd.props[i];
+        if (p.fromInventory) continue;
+        const pw = p.w || 1;
+        const ph = p.h || 1;
+        if (wx >= p.x && wx <= p.x + pw && wy >= p.y && wy <= p.y + ph) {
+          selectedProp = i;
+          selectedWander = null;
+          dragOffset = { dx: p.x - wx, dy: p.y - wy };
+          isDragging = true;
+          container.classList.add('dragging');
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+    }
+
+    // Clicked empty space — deselect
+    selectedProp = null;
+    selectedWander = null;
+  });
+
+  container.addEventListener('mousemove', (e) => {
+    if (!editMode || !isDragging) return;
+    const { wx, wy } = canvasToWorld(e);
+    const wd = window.__worldData;
+    if (!wd) return;
+
+    const cols = window.__gridCols || 20;
+    const rows = window.__gridRows || 11;
+
+    if (selectedWander !== null && wd.wanderPoints) {
+      wd.wanderPoints[selectedWander].x = Math.max(0, Math.min(cols - 1, snap(wx + dragOffset.dx)));
+      wd.wanderPoints[selectedWander].y = Math.max(0, Math.min(rows - 1, snap(wy + dragOffset.dy)));
+      worldDirty = true;
+    } else if (selectedProp !== null && wd.props) {
+      const pw = wd.props[selectedProp].w || 1;
+      const ph = wd.props[selectedProp].h || 1;
+      wd.props[selectedProp].x = Math.max(0, Math.min(cols - pw, snap(wx + dragOffset.dx)));
+      wd.props[selectedProp].y = Math.max(0, Math.min(rows - ph, snap(wy + dragOffset.dy)));
+      worldDirty = true;
+      // Update prop system layout live
+      const props = window.__props;
+      if (props) {
+        props.setLayout(wd.props);
+        if (wd.wanderPoints) props.setWanderPoints(wd.wanderPoints);
+      }
+    }
+    e.preventDefault();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    container.classList.remove('dragging');
+    // Update prop system after wander point drag too
+    if (selectedWander !== null) {
+      const props = window.__props;
+      const wd = window.__worldData;
+      if (props && wd && wd.wanderPoints) props.setWanderPoints(wd.wanderPoints);
+    }
+    if (worldDirty) {
+      saveBtn.style.display = '';
+    }
+  });
+
+  // --- Toggle handlers ---
+  zonesBtn.addEventListener('click', () => {
+    showZones = !showZones;
+    zonesBtn.classList.toggle('active', showZones);
+  });
+
+  walkBtn.addEventListener('click', () => {
+    showWalkable = !showWalkable;
+    walkBtn.classList.toggle('active', showWalkable);
+  });
+
+  editBtn.addEventListener('click', () => {
+    editMode = !editMode;
+    editBtn.classList.toggle('active', editMode);
+    document.body.classList.toggle('edit-mode', editMode);
+    if (editMode) {
+      showZones = true;
+      zonesBtn.classList.add('active');
+    }
+    selectedProp = null;
+    selectedWander = null;
+  });
+
+  // --- Save handler ---
+  saveBtn.addEventListener('click', async () => {
+    const wd = window.__worldData;
+    if (!wd) return;
+    const baseProps = (wd.props || []).filter(p => !p.fromInventory);
+    const payload = {
+      props: baseProps,
+      wanderPoints: wd.wanderPoints || [],
+    };
+    try {
+      const res = await fetch('/api/world/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        worldDirty = false;
+        saveBtn.style.display = 'none';
+        showToast('World saved', 'success');
+      } else {
+        showToast('Save failed: ' + (await res.text()), 'error');
+      }
+    } catch (err) {
+      showToast('Save failed: ' + err.message, 'error');
+    }
+  });
+
+  // --- Keyboard shortcuts ---
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'z' || e.key === 'Z') {
+      zonesBtn.click();
+    } else if (e.key === 'w' || e.key === 'W') {
+      walkBtn.click();
+    } else if (e.key === 'e' || e.key === 'E') {
+      editBtn.click();
+    } else if (e.key === 'Escape' && editMode) {
+      if (isDragging) {
+        isDragging = false;
+        container.classList.remove('dragging');
+      } else {
+        editBtn.click(); // exit edit mode
+      }
+    }
+  });
+
+  // Init dev layers after world loads
+  window.__devInitLayers = initDevLayers;
+}
+
+startWorld().catch(err => {
+  console.error('startWorld failed:', err);
+  document.getElementById('canvas-container').innerHTML = '<div style="color:red;padding:20px;font-size:14px">World load failed: ' + err.message + '</div>';
+});
 connect();
 <\/script>
 </body>

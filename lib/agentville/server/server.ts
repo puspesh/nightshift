@@ -19,6 +19,10 @@ export interface AgentvilleServerConfig {
   offlineTimeout?: number;
   /** Directory for generated assets (e.g. './public') */
   publicDir?: string;
+  /** Enable dev-only features (zone overlay, edit mode) in the frontend */
+  devMode?: boolean;
+  /** Optional pre-route handler. Return true if handled. */
+  onRoute?: (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean> | boolean;
 }
 
 export class AgentvilleServer {
@@ -37,6 +41,8 @@ export class AgentvilleServer {
   /** Webhook callbacks: agent ID → callback URL */
   private webhooks: Map<string, string> = new Map();
   private publicDir: string | null;
+  private devMode: boolean;
+  private onRoute: AgentvilleServerConfig['onRoute'];
   private gameState: AgentvilleWorld | null = null;
   private mutationCallbacks: Array<() => void> = [];
   /** Event API: track spawned child keys per parent agent key for cleanup */
@@ -46,6 +52,8 @@ export class AgentvilleServer {
   constructor(config: AgentvilleServerConfig = {}) {
     this.port = config.port ?? 4321;
     this.publicDir = config.publicDir ?? null;
+    this.devMode = config.devMode ?? false;
+    this.onRoute = config.onRoute;
     this.store = new AgentStore(config.offlineTimeout ?? 30000);
     this.events = new EventLog();
     if (this.publicDir) {
@@ -887,10 +895,16 @@ export class AgentvilleServer {
       return;
     }
 
+    // Custom route handler (dev mode extensions)
+    if (this.onRoute) {
+      const handled = await this.onRoute(req, res, url);
+      if (handled) return;
+    }
+
     // Routes
     if (req.method === 'GET' && url.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(getFrontendHtml());
+      res.end(getFrontendHtml(this.devMode));
       return;
     }
 
@@ -954,36 +968,50 @@ export class AgentvilleServer {
             .filter(item => item.placed && item.placedAt)
             .map(item => {
               const catalog = getCatalogItem(item.catalogId);
+              const w = catalog?.w ?? 1;
+              const h = catalog?.h ?? 1;
+              // For desks: center the desk sprite on the anchor tile so desk,
+              // chair, and citizen all align visually on the same tile center
+              let x = item.placedAt!.x;
+              const anchorOx = 1;
+              if (item.type === 'desk') {
+                const anchorTileX = Math.round(x + anchorOx);
+                x = anchorTileX + 0.5 - w / 2; // center desk on anchor tile
+              }
               return {
                 id: item.id,
                 catalogId: item.catalogId,
-                x: item.placedAt!.x,
+                x,
                 y: item.placedAt!.y,
-                w: catalog?.w ?? 1,
-                h: catalog?.h ?? 1,
+                w,
+                h,
                 layer: 'below' as const,
                 fromInventory: true,
                 anchors: item.type === 'desk' ? [{
                   name: 'desk_' + item.id,
-                  ox: 1,
-                  oy: 1.5,
+                  ox: anchorOx,
+                  oy: h - 1,
                   type: 'work',
                 }] : [],
               };
             });
-          // Add chair props alongside each desk
+          // Add chair props alongside each desk — center on anchor tile
+          const chairW = 1.1;
           const chairProps = inventoryProps
             .filter(p => p.catalogId.startsWith('desk_'))
-            .map((p, i) => ({
-              id: `chair_${p.id}`,
-              x: p.x + 1,
-              y: p.y + 1,
-              w: 1.1,
-              h: 1.9,
-              layer: 'above' as const,
-              fromInventory: true,
-              anchors: [] as { name: string; ox: number; oy: number; type: string }[],
-            }));
+            .map((p, i) => {
+              const anchorTileX = Math.round(p.x + 1); // same rounding as getLocations
+              return {
+                id: `chair_${p.id}`,
+                x: anchorTileX + 0.5 - chairW / 2,
+                y: p.y + 1,
+                w: chairW,
+                h: 1.9,
+                layer: 'above' as const,
+                fromInventory: true,
+                anchors: [] as { name: string; ox: number; oy: number; type: string }[],
+              };
+            });
 
           worldData.props = [...existingProps, ...inventoryProps, ...chairProps];
 

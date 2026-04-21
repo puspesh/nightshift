@@ -4,7 +4,7 @@ import type { SceneConfig, NamedLocation } from './scene/Scene';
 import { SpriteSheet } from './sprites/SpriteSheet';
 import type { SpriteSheetConfig } from './sprites/SpriteSheet';
 import { Citizen, CitizenLayer, TileReservation } from './citizens/Citizen';
-import type { CitizenConfig, AgentState, TypedLocation, AnchorType } from './citizens/Citizen';
+import type { CitizenConfig, AgentState, TypedLocation, AnchorType, ZoneBounds } from './citizens/Citizen';
 import { InteractiveObject } from './objects/InteractiveObject';
 import type { ObjectConfig } from './objects/InteractiveObject';
 import { ParticleSystem } from './effects/Particles';
@@ -195,6 +195,7 @@ export class Agentville {
     }
 
     this.citizenLayer.setCitizens(this.citizens);
+    this.pushZonesToCitizens();
     this.unstickCitizens();
     this.signal.start();
     this.renderer.start();
@@ -329,6 +330,8 @@ export class Agentville {
 
   setTypedLocations(locations: TypedLocation[]) {
     this.typedLocations = locations;
+    this.cachedZones = null;
+    this.pushZonesToCitizens();
   }
 
   /** Resize the grid by expanding right/down. Existing coords stay the same. */
@@ -378,6 +381,8 @@ export class Agentville {
     const tw = config.tileWidth;
     const th = config.tileHeight;
     this.renderer.resize(newCols * tw, newRows * th);
+    this.cachedZones = null;
+    this.pushZonesToCitizens();
   }
 
   getGridSize(): { cols: number; rows: number } {
@@ -472,6 +477,73 @@ export class Agentville {
     return this.reservation;
   }
 
+  // Cached zones — recomputed when typedLocations change
+  private cachedZones: { work: ZoneBounds | null; recreation: ZoneBounds | null } | null = null;
+
+  /** Dynamically compute work and recreation zones from anchor positions */
+  computeZones(): { work: ZoneBounds | null; recreation: ZoneBounds | null } {
+    if (this.cachedZones) return this.cachedZones;
+
+    const cols = this.scene.config.walkable[0]?.length ?? 0;
+    const rows = this.scene.config.walkable.length;
+    if (cols === 0 || rows === 0) return { work: null, recreation: null };
+
+    // Recreation zone: bounding box of rest + social + utility + wander anchors
+    const recTypes: AnchorType[] = ['rest', 'social', 'utility', 'wander'];
+    const recAnchors = this.typedLocations.filter(l => recTypes.includes(l.type));
+    let recreation: ZoneBounds | null = null;
+    if (recAnchors.length > 0) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const a of recAnchors) {
+        minX = Math.min(minX, a.x);
+        minY = Math.min(minY, a.y);
+        maxX = Math.max(maxX, a.x);
+        maxY = Math.max(maxY, a.y);
+      }
+      recreation = {
+        minX: Math.max(1, minX - 1),
+        minY: Math.max(1, minY - 1),
+        maxX: Math.min(cols - 2, maxX + 1),
+        maxY: Math.min(rows - 2, maxY + 1),
+      };
+    }
+
+    // Work zone: start from work anchors, expand to fill remaining canvas
+    const workAnchors = this.typedLocations.filter(l => l.type === 'work');
+    let work: ZoneBounds | null = null;
+    if (workAnchors.length > 0) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const a of workAnchors) {
+        minX = Math.min(minX, a.x);
+        minY = Math.min(minY, a.y);
+        maxX = Math.max(maxX, a.x);
+        maxY = Math.max(maxY, a.y);
+      }
+      // Expand to fill empty canvas with padding around work anchors
+      work = {
+        minX: Math.max(1, minX - 2),
+        minY: Math.max(2, minY - 2),
+        maxX: cols - 2,
+        maxY: rows - 2,
+      };
+    } else {
+      // No work anchors yet — use the right ~65% of canvas as the work zone
+      const midX = Math.max(1, Math.floor(cols * 0.35));
+      work = { minX: midX, minY: 2, maxX: cols - 2, maxY: rows - 2 };
+    }
+
+    this.cachedZones = { work, recreation };
+    return this.cachedZones;
+  }
+
+  /** Push current zone bounds to all citizens (call after zones change) */
+  private pushZonesToCitizens() {
+    const zones = this.computeZones();
+    for (const citizen of this.citizens) {
+      citizen.setZones(zones.work, zones.recreation);
+    }
+  }
+
   getCitizen(agentId: string): Citizen | undefined {
     return this.citizens.find(r => r.agentId === agentId);
   }
@@ -556,6 +628,9 @@ export class Agentville {
 
     this.citizens.push(citizen);
     this.citizenLayer.setCitizens(this.citizens);
+    // Give new citizen zone awareness
+    const zones = this.computeZones();
+    citizen.setZones(zones.work, zones.recreation);
     this.unstickCitizens();
     return citizen;
   }
@@ -701,20 +776,31 @@ export class Agentville {
       if (to === 'working') {
         // Go to assigned home anchor specifically
         const home = citizen.getHomePosition();
-        const anchor = this.typedLocations.find(l => l.name === home);
         if (!citizen.goToAnchor(home, this.typedLocations, this.scene.pathfinder, this.reservation)) {
           // Fallback: any unassigned work anchor
-          citizen.goToAnchorType('work', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes);
+          if (!citizen.goToAnchorType('work', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes)) {
+            // Last resort: walk to a random tile in the work zone
+            const zones = this.computeZones();
+            citizen.walkToRandomTile(this.scene.pathfinder, this.reservation, zones.work);
+          }
         }
       } else if (to === 'sleeping') {
-        citizen.goToAnchorType('rest', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes);
+        if (!citizen.goToAnchorType('rest', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes)) {
+          // Fallback: walk to a random tile in the recreation zone
+          const zones = this.computeZones();
+          citizen.walkToRandomTile(this.scene.pathfinder, this.reservation, zones.recreation);
+        }
       } else if (to === 'speaking') {
         // If already walking (e.g. toward DM recipient), don't redirect to social anchor
         if (!citizen.isMoving()) {
           citizen.goToAnchorType('social', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes);
         }
       } else if (to === 'thinking') {
-        citizen.goToAnchorType('utility', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes);
+        if (!citizen.goToAnchorType('utility', this.typedLocations, this.scene.pathfinder, this.reservation, otherHomes)) {
+          // Thinking is a work activity — fall back to work zone
+          const zones = this.computeZones();
+          citizen.walkToRandomTile(this.scene.pathfinder, this.reservation, zones.work);
+        }
       }
     }
 
@@ -861,7 +947,7 @@ export type { SpriteSheetConfig, AnimationDef } from './sprites';
 export { Scene, Pathfinder, DEADSPACE } from './scene';
 export type { SceneConfig, NamedLocation } from './scene';
 export { Citizen, CitizenLayer, TileReservation } from './citizens';
-export type { CitizenConfig, AgentState, TypedLocation, AnchorType } from './citizens';
+export type { CitizenConfig, AgentState, TypedLocation, AnchorType, ZoneBounds } from './citizens';
 export { InteractiveObject } from './objects';
 export type { ObjectConfig } from './objects';
 export { ParticleSystem } from './effects';

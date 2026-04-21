@@ -24,6 +24,14 @@ export interface TypedLocation {
   type: AnchorType;
 }
 
+/** Axis-aligned bounding box for a spatial zone (tile coordinates) */
+export interface ZoneBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 /** Maps tile "x,y" → agentId that currently claims it */
 export class TileReservation {
   private map = new Map<string, string>();
@@ -108,6 +116,10 @@ export class Citizen {
   private npcPhaseTimer = 0;
   private npcPhaseDuration = 0;
 
+  // Dynamic zone bounds for spatially-aware movement
+  private workZone: ZoneBounds | null = null;
+  private recreationZone: ZoneBounds | null = null;
+
   constructor(
     config: CitizenConfig,
     spriteSheet: SpriteSheet,
@@ -136,6 +148,11 @@ export class Citizen {
 
   setHomePosition(position: string) {
     this.homePosition = position;
+  }
+
+  setZones(work: ZoneBounds | null, recreation: ZoneBounds | null) {
+    this.workZone = work;
+    this.recreationZone = recreation;
   }
 
   setPixelPosition(x: number, y: number) {
@@ -262,6 +279,10 @@ export class Citizen {
         if (newState === 'idle') {
           this.idleBehaviorTimer = this.idleBehaviorInterval;
         }
+      } else if (newState === 'working' && this.workZone) {
+        // Can't reach a work anchor — walk to a random tile in the work zone
+        this.walkToRandomTile(pathfinder, reservation, this.workZone);
+        this.updateState(newState, null, this.energy);
       } else {
         // Can't reach destination — stay idle and try again next cycle
         this.npcPhase = 'idle';
@@ -410,8 +431,8 @@ export class Citizen {
 
     // Prefer typed locations with smart selection
     if (typedLocations && typedLocations.length > 0) {
-      // When idle, prefer wander/social/utility spots (never other people's home anchors)
-      const preferredTypes: AnchorType[] = ['wander', 'social', 'utility'];
+      // When idle, prefer recreation-area anchors (wander/social/rest) — not utility (kitchen)
+      const preferredTypes: AnchorType[] = ['wander', 'social', 'rest'];
       // Only consider types that actually have candidates
       const available = preferredTypes.filter(t =>
         typedLocations.some(l => l.type === t && (!excludeNames || !excludeNames.has(l.name)))
@@ -441,15 +462,25 @@ export class Citizen {
       }
     }
 
-    // Last resort: walk to a random walkable tile
-    this.walkToRandomTile(pathfinder, reservation);
+    // Last resort: walk to a random walkable tile within the recreation zone
+    this.walkToRandomTile(pathfinder, reservation, this.recreationZone);
   }
 
-  /** Pick a random walkable tile and walk there */
-  walkToRandomTile(pathfinder: Pathfinder, reservation?: TileReservation) {
+  /** Pick a random walkable tile and walk there, optionally constrained to a zone */
+  walkToRandomTile(pathfinder: Pathfinder, reservation?: TileReservation, zone?: ZoneBounds | null) {
     const tile = this.getTilePosition();
-    const walkable = pathfinder.getWalkableTiles();
+    let walkable = pathfinder.getWalkableTiles();
     if (walkable.length === 0) return;
+
+    // Filter to zone if provided
+    if (zone) {
+      const inZone = walkable.filter(t =>
+        t.x >= zone.minX && t.x <= zone.maxX &&
+        t.y >= zone.minY && t.y <= zone.maxY
+      );
+      // Fall back to full set only if zone has no walkable tiles
+      if (inZone.length > 0) walkable = inZone;
+    }
 
     // Shuffle and try a few random tiles (don't iterate all)
     const attempts = Math.min(10, walkable.length);

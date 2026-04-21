@@ -1851,8 +1851,61 @@ if (DEV_MODE) {
   const editBtn = document.getElementById('dev-edit-btn');
   const saveBtn = document.getElementById('dev-save-btn');
 
-  // --- Zone computation ---
+  // --- Zone computation (reads from engine when available, falls back to prop scan) ---
   function computeZones() {
+    const mv = window.__av;
+
+    // Prefer engine-computed zones — they match the actual citizen movement logic
+    if (mv && typeof mv.computeZones === 'function') {
+      const engineZones = mv.computeZones();
+      const result = [];
+      if (engineZones.work) {
+        const z = engineZones.work;
+        result.push({
+          type: 'work', x: z.minX, y: z.minY,
+          w: z.maxX - z.minX, h: z.maxY - z.minY,
+          label: ZONE_LABELS['work'] || 'Office',
+          color: ZONE_COLORS['work'],
+        });
+      }
+      if (engineZones.recreation) {
+        // Split recreation into sub-zones by scanning props for rest vs utility
+        const wd = window.__worldData;
+        const hasRest = wd?.props?.some(p => p.anchors?.some(a => a.type === 'rest'));
+        const hasUtility = wd?.props?.some(p => p.anchors?.some(a => a.type === 'utility'));
+        const z = engineZones.recreation;
+        if (hasRest) {
+          result.push({
+            type: 'rest', x: z.minX, y: z.minY,
+            w: z.maxX - z.minX, h: z.maxY - z.minY,
+            label: ZONE_LABELS['rest'] || 'Lounge',
+            color: ZONE_COLORS['rest'],
+          });
+        }
+        if (hasUtility) {
+          // Show utility sub-zone from utility anchors only
+          const utilProps = wd.props.filter(p => p.anchors?.some(a => a.type === 'utility'));
+          if (utilProps.length > 0) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const p of utilProps) {
+              minX = Math.min(minX, p.x);
+              minY = Math.min(minY, p.y);
+              maxX = Math.max(maxX, p.x + (p.w || 1));
+              maxY = Math.max(maxY, p.y + (p.h || 1));
+            }
+            result.push({
+              type: 'utility', x: Math.max(0, minX - 0.5), y: Math.max(0, minY - 0.5),
+              w: maxX - minX + 1, h: maxY - minY + 1,
+              label: ZONE_LABELS['utility'] || 'Kitchen',
+              color: ZONE_COLORS['utility'],
+            });
+          }
+        }
+      }
+      return result;
+    }
+
+    // Fallback: scan props directly (engine not yet initialized)
     const wd = window.__worldData;
     if (!wd || !wd.props) return [];
     const groups = {};

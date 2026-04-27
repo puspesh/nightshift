@@ -20,6 +20,7 @@
   "files": [
     "bin/ns-status.sh",
     "dist/",
+    "!dist/tests/",
     "presets/",
     "examples/",
     "docs/*.md",

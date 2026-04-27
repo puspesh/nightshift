@@ -41,7 +41,7 @@ Nightshift is a different workflow -
 - **End-to-end issue-to-PR pipeline** -- from new issue to merged pull request without human intervention
 - **Git worktree isolation** -- each agent works in its own worktree, no branch conflicts
 - **GitHub label state machine** -- the entire pipeline state is visible in your issue tracker
-- **Headless mode** -- run agents as background processes without tmux (`--headless`), with logs written to `~/.nightshift/`
+- **Headless mode (recommended)** -- run agents as background processes with `--headless`, no manual `/loop` commands needed, logs written to `~/.nightshift/`
 - **Scalable coders** -- spin up 1-4 coder agents working in parallel (`--coders 2`)
 - **Per-repo customization** -- review criteria, test config, branch patterns, runner command -- all configurable per project in `.claude/nightshift/`
 
@@ -64,9 +64,23 @@ Difference from Claude Code Teams and other multi-agent workflows -- it gives yo
 
 ## Quick Start
 
+### Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nightshift-agents/nightshift/main/install.sh | bash
+```
+
+Or use npx without installing:
+
+```bash
+npx nightshift init --team dev
+```
+
+### Set up a team
+
 ```bash
 # In your repository
-npx nightshift init --team dev
+nightshift init --team dev
 ```
 
 This sets up everything: agent profiles, pipeline extensions, git worktrees,
@@ -79,7 +93,7 @@ vi .claude/nightshift/ns-dev-review-criteria.md  # code review checklist
 vi .claude/nightshift/ns-dev-test-config.md      # test configuration
 
 # Start all agents in a tmux session
-npx nightshift start --team dev
+nightshift start --team dev
 ```
 
 This opens a tmux session with a split-pane layout:
@@ -104,45 +118,37 @@ If [agentville](https://github.com/nightshift-agents/agentville) is installed, a
 visualization server launches at `http://localhost:4321` showing a pixel-art office
 world with agents as animated citizens, plus a real-time status panel.
 
-You can also start agents individually in separate terminals:
+### Headless Mode (Recommended)
+
+Use `--headless` to run agents as background processes -- no tmux, no manual
+`/loop` commands. Each agent starts working immediately:
 
 ```bash
-/loop 15m @ns-dev-producer
-/loop 15m @ns-dev-planner
-/loop 15m @ns-dev-reviewer
-/loop 15m @ns-dev-coder-1
-/loop 15m @ns-dev-tester
+nightshift start --team dev --headless
 ```
 
-### Headless Mode
-
-Run agents without tmux -- each agent runs as a background process:
-
-```bash
-npx nightshift start --team dev --headless
-```
-
-Agents loop every 15 minutes, same as in tmux mode. Logs are written to
+Agents loop every 15 minutes. Logs are written to
 `~/.nightshift/<repo>/<team>/logs/<role>.log`.
 
 ```bash
 # Check agent logs
 tail -f ~/.nightshift/<repo>/<team>/logs/producer.log
 
-# Stop all agents (same command as tmux mode)
-npx nightshift stop --team dev
+# Stop all agents
+nightshift stop --team dev
 ```
+
+> **Why headless?** In tmux mode you need to type the `/loop` command in each
+> pane to start an agent. Headless mode handles this automatically -- just start
+> and walk away.
 
 ### Multiple Coders
 
 Use the `--coders` flag to add multiple coder agents:
 
 ```bash
-npx nightshift init --team dev --coders 2
-
-# This creates two coder agents:
-/loop 15m @ns-dev-coder-1
-/loop 15m @ns-dev-coder-2
+nightshift init --team dev --coders 2
+nightshift start --team dev --headless   # both coders start automatically
 ```
 
 ## How It Works
@@ -213,7 +219,7 @@ dev:ready-to-merge --> human merges
 
 Already have Claude Code? Paste this repo and get started:
 
-> I just cloned nightshift. Help me run `npx nightshift init --team dev` in my
+> I just cloned nightshift. Help me run `nightshift init --team dev` in my
 > project repo, configure it for my stack, and start the agents.
 
 Claude Code can help you customize the pipeline extensions, write your `repo.md`,
@@ -223,25 +229,28 @@ and troubleshoot any setup issues.
 
 ```bash
 # Initialize a team
-npx nightshift init --team dev
+nightshift init --team dev
 
 # Launch all agents in a tmux session
-npx nightshift start --team dev
+nightshift start --team dev
 
-# Stop a running tmux session
-npx nightshift stop --team dev
+# Headless mode (recommended — no manual /loop needed)
+nightshift start --team dev --headless
+
+# Stop all agents
+nightshift stop --team dev
 
 # List all installed teams and their agents
-npx nightshift list
+nightshift list
 
 # Teardown a team (interactive confirmation)
-npx nightshift teardown --team dev
+nightshift teardown --team dev
 
 # Skip confirmation
-npx nightshift teardown --team dev --force
+nightshift teardown --team dev --force
 
 # Also remove GitHub labels
-npx nightshift teardown --team dev --force --remove-labels
+nightshift teardown --team dev --force --remove-labels
 ```
 
 ### Runner Configuration
@@ -260,7 +269,7 @@ Customize it to change flags, model, or permissions for all agents.
 - [Claude Code](https://docs.anthropic.com/claude-code) -- the AI coding assistant
 - [GitHub CLI (gh)](https://cli.github.com/) -- for label and issue management
 - [git](https://git-scm.com/) -- for worktree isolation
-- [tmux](https://github.com/tmux/tmux) -- for the `start` command (`brew install tmux`)
+- [tmux](https://github.com/tmux/tmux) -- for the default `start` command; not needed with `--headless` (`brew install tmux`)
 
 ## Documentation
 

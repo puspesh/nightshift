@@ -71,10 +71,11 @@ Currently uses/supports -
 
 ## Quick Start
 
-### Pre-requisities
-1. Claude Code
-2. tmux
-3. gh
+### Prerequisites
+
+- [Claude Code](https://docs.anthropic.com/claude-code)
+- [GitHub CLI (gh)](https://cli.github.com/)
+- [tmux](https://github.com/tmux/tmux) (not needed with `--headless`)
 
 ### Install
 
@@ -185,37 +186,27 @@ teams in parallel (e.g., `dev`, `infra` etc) without interference.
 
 ### State Machine
 
-Issues flow through the pipeline via GitHub labels:
+Issues flow through the pipeline via GitHub labels. Each agent watches for specific labels and transitions issues to the next stage.
 
-```
-[new issue]
-     |
-     v
-@producer: triage
-     |
-     v
-dev:planning -----> @planner: write plan
-     |
-     v
-dev:plan-review --> @reviewer: review plan
-     |                      |
-     v                      v
-dev:approved        dev:plan-revising (back to planner)
-     |
-     v
-@coder: implement
-     |
-     v
-dev:code-review --> @reviewer: review code
-     |                      |
-     v                      v
-dev:testing         dev:code-revising (back to coder)
-     |
-     v
-@tester: run tests
-     |
-     v
-dev:ready-to-merge --> human merges
+> **Example: `dev` team preset.** Stages, agents, transitions, and label names are all configurable in `team.yaml`. See [Customization Guide](docs/customization.md).
+
+```mermaid
+stateDiagram-v2
+    [*] --> planning : @producer triages
+
+    planning --> plan_review : @planner writes plan
+    plan_review --> approved : @reviewer approves
+    plan_review --> plan_revising : @reviewer requests changes
+    plan_revising --> plan_review : @planner revises
+
+    approved --> code_review : @coder implements & opens PR
+    code_review --> testing : @reviewer approves
+    code_review --> code_revising : @reviewer requests changes
+    code_revising --> code_review : @coder revises
+
+    testing --> ready_to_merge : @tester passes
+    testing --> code_revising : @tester fails
+    ready_to_merge --> [*] : human merges
 ```
 
 ### Agent Roles
@@ -287,13 +278,6 @@ claude --dangerously-skip-permissions
 ```
 
 Customize it to change flags, model, or permissions for all agents.
-
-## Prerequisites
-
-- [Claude Code](https://docs.anthropic.com/claude-code) -- the AI coding assistant
-- [GitHub CLI (gh)](https://cli.github.com/) -- for label and issue management
-- [git](https://git-scm.com/) -- for worktree isolation
-- [tmux](https://github.com/tmux/tmux) -- for the default `start` command; not needed with `--headless` (`brew install tmux`)
 
 ## Documentation
 

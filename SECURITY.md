@@ -4,7 +4,7 @@
 
 If you discover a security vulnerability in nightshift, please report it responsibly.
 
-**Preferred**: Use [GitHub Security Advisories](https://github.com/nightshift-agents/nightshift/security/advisories/new) to report vulnerabilities privately.
+**Preferred**: Use [GitHub Security Advisories](https://github.com/puspesh/nightshift/security/advisories/new) to report vulnerabilities privately.
 
 **Fallback**: Email the maintainer directly. Do not open a public issue for security vulnerabilities.
 

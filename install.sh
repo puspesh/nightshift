@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Nightshift installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/nightshift-agents/nightshift/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/puspesh/nightshift/main/install.sh | bash
 
-REPO="https://github.com/nightshift-agents/nightshift.git"
+REPO="https://github.com/puspesh/nightshift.git"
 INSTALL_DIR="${NIGHTSHIFT_HOME:-$HOME/.nightshift-install}"
 BIN_DIR="${NIGHTSHIFT_BIN:-/usr/local/bin}"
 

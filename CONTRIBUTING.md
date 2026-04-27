@@ -7,7 +7,7 @@ everything you need to get started.
 
 ```bash
 # Clone the repository
-git clone https://github.com/nightshift-agents/nightshift.git
+git clone https://github.com/puspesh/nightshift.git
 cd nightshift
 
 # Install dependencies
@@ -62,7 +62,7 @@ node --test dist/tests/<file>.test.js
 
 - Write tests before implementation (TDD)
 - Never hit real `~/.claude/agents/` directories in tests -- use temp directories
-  (lesson from [#46](https://github.com/nightshift-agents/nightshift/issues/46))
+  (lesson from [#46](https://github.com/puspesh/nightshift/issues/46))
 - Use `mkdtempSync` for isolated test fixtures
 - Tests should be deterministic -- no network calls, no filesystem side effects outside temp dirs
 
@@ -70,7 +70,7 @@ node --test dist/tests/<file>.test.js
 
 ### Reporting Issues
 
-- Use [GitHub Issues](https://github.com/nightshift-agents/nightshift/issues) to report bugs or request features
+- Use [GitHub Issues](https://github.com/puspesh/nightshift/issues) to report bugs or request features
 - Include steps to reproduce for bugs
 - Include your nightshift version (`npx nightshift --version`), Node.js version, and OS
 
@@ -151,7 +151,7 @@ Releases are managed by the maintainer:
 - Documentation improvements
 - CLI UX improvements
 - New agent roles (see [docs/adding-agents.md](docs/adding-agents.md))
-- [Good first issues](https://github.com/nightshift-agents/nightshift/labels/good%20first%20issue)
+- [Good first issues](https://github.com/puspesh/nightshift/labels/good%20first%20issue)
 
 ## Code of Conduct
 

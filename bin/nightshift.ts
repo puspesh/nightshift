@@ -73,7 +73,7 @@ Options:
   --help, -h        Show this help message
   --version, -v     Show version number
 
-Learn more: https://github.com/nightshift-agents/nightshift
+Learn more: https://github.com/puspesh/nightshift
 `);
 }
 

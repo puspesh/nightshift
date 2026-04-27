@@ -14,9 +14,9 @@
     "nightshift": "./dist/bin/nightshift.js"
   },
   "bugs": {
-    "url": "https://github.com/nightshift-agents/nightshift/issues"
+    "url": "https://github.com/puspesh/nightshift/issues"
   },
-  "homepage": "https://github.com/nightshift-agents/nightshift#readme",
+  "homepage": "https://github.com/puspesh/nightshift#readme",
   "files": [
     "bin/ns-status.sh",
     "dist/",
@@ -45,7 +45,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nightshift-agents/nightshift.git"
+    "url": "git+https://github.com/puspesh/nightshift.git"
   },
   "publishConfig": {
     "access": "public"

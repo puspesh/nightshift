@@ -68,7 +68,7 @@ Unlike hosted multi-agent products, nightshift gives you full control over each 
 
 **curl (recommended)**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nightshift-agents/nightshift/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/puspesh/nightshift/main/install.sh | bash
 ```
 
 **npm / pnpm / bun**
@@ -82,7 +82,7 @@ bun add -g @nightshift-team/nightshift
 
 **From source**
 ```bash
-git clone https://github.com/nightshift-agents/nightshift.git
+git clone https://github.com/puspesh/nightshift.git
 cd nightshift
 npm install && npm run build
 npm link
@@ -126,7 +126,7 @@ Each pane has a color-coded label showing its role, the `/loop` command to type,
 and a live status indicator (working/idle with countdown timer). Navigate panes
 with `Ctrl+b, arrow`. Detach with `Ctrl+b, d` (agents keep running).
 
-If [agentville](https://github.com/nightshift-agents/agentville) is installed, a
+If [agentville](https://github.com/puspesh/agentville) is installed, a
 visualization server launches at `http://localhost:4321` showing a pixel-art office
 world with agents as animated citizens, plus a real-time status panel.
 

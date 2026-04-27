@@ -177,7 +177,7 @@ describe('install.sh passes shellcheck', () => {
 });
 
 describe('install.sh clones correct repo', () => {
-  it('clones from nightshift-agents/nightshift', () => {
-    assert.ok(script.includes('github.com/nightshift-agents/nightshift.git'));
+  it('clones from puspesh/nightshift', () => {
+    assert.ok(script.includes('github.com/puspesh/nightshift.git'));
   });
 });

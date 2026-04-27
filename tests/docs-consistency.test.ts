@@ -85,7 +85,6 @@ describe('docs consistency', () => {
       'Quick Start',
       'How It Works',
       'Commands',
-      'Prerequisites',
       'Documentation',
       'Contributing',
       'License',

@@ -13,6 +13,7 @@ Not a Claude Code/Codex replacement - rather a practical workflow to effectively
 ██║ ╚████║██║╚██████╔╝██║  ██║   ██║   ███████║██║  ██║██║██║        ██║   
 ╚═╝  ╚═══╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   
 </pre>
+
 <p>Coordinating AI agents for your development pipeline.</p>
 <p>
   <a href="https://github.com/puspesh/nightshift/actions/workflows/ci.yml"><img src="https://github.com/puspesh/nightshift/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -26,18 +27,19 @@ Not a Claude Code/Codex replacement - rather a practical workflow to effectively
 
 We all wear different hats at different times - sometimes we are a coder, sometimes a tester, sometimes a reviewer, sometimes a project manager (producer) who creates issues, triages and what not. Working with multi-agent workflows requires you to juggle between these hats at rapid intervals which is counter-productive. We as humans are bound by our context-switching limits. Going above to multi-task is not "productive" and leads to AI-slop, drop in quality, lack of control and more. 
 
-Nightshift is a different workflow - 
+**Nightshift** is a different workflow - 
 1) You work in day/active time as usual. In your terminal or IDE.
 2) While working, you focus on big ticket items. But for all small ideas, bugs, fixes, experiments that you encounter - you create "issues" and do not do active work.
 3) Once your day ends, you kickoff your nightshift team (or teams across projects)
 4) Let them work and toil while you sleep, live, touch grass!
+   
+<br>
 
 <img src="docs/images/tmux-session.png" alt="nightshift tmux session showing 6 agents" width="100%">
 
 ## Why nightshift?
 
 - **Fully configurable agent profiles** -- define each agent's role, skills, and constraints in markdown. Mimic your own coding style, review standards, and testing preferences
-- **Autonomous overnight triage** -- wake up to issues triaged, branches created, and plans written
 - **End-to-end issue-to-PR pipeline** -- from new issue to merged pull request without human intervention
 - **Git worktree isolation** -- each agent works in its own worktree, no branch conflicts
 - **GitHub label state machine** -- the entire pipeline state is visible in your issue tracker
@@ -47,13 +49,18 @@ Nightshift is a different workflow -
 
 Unlike hosted multi-agent products, nightshift gives you full control over each agent's profile, constraints, and review criteria -- tuned to your repo and your standards. You can take over any agent at any time.
 
+Currently uses/supports - 
+1. CLI Agents - Claude Code (supported) / Codex (soon)
+2. Issue tracker - Github issues (supported) / local (soon) / linear (future)
+3. Agent profiles and Team configuration - yaml and md files (supported)
+4. Skills - everything claude code supports (you install in your environment and tune agent profiles accordingly
+
 ## What it is NOT
 
-- **Not a hosted service** -- runs locally on your machine using your Claude Code subscription
 - **Not a Claude Code replacement** -- it orchestrates Claude Code sessions, not replaces them
-- **Not a CI system** -- it creates PRs; your existing CI validates them
 - **Not a general-purpose agent framework** -- purpose-built for the issue-to-PR development workflow
-- **Not a chatbot** -- agents work autonomously on a loop, not in conversation
+- **Not a hosted service** -- runs locally on your machine using your Claude Code subscription
+- **Not a CI system** -- it creates PRs; your existing CI validates them
 
 ## Who is this for?
 
@@ -63,6 +70,11 @@ Unlike hosted multi-agent products, nightshift gives you full control over each 
 
 
 ## Quick Start
+
+### Pre-requisities
+1. Claude Code
+2. tmux
+3. gh
 
 ### Install
 
@@ -100,7 +112,7 @@ and GitHub labels for the `dev` team. Then customize and start the agents:
 
 ```bash
 # Edit your config files
-vi .claude/nightshift/repo.md                  # commands, branch patterns (shared)
+vi .claude/nightshift/repo.md                    # commands, branch patterns (shared)
 vi .claude/nightshift/ns-dev-review-criteria.md  # code review checklist
 vi .claude/nightshift/ns-dev-test-config.md      # test configuration
 

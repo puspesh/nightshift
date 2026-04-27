@@ -73,11 +73,11 @@ curl -fsSL https://raw.githubusercontent.com/nightshift-agents/nightshift/main/i
 
 **npm / pnpm / bun**
 ```bash
-npm install -g nightshift
+npm install -g @nightshift-team/nightshift
 # or
-pnpm add -g nightshift
+pnpm add -g @nightshift-team/nightshift
 # or
-bun add -g nightshift
+bun add -g @nightshift-team/nightshift
 ```
 
 **From source**

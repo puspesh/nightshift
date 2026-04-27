@@ -24,13 +24,11 @@ Not a Claude Code/Codex replacement - rather a practical workflow to effectively
 </p>
 </div>
 
-We all wear different hats at different times - sometimes we are a coder, sometimes a tester, sometimes a reviewer, sometimes a project managr (producer) who creates issues, triages and what not. Working with multi-agent workflows requires you to juggle between these hats at rapid intervals which is counter-productive. We as humans are bound by our context-switching limits. Going above to multi-task is not "productive" and leads to AI-slop, drop in quality, lack of control and more. 
+Working with AI coding agents means constant context-switching: triaging issues, writing plans, reviewing code, running tests. Doing all of that yourself -- even with an AI assistant -- caps out quickly. Nightshift takes a different approach: delegate the entire pipeline to a team of specialized agents that run autonomously while you're away.
 
-Nightshift is a different workflow - 
-1) You work in day/active time as usual. In your terminal or IDE.
-2) While working, you focus on big ticket items. But for all small ideas, bugs, fixes, experiments that you encounter - you create "issues" and do not do active work.
-3) Once your day ends, you kickoff your nightshift team (or teams across projects)
-4) Let them work and toil while you sleep, live, touch grass!
+1. During the day, work as usual. For smaller tasks -- bugs, fixes, experiments -- just create GitHub issues.
+2. When you're done for the day, start your nightshift team.
+3. Wake up to triaged issues, implementation plans, reviewed code, and draft PRs.
 
 <img src="docs/images/tmux-session.png" alt="nightshift tmux session showing 6 agents" width="100%">
 
@@ -45,7 +43,7 @@ Nightshift is a different workflow -
 - **Scalable coders** -- spin up 1-4 coder agents working in parallel (`--coders 2`)
 - **Per-repo customization** -- review criteria, test config, branch patterns, runner command -- all configurable per project in `.claude/nightshift/`
 
-Difference from Claude Code Teams and other multi-agent workflows -- it gives you control to define and fine-tune each agent profile as per your liking, your repo and more. You can take over anytime.
+Unlike hosted multi-agent products, nightshift gives you full control over each agent's profile, constraints, and review criteria -- tuned to your repo and your standards. You can take over any agent at any time.
 
 ## What it is NOT
 
@@ -67,14 +65,24 @@ Difference from Claude Code Teams and other multi-agent workflows -- it gives yo
 ### Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nightshift-agents/nightshift/main/install.sh | bash
+npm install -g nightshift
 ```
 
-Or use npx without installing:
+Or run directly without installing:
 
 ```bash
 npx nightshift init --team dev
 ```
+
+<details>
+<summary>Alternative: install via curl</summary>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nightshift-agents/nightshift/main/install.sh | bash
+```
+
+This clones the repo, builds from source, and links the binary. Supports `NIGHTSHIFT_HOME` and `NIGHTSHIFT_BIN` environment variables for custom paths.
+</details>
 
 ### Set up a team
 
@@ -293,10 +301,10 @@ Copy any example's files into your `.claude/nightshift/` directory as a starting
 
 ## Roadmap
 
-[] Codex support
-[] Additional team presets beyond `dev`, `content`
-[] Codex integration for adversarial code review inside claude workflows
-[] Agentville(!)
+- [ ] Codex support
+- [ ] Additional team presets beyond `dev`, `content`
+- [ ] Codex integration for adversarial code review inside Claude workflows
+- [ ] Agentville -- gamified visualization of your agent team
 
 ## Contributing
 

@@ -26,8 +26,10 @@ Read `.claude/nightshift/repo.md` for branch naming pattern, label definitions, 
 ### 1. Fetch open issues
 
 ```bash
-gh issue list --state open --json number,title,labels,updatedAt
+gh issue list --state open --json number,title,labels,updatedAt --jq 'map(. + {ageMin: ((now - (.updatedAt|fromdateiso8601))/60|floor)})'
 ```
+
+The `--jq` filter adds an `ageMin` field to each issue (integer minutes since `updatedAt`). **Use this value directly for staleness decisions in step 4d. Do NOT compute elapsed time yourself from the `updatedAt` ISO string** — LLM date arithmetic is unreliable and has previously caused false-positive escalations.
 
 ### 2. Triage new issues (no `{{team_name}}:*` label)
 
@@ -176,24 +178,26 @@ If an issue has `{{team_name}}:wip` but NO pipeline stage label — this means a
 For issues WITHOUT `{{team_name}}:wip` in an active stage (`planning`, `plan-review`, `plan-revising`, `approved`, `code-review`, `code-revising`, `testing`):
 
 - **Do not double-warn** — if the last comment is already a producer warning/escalation (`### @{{agent_name}} -- Issue stuck` or `### @{{agent_name}} -- Stale warning`), skip this issue entirely
-- Use the issue's `updatedAt` field (already fetched in step 1) as the staleness baseline — this reflects the most recent label change, comment, or edit, and is more reliable than the last comment timestamp alone
-- **Check 3+ hours first** (escalate before warning):
-  - If `updatedAt` is 3+ hours ago → escalate — the issue is likely stuck:
+- Use the deterministic `ageMin` field on each issue from step 1 (integer minutes since `updatedAt`). **Do NOT eyeball the ISO `updatedAt` string and compute elapsed time yourself** — past incidents have escalated within minutes because of bad LLM date math. Trust only the `ageMin` integer.
+- **Check `ageMin >= 180` first** (escalate before warning):
+  - If the issue's `ageMin` is at least `180` → escalate — the issue is likely stuck:
     ```bash
     gh issue edit <number> --add-label "{{team_name}}:blocked"
     gh issue comment <number> --body "### @{{agent_name}} -- Issue stuck
     **Status**: escalated to blocked
-    **Reason**: Issue has been in \`{{team_name}}:<x>\` for 3+ hours with no agent picking it up.
+    **Reason**: Issue has been in \`{{team_name}}:<x>\` for <ageMin> minutes (>= 180) with no agent picking it up.
     **Next**: Needs human intervention (label: \`{{team_name}}:blocked\`)"
     ```
+  - Replace `<ageMin>` with the actual integer from step 1
   - **Do not also post a 90-minute warning** — the escalation supersedes it
-- **Otherwise, check 90+ minutes** (warning only):
-  - If `updatedAt` is 90+ minutes ago → post warning:
+- **Otherwise, check `ageMin >= 90`** (warning only):
+  - If the issue's `ageMin` is at least `90` (and < 180) → post warning:
     ```bash
     gh issue comment <number> --body "### @{{agent_name}} -- Stale warning
     **Status**: warning
-    **Reason**: This issue has been in \`{{team_name}}:<x>\` for over 90 minutes with no agent activity."
+    **Reason**: This issue has been in \`{{team_name}}:<x>\` for <ageMin> minutes (>= 90) with no agent activity."
     ```
+- **Otherwise (`ageMin < 90`)** → no action. The issue is fresh; do not warn or escalate.
 
 ### 5. Handle ready-to-merge
 
@@ -290,8 +294,8 @@ REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | 
 ### Reading State
 
 ```bash
-# All open issues with labels
-gh issue list --state open --json number,title,labels,updatedAt
+# All open issues with labels (and a deterministic ageMin for staleness checks)
+gh issue list --state open --json number,title,labels,updatedAt --jq 'map(. + {ageMin: ((now - (.updatedAt|fromdateiso8601))/60|floor)})'
 
 # Specific issue details
 gh issue view <number> --json body,labels,comments

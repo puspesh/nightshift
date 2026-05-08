@@ -95,7 +95,7 @@ function generatePipelineAgentBlock(
     initialCmd =
       `REPO_NAME=$(basename "$(git rev-parse --path-format=absolute --git-common-dir | sed 's|/\\.git$||')"); ` +
       `echo "working|$(date +%s)|" > ~/.nightshift/\${REPO_NAME}/${team}/status/${role}; ` +
-      `gh issue list --state open --json number,title,labels,updatedAt`;
+      `gh issue list --state open --json number,title,labels,updatedAt --jq 'map(. + {ageMin: ((now - (.updatedAt|fromdateiso8601))/60|floor)})'`;
   } else {
     // Worktree agent: status write + lock check
     initialCmd =
